@@ -113,7 +113,8 @@ winsnip/
 tests/                 the eight suites above
 tools/                 icon / promo art / promo video / benchmark generators
 docs/screenshots/      UI reference shots (regenerate: python app.py --selftest-ui)
-promo/                 poster art and a 30 s promo video (frame-rendered)
+promo/                 poster art, a 30 s promo video (frame-rendered) and
+                       video covers in 16:9 and 4:3
 perf/                  measured performance charts
 ```
 

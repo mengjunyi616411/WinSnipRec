@@ -235,6 +235,7 @@ WinSnipRec/
 │   ├── make_promo.py          生成宣传图（promo\）
 │   ├── make_perf_charts.py    生成性能图表（perf\）
 │   ├── make_promo_video.py    逐帧渲染宣传视频（promo\video\）
+│   ├── make_video_cover.py    生成视频封面（16:9 / 4:3）
 │   ├── bench_encode.py        编码 CPU 基准
 │   ├── bench_runtime.py       内存 / 抓屏 / 启停基准
 │   └── install.ps1            安装 / 卸载逻辑
@@ -373,6 +374,7 @@ dist\截图工具\截图工具.exe --selftest-quit   :: 应在数秒内自行退
 ```bat
 .venv\Scripts\python.exe tools\make_promo_video.py            :: 渲染成片（约 76 秒）
 .venv\Scripts\python.exe tools\make_promo_video.py --preview  :: 只出 30 帧审阅网格
+.venv\Scripts\python.exe tools\make_video_cover.py            :: 生成 16:9 与 4:3 封面
 ```
 
 **为什么不录屏**：本机 1080p 抓屏一帧要 112ms（上限 9fps），半透明窗口合成要数秒，
@@ -385,6 +387,10 @@ dist\截图工具\截图工具.exe --selftest-quit   :: 应在数秒内自行退
 | `promo_1920x1080_30s.srt` | 字幕，时间轴与画面严格对齐 |
 | `storyboard.md` | 分镜表 + 音效节拍表 |
 | `contact_sheet.png` | 30 帧审阅网格（每秒 1 帧） |
+| `cover_16x9_1920x1080.png` | **视频封面 16:9**（带播放键，1920×1080） |
+| `cover_16x9_1920x1080_无播放键.png` | 同上，不带播放键（平台自己会画播放按钮时用） |
+| `cover_4x3_1440x1080.png` | **视频封面 4:3**（带播放键，1440×1080） |
+| `cover_4x3_1440x1080_无播放键.png` | 同上，不带播放键 |
 | `sfx_track.wav` | 合成出来的 UI 音效轨（点击/滑动/提示/快门） |
 | `混入BGM.ps1` | 把你自己的 BGM 混进来（视频流不重编码） |
 
