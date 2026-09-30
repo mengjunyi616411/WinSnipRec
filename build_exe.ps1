@@ -27,7 +27,12 @@ if (-not (Test-Path $venvPython)) {
     $venvPython = Join-Path (Split-Path $root -Parent) '.venv\Scripts\python.exe'
 }
 if (-not (Test-Path $venvPython)) {
-    throw "找不到虚拟环境解释器（.venv\Scripts\python.exe）。请先: py -3 -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.txt"
+    # 没有 .venv 就用 PATH 上的 python（CI 用 actions/setup-python 就是这样）
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($cmd) { $venvPython = $cmd.Source }
+}
+if (-not (Test-Path $venvPython)) {
+    throw "找不到 Python 解释器。本地请先: py -3 -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.txt"
 }
 Write-Host "Python: $venvPython"
 

@@ -248,6 +248,24 @@ winget install --id JRSoftware.InnoSetup -e
 `tools\installer.iss` 里的 `PrivilegesRequired` 改成 `admin`、
 `DefaultDirName` 换成 `{autopf}`。
 
+### 发布新版本
+
+安装包约 **50 MB**，**不要提交进仓库**（GitHub 单文件硬上限 100 MB、
+网页上传上限 25 MB）。走 Release：
+
+```bat
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+推 tag 后 GitHub Actions 自动完成：跑自测 → 打包主程序 → 压缩免安装版 →
+编译安装包 → 生成 `SHA256SUMS.txt` → 创建 Release 并附上两个产物。
+
+也可以手动触发：Actions → Release → Run workflow，填入版本号即可。
+
+> 首次运行约 10~15 分钟（要装 Inno Setup 和依赖）。抓屏相关的自测在 runner 上
+> 是无桌面环境，可能不稳定，所以设为不阻塞发布；代码质量由 CI 在 push 时把关。
+
 ---
 
 ## 8. 目录结构

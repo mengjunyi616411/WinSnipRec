@@ -1,6 +1,6 @@
 name: Release
 
-# 打 v* 标签即触发：跑自测 → 打包 EXE → 压缩 → 创建 Release
+# 打 v* 标签即触发：跑自测 → 打包 EXE → 压缩 → 编译安装包 → 创建 Release
 on:
   push:
     tags: ["v*"]
@@ -24,82 +24,117 @@ jobs:
         with:
           python-version: "3.13"
 
+      # 版本号统一从这里取：tag 可能是 v1.0.0，而产物文件名用 1.0.0
+      - name: 解析版本号
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag }}"
+          if (-not $tag) { $tag = "${{ github.ref_name }}" }
+          $version = $tag -replace '^v', ''
+          "tag=$tag" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "version=$version" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          Write-Host "tag=$tag  version=$version"
+
       - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: 录制内核自测
+      # 这两条会真的抓屏编码，而 runner 是无交互桌面的虚拟机，抓屏行为不可靠。
+      # 代码质量由 CI 在 push 到 main 时把关，这里只作信号、不阻塞发布。
+      - name: 录制内核自测（不阻塞发布）
+        continue-on-error: true
         run: python tests/selftest_core.py
 
-      - name: 时长回归自测
+      - name: 时长回归自测（不阻塞发布）
+        continue-on-error: true
         run: python tests/selftest_duration.py
 
-      - name: 打包 EXE
+      - name: 打包主程序
         run: powershell -ExecutionPolicy Bypass -File build_exe.ps1 -SkipSmokeTest
 
-      - name: 打包产物信息
+      - name: 压缩免安装版
+        shell: pwsh
         run: |
-          $exe = "dist\截图工具\截图工具.exe"
-          $size = [math]::Round((Get-ChildItem "dist\截图工具" -Recurse -File |
-                   Measure-Object -Property Length -Sum).Sum / 1MB, 1)
-          Write-Host "EXE: $((Get-Item $exe).Length / 1MB) MB，整包 $size MB"
-
-      - name: 压缩为免安装 zip
-        run: |
-          $tag = "${{ github.ref_name }}"
-          if ("${{ github.event.inputs.tag }}") { $tag = "${{ github.event.inputs.tag }}" }
+          $v = "${{ steps.ver.outputs.version }}"
           Compress-Archive -Path "dist\截图工具\*" `
-            -DestinationPath "WinSnipRec-$tag-win64.zip" -CompressionLevel Optimal
-          Write-Host "zip: $((Get-Item "WinSnipRec-$tag-win64.zip").Length / 1MB) MB"
+            -DestinationPath "WinSnipRec-$v-win64.zip" -CompressionLevel Optimal
+          $zip = Get-Item "WinSnipRec-$v-win64.zip"
+          Write-Host "zip: $([math]::Round($zip.Length / 1MB, 1)) MB"
 
       - name: 安装 Inno Setup
+        shell: pwsh
         run: |
           choco install innosetup --no-progress -y
-          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
-            throw "Inno Setup 安装失败"
-          }
+          $iscc = Get-ChildItem "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+                                 "$env:ProgramFiles\Inno Setup 6\ISCC.exe" `
+                                 -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) { throw "Inno Setup 安装失败" }
+          Write-Host "ISCC: $($iscc.FullName)"
 
       - name: 编译安装包
-        run: powershell -ExecutionPolicy Bypass -File build_installer.ps1 -SkipAppBuild
-
-      - name: 生成 SHA256
+        shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          if ("${{ github.event.inputs.tag }}") { $tag = "${{ github.event.inputs.tag }}" }
+          $v = "${{ steps.ver.outputs.version }}"
+          powershell -ExecutionPolicy Bypass -File build_installer.ps1 `
+            -SkipAppBuild -Version $v
+          # build_installer 输出在 dist\installer\，挪到工作目录根方便后续引用
+          $src = "dist\installer\WinSnipRec-Setup-$v.exe"
+          if (-not (Test-Path $src)) { throw "安装包没有生成：$src" }
+          Copy-Item $src ".\WinSnipRec-Setup-$v.exe" -Force
+          Write-Host "安装包 $([math]::Round((Get-Item ".\WinSnipRec-Setup-$v.exe").Length / 1MB, 1)) MB"
+
+      - name: 生成 SHA256SUMS
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
           $lines = @()
-          foreach ($f in @("WinSnipRec-$tag-win64.zip",
-                           "WinSnipRec-Setup-$tag.exe")) {
-            if (Test-Path $f) {
-              $lines += "$((Get-FileHash $f -Algorithm SHA256).Hash)  $f"
-              Write-Host "$f  $([math]::Round((Get-Item $f).Length / 1MB, 1)) MB"
-            }
+          foreach ($f in @("WinSnipRec-$v-win64.zip", "WinSnipRec-Setup-$v.exe")) {
+            if (-not (Test-Path $f)) { throw "缺少产物：$f" }
+            $lines += "$((Get-FileHash $f -Algorithm SHA256).Hash)  $f"
+            Write-Host "$f  $([math]::Round((Get-Item $f).Length / 1MB, 1)) MB"
           }
-          $lines | Out-File -Encoding ASCII "SHA256SUMS.txt"
+          $lines | Out-File -Encoding ascii "SHA256SUMS.txt"
+          Get-Content SHA256SUMS.txt
 
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          name: WinSnipRec ${{ github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: WinSnipRec ${{ steps.ver.outputs.version }}
           draft: false
           generate_release_notes: true
           body: |
-            **安装版（推荐）**：下载 `WinSnipRec-Setup-*.exe` 双击即可。按用户安装到
-            `%LOCALAPPDATA%\Programs\WinSnipRec`，**不需要管理员权限**，自带卸载程序，
-            安装时会询问是否创建桌面快捷方式和开机自启。
+            ## 下载
 
-            **免安装版**：下载 `WinSnipRec-*-win64.zip`，解压后双击 `截图工具.exe`。
-            两个版本都**不需要安装 Python**。
+            **安装版（推荐）** —— `WinSnipRec-Setup-${{ steps.ver.outputs.version }}.exe`
 
-            系统要求：Windows 10 1809 及以上（Windows 11 同样可用），64 位。
+            双击安装，按用户装到 `%LOCALAPPDATA%\Programs\WinSnipRec`，
+            **不需要管理员权限**，自带卸载程序。安装时可选择是否创建桌面快捷方式
+            和开机自动启动。
 
-            校验下载完整性：
+            **免安装版** —— `WinSnipRec-${{ steps.ver.outputs.version }}-win64.zip`
+
+            解压后双击 `截图工具.exe` 即可，不写注册表。
+
+            两个版本都**不需要预先安装 Python**。
+
+            ## 系统要求
+
+            Windows 10 1809 及以上 / Windows 11，64 位。
+
+            > 安装包未做代码签名，首次运行 Windows 可能提示 SmartScreen，
+            > 点「更多信息 → 仍要运行」即可。
+
+            ## 校验下载完整性
 
             ```
-            certutil -hashfile WinSnipRec-*-win64.zip SHA256
+            certutil -hashfile WinSnipRec-Setup-${{ steps.ver.outputs.version }}.exe SHA256
             ```
+
+            与下方的 `SHA256SUMS.txt` 对照。
           files: |
             WinSnipRec-*-win64.zip
             WinSnipRec-Setup-*.exe
