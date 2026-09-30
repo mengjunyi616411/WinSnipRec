@@ -375,7 +375,11 @@ dist\截图工具\截图工具.exe --selftest-quit   :: 应在数秒内自行退
 .venv\Scripts\python.exe tools\make_promo_video.py            :: 渲染成片（约 76 秒）
 .venv\Scripts\python.exe tools\make_promo_video.py --preview  :: 只出 30 帧审阅网格
 .venv\Scripts\python.exe tools\make_video_cover.py            :: 生成 16:9 与 4:3 封面
+.venv\Scripts\python.exe tools\make_video_cover.py --play     :: 需要时在中间叠加播放按钮
 ```
+
+封面默认**不加**播放按钮（平台通常自己会画一个）。标题占满上半幅是为了缩略图尺寸下
+仍然读得清；右下压着录制控制条，一眼能看出是录屏工具而不是截图工具。
 
 **为什么不录屏**：本机 1080p 抓屏一帧要 112ms（上限 9fps），半透明窗口合成要数秒，
 真录出来会又卡又抖 —— 反而比软件实际表现差。逐帧合成可以做到精确 30fps、
@@ -387,10 +391,8 @@ dist\截图工具\截图工具.exe --selftest-quit   :: 应在数秒内自行退
 | `promo_1920x1080_30s.srt` | 字幕，时间轴与画面严格对齐 |
 | `storyboard.md` | 分镜表 + 音效节拍表 |
 | `contact_sheet.png` | 30 帧审阅网格（每秒 1 帧） |
-| `cover_16x9_1920x1080.png` | **视频封面 16:9**（带播放键，1920×1080） |
-| `cover_16x9_1920x1080_无播放键.png` | 同上，不带播放键（平台自己会画播放按钮时用） |
-| `cover_4x3_1440x1080.png` | **视频封面 4:3**（带播放键，1440×1080） |
-| `cover_4x3_1440x1080_无播放键.png` | 同上，不带播放键 |
+| `cover_16x9_1920x1080.png` | **视频封面 16:9**（1920×1080） |
+| `cover_4x3_1440x1080.png` | **视频封面 4:3**（1440×1080，单独排版，不是裁切） |
 | `sfx_track.wav` | 合成出来的 UI 音效轨（点击/滑动/提示/快门） |
 | `混入BGM.ps1` | 把你自己的 BGM 混进来（视频流不重编码） |
 

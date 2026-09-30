@@ -3,9 +3,11 @@
 Both are built from the real UI screenshots and the same design tokens as the
 app, so the cover, the posters and the video all look like one family.
 
-Run:  .venv\\Scripts\\python.exe tools\\make_video_cover.py
+Run:  .venv\\Scripts\\python.exe tools\\make_video_cover.py [--play]
 Out:  promo/video/cover_16x9_1920x1080.png
       promo/video/cover_4x3_1440x1080.png
+
+The centre play badge is off by default; pass --play to draw it.
 """
 
 from __future__ import annotations
@@ -185,7 +187,7 @@ def vignette(painter: QPainter, width: int, height: int) -> None:
 
 
 # --------------------------------------------------------------------------- #
-def build_wide(play: bool = True) -> QImage:
+def build_wide(play: bool = False) -> QImage:
     width, height = 1920, 1080
     image = Poster(width, height).background()
     painter = QPainter(image)
@@ -223,7 +225,7 @@ def build_wide(play: bool = True) -> QImage:
     return image
 
 
-def build_four_three(play: bool = True) -> QImage:
+def build_four_three(play: bool = False) -> QImage:
     width, height = 1440, 1080
     image = Poster(width, height).background()
     painter = QPainter(image)
@@ -257,6 +259,13 @@ def build_four_three(play: bool = True) -> QImage:
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="生成宣传视频封面")
+    parser.add_argument("--play", action="store_true",
+                        help="在窗口中央叠加播放按钮（默认不加）")
+    args = parser.parse_args()
+
     winapi.enable_per_monitor_dpi_awareness()
     app = QApplication(sys.argv)  # noqa: F841
     theme.mode = "dark"
@@ -264,13 +273,9 @@ def main() -> int:
     apply_app_theme(app)
 
     OUT.mkdir(parents=True, exist_ok=True)
-    # Two variants each: with a play badge (reads as a video at a glance) and
-    # without it, for platforms that draw their own play button on top.
     outputs = [
-        ("cover_16x9_1920x1080.png", build_wide(True)),
-        ("cover_16x9_1920x1080_无播放键.png", build_wide(False)),
-        ("cover_4x3_1440x1080.png", build_four_three(True)),
-        ("cover_4x3_1440x1080_无播放键.png", build_four_three(False)),
+        ("cover_16x9_1920x1080.png", build_wide(args.play)),
+        ("cover_4x3_1440x1080.png", build_four_three(args.play)),
     ]
     for name, image in outputs:
         path = OUT / name
