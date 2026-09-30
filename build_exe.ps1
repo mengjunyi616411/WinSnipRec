@@ -4,13 +4,15 @@
 #  用法：
 #     powershell -ExecutionPolicy Bypass -File build_exe.ps1            # 目录版（启动快）
 #     powershell -ExecutionPolicy Bypass -File build_exe.ps1 -OneFile   # 单文件版
+#     powershell -ExecutionPolicy Bypass -File build_exe.ps1 -NoTrim    # 不裁剪 Qt 冗余文件
 #
 #  产物：dist\截图工具\截图工具.exe   或   dist\截图工具.exe
 # ============================================================================
 [CmdletBinding()]
 param(
     [switch]$OneFile,
-    [switch]$SkipSmokeTest
+    [switch]$SkipSmokeTest,
+    [switch]$NoTrim          # 保留 Qt 里用不到的文件（默认会裁掉，安装包小约 9 MB）
 )
 
 $ErrorActionPreference = 'Stop'
@@ -91,6 +93,38 @@ if ($OneFile) {
     $exe = Join-Path $root 'dist\截图工具.exe'
 }
 if (-not (Test-Path $exe)) { throw "未找到产物 $exe" }
+
+# ---- 7.5 裁剪 Qt 里用不到的东西 -------------------------------------------
+#  程序全程用 QPainter 光栅绘制，不创建 OpenGL 上下文，也不加载 Qt 翻译文件，
+#  所以这些是纯粹的体积负担（尤其是 19.7 MB 的软件 OpenGL 回退库）。
+if (-not $OneFile -and -not $NoTrim) {
+    Step '裁剪 Qt 冗余文件'
+    $internal = Join-Path $exeDir '_internal'
+    $drop = @(
+        'PySide6\opengl32sw.dll',              # 软件 OpenGL 回退，用不到（19.7 MB）
+        'PySide6\plugins\tls'                 # QtNetwork 的 TLS 后端，不联网
+    )
+    $before = (Get-ChildItem $exeDir -Recurse -File | Measure-Object Length -Sum).Sum
+    foreach ($rel in $drop) {
+        $target = Join-Path $internal $rel
+        if (Test-Path $target) {
+            $item = Get-Item $target
+            $mb = if ($item.PSIsContainer) {
+                [math]::Round((Get-ChildItem $target -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 1)
+            } else { [math]::Round($item.Length / 1MB, 1) }
+            Remove-Item $target -Recurse -Force
+            Write-Host "  移除 $rel ($mb MB)"
+        }
+    }
+    $langDir = Join-Path $internal 'PySide6\translations'
+    if (Test-Path $langDir) {
+        $mb = [math]::Round((Get-ChildItem $langDir -File | Measure-Object Length -Sum).Sum / 1MB, 1)
+        Remove-Item $langDir -Recurse -Force
+        Write-Host "  移除 PySide6\translations ($mb MB)"
+    }
+    $after = (Get-ChildItem $exeDir -Recurse -File | Measure-Object Length -Sum).Sum
+    Write-Host ("  精简掉 {0:N1} MB" -f (($before - $after) / 1MB)) -ForegroundColor Green
+}
 
 Copy-Item -Force 'README.md' (Join-Path (Split-Path $exe -Parent) 'README.md')
 $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
