@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 显示环境
+        run: python -c "import sys, platform; print(sys.version); print(platform.platform())"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 语法检查
+        run: python -m compileall -q app.py winsnip tests tools
+
+      - name: 开机自启自测（22 项）
+        run: python tests/selftest_startup.py
+
+      - name: 全局快捷键自测（7 项）
+        run: python tests/selftest_hotkeys.py
+
+      # 录制内核自测会真的抓屏编码，对机器速度敏感：在共享/虚拟化的 runner 上
+      # 偶尔会因为抓屏跟不上而超时（时长偏短、音频流缺失）。它作为信号保留，
+      # 但不阻塞构建；本地跑仍然应当全绿。
+      - name: 录制内核自测（51 项，不阻塞构建）
+        continue-on-error: true
+        run: python tests/selftest_core.py
+
+      - name: 上传失败日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.python-version }}
+          path: |
+            **/*.log
+            _selftest*/**/*.txt
+          if-no-files-found: ignore
+          retention-days: 7

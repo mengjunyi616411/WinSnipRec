@@ -1,0 +1,30 @@
+# ---- 构建产物 ----
+dist/
+build/
+*.spec
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ---- 运行与测试中间产物 ----
+_selftest*/
+_*_config/
+_bench/
+docs/screenshots/live_*.png
+promo/video/_*
+perf/_*
+*.log
+
+# ---- 图标生成中间件（保留 assets/app.ico）----
+assets/icon_*.png
+
+# ---- 本地环境 / 编辑器 ----
+.venv/
+venv/
+env/
+.env
+.idea/
+.vscode/
+*.code-workspace
+Thumbs.db
+desktop.ini
