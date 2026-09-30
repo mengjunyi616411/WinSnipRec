@@ -218,6 +218,36 @@ powershell -ExecutionPolicy Bypass -File build_exe.ps1
 
 在 Windows 10 与 Windows 11 上均可直接分发；程序只在 Win10 1809 及以上版本使用 API。
 
+### 安装包（Inno Setup）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build_installer.ps1
+```
+
+默认会先跑一遍 `build_exe.ps1`，再编译安装包；已经打包过主程序就加 `-SkipAppBuild`，
+大概 4~5 分钟（LZMA2 压缩 200 MB 整包比较慢）。
+
+产物：`dist\installer\WinSnipRec-Setup-<版本>.exe`，**55.5 MB**。
+
+| 行为 | 说明 |
+| --- | --- |
+| 安装位置 | `%LOCALAPPDATA%\Programs\WinSnipRec`，**全程不需要管理员权限** |
+| 可选项 | 桌面快捷方式（默认勾）、开机自动启动（默认不勾） |
+| 开始菜单 | 「截图工具」程序组，含主程序和卸载入口 |
+| 升级 | 按 `AppId` 识别旧版本，直接覆盖安装 |
+| 卸载 | 删除程序、快捷方式与开机自启项；**保留** `%APPDATA%\WinSnipRec` 里的个人设置 |
+| 界面语言 | 简体中文（社区翻译），缺失时自动回退英文 |
+
+依赖只有一个 Inno Setup 6：
+
+```bat
+winget install --id JRSoftware.InnoSetup -e
+```
+
+中文语言文件按需自动下载（不随仓库分发）；要装到 `Program Files` 就把
+`tools\installer.iss` 里的 `PrivilegesRequired` 改成 `admin`、
+`DefaultDirName` 换成 `{autopf}`。
+
 ---
 
 ## 8. 目录结构
@@ -229,6 +259,7 @@ WinSnipRec/
 ├── 启动截图工具.bat            源码方式启动
 ├── 安装到本机.bat              安装到 %LOCALAPPDATA% + 创建快捷方式
 ├── build_exe.ps1              PyInstaller 打包
+├── build_installer.ps1        生成 Inno Setup 安装包
 ├── assets/                    app.ico 及多尺寸 PNG
 ├── tools/
 │   ├── make_icon.py           由矢量图标生成 .ico
@@ -238,7 +269,8 @@ WinSnipRec/
 │   ├── make_video_cover.py    生成视频封面（16:9 / 4:3）
 │   ├── bench_encode.py        编码 CPU 基准
 │   ├── bench_runtime.py       内存 / 抓屏 / 启停基准
-│   └── install.ps1            安装 / 卸载逻辑
+│   ├── installer.iss          Inno Setup 安装包脚本
+│   └── install.ps1            免安装版的安装 / 卸载逻辑
 ├── promo/                     宣传图（横版 / 竖版 / 方形）
 ├── promo/video/               宣传视频（30s MP4 + 字幕 + 分镜表）
 ├── perf/                      性能图表

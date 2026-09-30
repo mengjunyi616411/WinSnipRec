@@ -15,6 +15,9 @@ promo/video/_*
 perf/_*
 *.log
 
+# ---- 按需下载的安装包语言文件（build_installer.ps1 会自动取）----
+tools/innosetup/
+
 # ---- 图标生成中间件（保留 assets/app.ico）----
 assets/icon_*.png
 

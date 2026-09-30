@@ -46,7 +46,7 @@ jobs:
                    Measure-Object -Property Length -Sum).Sum / 1MB, 1)
           Write-Host "EXE: $((Get-Item $exe).Length / 1MB) MB，整包 $size MB"
 
-      - name: 压缩为 zip
+      - name: 压缩为免安装 zip
         run: |
           $tag = "${{ github.ref_name }}"
           if ("${{ github.event.inputs.tag }}") { $tag = "${{ github.event.inputs.tag }}" }
@@ -54,13 +54,29 @@ jobs:
             -DestinationPath "WinSnipRec-$tag-win64.zip" -CompressionLevel Optimal
           Write-Host "zip: $((Get-Item "WinSnipRec-$tag-win64.zip").Length / 1MB) MB"
 
+      - name: 安装 Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            throw "Inno Setup 安装失败"
+          }
+
+      - name: 编译安装包
+        run: powershell -ExecutionPolicy Bypass -File build_installer.ps1 -SkipAppBuild
+
       - name: 生成 SHA256
         run: |
           $tag = "${{ github.ref_name }}"
           if ("${{ github.event.inputs.tag }}") { $tag = "${{ github.event.inputs.tag }}" }
-          $hash = (Get-FileHash "WinSnipRec-$tag-win64.zip" -Algorithm SHA256).Hash
-          "$hash  WinSnipRec-$tag-win64.zip" | Out-File -Encoding ASCII "WinSnipRec-$tag-win64.zip.sha256"
-          Write-Host $hash
+          $lines = @()
+          foreach ($f in @("WinSnipRec-$tag-win64.zip",
+                           "WinSnipRec-Setup-$tag.exe")) {
+            if (Test-Path $f) {
+              $lines += "$((Get-FileHash $f -Algorithm SHA256).Hash)  $f"
+              Write-Host "$f  $([math]::Round((Get-Item $f).Length / 1MB, 1)) MB"
+            }
+          }
+          $lines | Out-File -Encoding ASCII "SHA256SUMS.txt"
 
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
@@ -70,8 +86,12 @@ jobs:
           draft: false
           generate_release_notes: true
           body: |
-            免安装版：下载下面的 `WinSnipRec-*-win64.zip`，解压后双击 `截图工具.exe` 即可，
-            **不需要安装 Python**。
+            **安装版（推荐）**：下载 `WinSnipRec-Setup-*.exe` 双击即可。按用户安装到
+            `%LOCALAPPDATA%\Programs\WinSnipRec`，**不需要管理员权限**，自带卸载程序，
+            安装时会询问是否创建桌面快捷方式和开机自启。
+
+            **免安装版**：下载 `WinSnipRec-*-win64.zip`，解压后双击 `截图工具.exe`。
+            两个版本都**不需要安装 Python**。
 
             系统要求：Windows 10 1809 及以上（Windows 11 同样可用），64 位。
 
@@ -82,4 +102,5 @@ jobs:
             ```
           files: |
             WinSnipRec-*-win64.zip
-            WinSnipRec-*.sha256
+            WinSnipRec-Setup-*.exe
+            SHA256SUMS.txt
