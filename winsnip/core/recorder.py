@@ -464,8 +464,16 @@ class Recorder(QObject):
         self._pending_mic: Optional[AudioDevice] = None
         self._pending_mic_set = False
         self._thread: Optional[threading.Thread] = None
+        self._measured_segment_seconds: Optional[float] = None
+        self._pause_at: Optional[float] = None
         self._frame_lock = threading.Lock()
         self._frame: Optional[bytes] = None
+        # Last frame ever captured. Unlike _frame it survives pause/resume and
+        # mic-split boundaries: without it a segment that starts before the
+        # capture thread has produced its first frame has nothing to write,
+        # and a zero-frame segment used to be dropped -- silently shortening
+        # the movie (a 3 s recording could come out as 1.2 s).
+        self._last_frame: Optional[bytes] = None
         self._frame_seq = 0
 
         self._writer: Optional[FfmpegVideoWriter] = None
@@ -590,7 +598,13 @@ class Recorder(QObject):
 
     def _accumulate_elapsed(self) -> None:
         with self._lock:
-            if self._seg_start is not None:
+            measured, self._measured_segment_seconds = self._measured_segment_seconds, None
+            if measured is not None:
+                # Frozen when the segment started closing: the time spent
+                # writing catch-up frames is not recording time.
+                self._elapsed_total += measured
+                self._seg_start = None
+            elif self._seg_start is not None:
                 self._elapsed_total += max(0.0, time.perf_counter() - self._seg_start)
                 self._seg_start = None
 
@@ -781,6 +795,7 @@ class Recorder(QObject):
                         pass
                 with self._frame_lock:
                     self._frame = frame
+                    self._last_frame = frame
                     self._frame_seq += 1
 
                 next_at += interval
@@ -797,9 +812,11 @@ class Recorder(QObject):
 
     def _latest_frame(self) -> Optional[bytes]:
         with self._frame_lock:
-            return self._frame
+            return self._frame if self._frame is not None else self._last_frame
 
     def _clear_frame(self) -> None:
+        # Only the *current* frame is dropped; the last frame stays available so
+        # a segment opened right after a pause always has something to write.
         with self._frame_lock:
             self._frame = None
 
@@ -811,6 +828,20 @@ class Recorder(QObject):
         )
         thread.start()
         return thread
+
+    def _rebase_settled_segment(self) -> None:
+        """Re-open a segment whose clock ``pause()`` already froze.
+
+        ``pause()`` settles the elapsed clock the instant the user clicks, so
+        the UI freezes immediately.  If the writer was blocked in a frame write
+        it may only notice the flag a few hundred milliseconds later -- and the
+        frames it wrote in the meantime are real.  Re-basing the segment start
+        to the pause instant keeps the reported length in step with the file.
+        """
+        with self._lock:
+            if self._seg_start is None and self._pause_at is not None:
+                self._seg_start = self._pause_at
+            self._pause_at = None
 
     def _pad_deadline_debt(self, writer, frames_in_segment: int, interval: float) -> int:
         """Cover frame slots the encoder still owes when a segment ends.
@@ -826,7 +857,17 @@ class Recorder(QObject):
         frame = self._latest_frame()
         if frame is None:
             return frames_in_segment
-        owed = int(self._current_segment_seconds() / interval) - frames_in_segment
+        # Freeze the measured length *before* padding: writing the catch-up
+        # frames takes wall-clock time on slow machines and must not be
+        # mistaken for time that was recorded.
+        seconds = self._current_segment_seconds()
+        with self._lock:
+            # pause() settles the segment itself (and clears _seg_start) before
+            # the worker gets here.  Only freeze when this thread is the one
+            # closing the segment, otherwise the time would be counted twice.
+            if self._seg_start is not None:
+                self._measured_segment_seconds = seconds
+        owed = int(seconds / interval) - frames_in_segment
         owed = min(owed, int(_MAX_DEADLINE_DEBT / interval))
         for _ in range(max(0, owed)):
             writer.write(frame)
@@ -852,12 +893,14 @@ class Recorder(QObject):
 
             while True:
                 if self._stop_evt.is_set():
+                    self._rebase_settled_segment()
                     frames_in_segment = self._pad_deadline_debt(
                         writer, frames_in_segment, interval
                     )
                     break
 
                 if self._pause_evt.is_set():
+                    self._rebase_settled_segment()
                     frames_in_segment = self._pad_deadline_debt(
                         writer, frames_in_segment, interval
                     )
@@ -966,6 +1009,11 @@ class Recorder(QObject):
                 self._elapsed_total = 0.0
                 self._seg_base = 0.0
                 self._seg_start = None
+                self._measured_segment_seconds = None
+                self._pause_at = None
+                with self._frame_lock:
+                    self._frame = None
+                    self._last_frame = None
                 self._last_emit = 0.0
                 self._mic_disabled = self._mic is None
 
@@ -999,7 +1047,10 @@ class Recorder(QObject):
             self._pause_evt.set()
             self._resume_evt.clear()
             # Freeze the active clock at the moment the user asked to pause;
-            # the worker pads the segment to exactly this instant.
+            # the worker pads the segment to exactly this instant.  Remember the
+            # instant too: if the writer is busy it may only see the flag much
+            # later, and the frames it wrote in between still happened.
+            self._pause_at = time.perf_counter()
             self._accumulate_elapsed()
             self._set_state(RecorderState.PAUSED)
             self._elapsed_timer_stop()
@@ -1076,6 +1127,8 @@ class Recorder(QObject):
             self._flush_segment()
             self._emit_elapsed(force=True)
 
+            self._verify_produced_length()
+
             with self._lock:
                 self._started = False
                 self._discarded = True  # stop() is terminal for this instance
@@ -1122,6 +1175,31 @@ class Recorder(QObject):
             self._report_error(f"discard failed: {exc!r}")
 
     # -- finalize ----------------------------------------------------------
+    def _verify_produced_length(self) -> None:
+        """Compare what was written against how long we actually recorded.
+
+        Duration is the one property a recording must never lose silently: a
+        short file plays back fast *and* cuts off, and it desyncs any audio.
+        If the encoder could not keep up we say so instead of shipping a
+        quietly truncated movie.
+        """
+        try:
+            with self._lock:
+                produced = sum(float(s.get("seconds", 0.0)) for s in self._segments)
+                expected = self._elapsed_total
+            if expected < 0.5:
+                return
+            if produced >= expected * 0.9:
+                return
+            missing = expected - produced
+            self._report_error(
+                f"本机编码速度跟不上：实际录制 {expected:.1f}s，写入成片 {produced:.1f}s"
+                f"（少 {missing:.1f}s）。建议降低帧率或缩小录制区域。",
+                once=True,
+            )
+        except Exception:
+            pass
+
     def _finalize(self) -> str:
         with self._lock:
             segments = [dict(s) for s in self._segments]

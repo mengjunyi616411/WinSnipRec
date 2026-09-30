@@ -2,6 +2,8 @@
 
 > 在 Windows 10 上复刻 Windows 11「截图工具」的录屏与截图体验。
 
+[English](README.en.md) · [中文](README.md)
+
 [![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
@@ -270,6 +272,7 @@ WinSnipRec/
     ├── selftest_hotkeys.py      全局快捷键自测（7 项：注册 + 真实按键注入）
     ├── selftest_startup.py      开机自启自测（22 项：注册表读写 + 失效修复 + 模拟登录）
     ├── selftest_animation.py    动效自测（41 项：启动动画、全窗口淡入、模式切换、进度环、居中）
+    ├── selftest_duration.py     时长回归（8 项：人为拖慢抓屏，验证分段不被静默丢弃）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
 
@@ -277,7 +280,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **197 项断言**，当前全部通过：
+全部自测均可离线运行，共 **205 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -287,6 +290,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_mic_switch.py      ::  9/9   录制中切换麦克风
 .venv\Scripts\python.exe tests\selftest_startup.py         :: 22/22  开机自启（含模拟登录）
 .venv\Scripts\python.exe tests\selftest_animation.py       :: 41/41  启动动画、模式切换、全窗口打开动画
+.venv\Scripts\python.exe tests\selftest_duration.py        ::  8/8   时长回归（拖慢抓屏的最坏情况）
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图
 ```
@@ -450,9 +454,9 @@ powershell -ExecutionPolicy Bypass -File promo\video\混入BGM.ps1 -Music "D:\mu
 改动界面的话，顺手跑一次 `python app.py --selftest-ui`，把 `docs/screenshots/` 的截图一起提交，
 方便 review 的人肉眼比对。
 
-**已知问题**：在抓屏很慢的机器（虚拟机、远程桌面）上，`selftest_core.py` 偶发失败 ——
-表现为录制文件时长偏短或音频流缺失；同一台机器上真机运行通常正常。
-如果你在物理机上稳定复现，欢迎提 Issue 并附上 `%APPDATA%\WinSnipRec\app.log`。
+**慢机器上的表现**：抓屏极慢时（虚拟机、远程桌面）编码可能跟不上，程序会明确提示
+「本机编码速度跟不上」，并建议降低帧率或缩小区域 —— **不会**再出现"录了 3 秒、
+文件只有 1 秒"的静默截断（该缺陷已修复，由 `selftest_duration.py` 把关）。
 
 ---
 

@@ -38,9 +38,13 @@ jobs:
       - name: 全局快捷键自测（7 项）
         run: python tests/selftest_hotkeys.py
 
-      # 录制内核自测会真的抓屏编码，对机器速度敏感：在共享/虚拟化的 runner 上
-      # 偶尔会因为抓屏跟不上而超时（时长偏短、音频流缺失）。它作为信号保留，
-      # 但不阻塞构建；本地跑仍然应当全绿。
+      # 时长回归：人为把抓屏拖慢，验证"分段不会被静默丢弃"。
+      # 这条专门覆盖慢机器场景，是硬性门槛。
+      - name: 时长回归自测（8 项）
+        run: python tests/selftest_duration.py
+
+      # 录制内核自测会真的抓屏编码，在共享/虚拟化的 runner 上仍可能因抓屏
+      # 跟不上而抖动（音频设备也可能不存在）。作为信号保留，不阻塞构建。
       - name: 录制内核自测（51 项，不阻塞构建）
         continue-on-error: true
         run: python tests/selftest_core.py

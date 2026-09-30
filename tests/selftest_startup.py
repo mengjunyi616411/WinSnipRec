@@ -96,8 +96,12 @@ def main() -> int:
         while time.time() < deadline:
             time.sleep(0.5)
             if interactive:
+                # Match by owning process, not by title: an Explorer window
+                # showing the project folder has "截图工具" in its path, and the
+                # real Snipping Tool is also titled 截图工具.
                 windows = winapi.list_windows()
-                main_window = next((w for w in windows if "截图工具" in w.title), None)
+                main_window = next(
+                    (w for w in windows if winapi.window_pid(w.hwnd) == process.pid), None)
                 if main_window is not None:
                     break
             if process.poll() is not None:

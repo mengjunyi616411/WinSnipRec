@@ -1,0 +1,85 @@
+name: Release
+
+# 打 v* 标签即触发：跑自测 → 打包 EXE → 压缩 → 创建 Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的版本号（例如 v1.0.0）"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 录制内核自测
+        run: python tests/selftest_core.py
+
+      - name: 时长回归自测
+        run: python tests/selftest_duration.py
+
+      - name: 打包 EXE
+        run: powershell -ExecutionPolicy Bypass -File build_exe.ps1 -SkipSmokeTest
+
+      - name: 打包产物信息
+        run: |
+          $exe = "dist\截图工具\截图工具.exe"
+          $size = [math]::Round((Get-ChildItem "dist\截图工具" -Recurse -File |
+                   Measure-Object -Property Length -Sum).Sum / 1MB, 1)
+          Write-Host "EXE: $((Get-Item $exe).Length / 1MB) MB，整包 $size MB"
+
+      - name: 压缩为 zip
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ("${{ github.event.inputs.tag }}") { $tag = "${{ github.event.inputs.tag }}" }
+          Compress-Archive -Path "dist\截图工具\*" `
+            -DestinationPath "WinSnipRec-$tag-win64.zip" -CompressionLevel Optimal
+          Write-Host "zip: $((Get-Item "WinSnipRec-$tag-win64.zip").Length / 1MB) MB"
+
+      - name: 生成 SHA256
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ("${{ github.event.inputs.tag }}") { $tag = "${{ github.event.inputs.tag }}" }
+          $hash = (Get-FileHash "WinSnipRec-$tag-win64.zip" -Algorithm SHA256).Hash
+          "$hash  WinSnipRec-$tag-win64.zip" | Out-File -Encoding ASCII "WinSnipRec-$tag-win64.zip.sha256"
+          Write-Host $hash
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: WinSnipRec ${{ github.event.inputs.tag || github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          body: |
+            免安装版：下载下面的 `WinSnipRec-*-win64.zip`，解压后双击 `截图工具.exe` 即可，
+            **不需要安装 Python**。
+
+            系统要求：Windows 10 1809 及以上（Windows 11 同样可用），64 位。
+
+            校验下载完整性：
+
+            ```
+            certutil -hashfile WinSnipRec-*-win64.zip SHA256
+            ```
+          files: |
+            WinSnipRec-*-win64.zip
+            WinSnipRec-*.sha256

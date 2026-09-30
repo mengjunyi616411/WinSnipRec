@@ -305,6 +305,16 @@ def list_windows(min_size: int = 40) -> list[WindowInfo]:
     return result
 
 
+def window_pid(hwnd: int) -> int:
+    """Process id that owns a top level window."""
+    pid = wt.DWORD()
+    try:
+        user32.GetWindowThreadProcessId(wt.HWND(hwnd), ctypes.byref(pid))
+    except Exception:
+        return 0
+    return int(pid.value)
+
+
 def window_at_point(x: int, y: int, exclude_pid: int | None = None) -> int:
     """Root owner of the topmost *foreign* window under a physical point.
 
