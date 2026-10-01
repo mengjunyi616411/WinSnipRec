@@ -324,6 +324,7 @@ WinSnipRec/
 │   ├── make_promo.py          生成宣传图（promo\）
 │   ├── make_perf_charts.py    生成性能图表（perf\）
 │   ├── make_promo_video.py    逐帧渲染宣传视频（promo\video\）
+│   ├── make_update_video.py   渲染 1.1.0 更新宣传片（30s，可配乐）
 │   ├── make_video_cover.py    生成视频封面（16:9 / 4:3）
 │   ├── bench_encode.py        编码 CPU 基准
 │   ├── bench_runtime.py       内存 / 抓屏 / 启停基准
@@ -463,7 +464,34 @@ dist\截图工具\截图工具.exe --selftest-quit   :: 应在数秒内自行退
 
 ## 12. 宣传视频
 
-`promo\video\` 下是一支 **30 秒 / 16:9 / 1920×1080 / 30fps** 的宣传片，全部画面由程序逐帧合成。
+`promo\video\` 下有两支 **30 秒 / 16:9 / 1920×1080 / 30fps** 的宣传片，画面全部由程序逐帧合成：
+
+| 文件 | 内容 |
+|---|---|
+| `promo_1920x1080_30s.mp4` | 首版功能总览 |
+| `update_1920x1080_30s.mp4` | **1.1.0 更新片**：Win10 风格切换 / Acrylic 对比 / Reveal 光效 |
+
+更新片的画面全部来自程序自身：两种风格的窗口是 `MainWindow` 的离屏实拍，
+Reveal 光晕直接调用 `RevealOverlay.glow_pixmap()`（用程序真正的渐变，
+不是在视频里重画近似），所以片子不会和软件走样。
+
+```bat
+.venv\Scripts\python.exe tools\make_update_video.py            :: 渲染更新片
+.venv\Scripts\python.exe tools\make_update_video.py --preview   :: 只出每秒一帧的预览网格
+```
+
+### 配乐
+
+仓库不附带任何商业音乐。拿到你自己的音乐文件后用这个脚本混入
+（音乐自动循环铺满、响度归一到 -18 LUFS、结尾淡出，视频流直接复制不重新编码）：
+
+```bat
+powershell -ExecutionPolicy Bypass -File promo\video\混入音乐.ps1 ^
+    -Music "D:\music\Watch Me Work.mp3" -Offset 32 -Volume 0.35
+```
+
+`-Offset` 用来跳过前奏直接进主歌/副歌；切点已经落在 120 BPM 的拍上，
+如果你的版本速度不同，渲染时用 `--bpm` 指定即可（`tools\make_update_video.py --bpm 140`）。
 
 ```bat
 .venv\Scripts\python.exe tools\make_promo_video.py            :: 渲染成片（约 76 秒）
