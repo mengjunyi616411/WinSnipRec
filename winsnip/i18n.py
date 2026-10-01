@@ -234,6 +234,68 @@ TABLE: dict[str, tuple[str, str, str]] = {
     "当前：{0}": ("目前：{0}", "Current: {0}", "現在: {0}"),
     "版本 {0}": ("版本 {0}", "Version {0}", "バージョン {0}"),
     "界面语言": ("介面語言", "Interface language", "表示言語"),
+    "首次使用引导": ("首次使用引導", "First-run guide", "初回ガイド"),
+    "重新运行引导": ("重新執行引導", "Run the guide again", "ガイドをもう一度"),
+    "欢迎": ("歡迎", "Welcome", "ようこそ"),
+    "跳过": ("略過", "Skip", "スキップ"),
+    "上一步": ("上一步", "Back", "戻る"),
+    "下一步": ("下一步", "Next", "次へ"),
+    "第 {0} / {1} 步": ("第 {0} / {1} 步", "Step {0} of {1}", "ステップ {0} / {1}"),
+    "让截图工具变成你喜欢的样子":
+        ("讓截圖工具變成你喜歡的樣子",
+         "Make WinSnipRec look the way you like",
+         "切り取りツールをお好みの見た目に"),
+    "接下来几个问题，帮你把外观调成自己喜欢的样子。每一步都会立刻作用在这个窗口上，你能直接看到效果。":
+        ("接下來幾個問題，幫你把外觀調成自己喜歡的樣子。"
+         "每一步都會立刻作用在這個視窗上，你能直接看到效果。",
+         "A few quick questions to set the appearance the way you like it. "
+         "Every choice applies to this very window, so you see it right away.",
+         "いくつかの質問で、見た目をお好みに合わせます。"
+         "選んだ内容はこのウィンドウにすぐ反映されるので、その場で確認できます。"),
+    "这些选项随时可以在设置里修改":
+        ("這些選項隨時可以在設定裡修改",
+         "You can change all of this later in Settings",
+         "これらの設定は後から設定で変更できます"),
+    "选一个你更习惯的外观。选中的那一刻，这个窗口就会变成那个样子——圆角、材质和标题栏按钮都会跟着变。":
+        ("選一個你更習慣的外觀。選中的那一刻，這個視窗就會變成那個樣子——"
+         "圓角、材質與標題列按鈕都會跟著變。",
+         "Pick the look you are used to. The moment you choose, this window becomes it - "
+         "corners, material and caption buttons all change.",
+         "使い慣れた見た目を選んでください。選んだ瞬間にこのウィンドウがその外観になり、"
+         "角の丸み、素材、タイトル バーのボタンも変わります。"),
+    "浅色或深色。选「跟随系统」就跟着 Windows 的设置走，系统切成深色时这个窗口也会变。":
+        ("淺色或深色。選「跟隨系統」就跟著 Windows 的設定走，系統切成深色時這個視窗也會變。",
+         "Light or dark. “Follow system” tracks Windows, so this window turns dark "
+         "when Windows does.",
+         "ライトまたはダーク。「システムに従う」を選ぶと Windows の設定に追従し、"
+         "システムがダークになればこのウィンドウも変わります。"),
+    "Windows 10 风格下，鼠标移动会带起一束光。把鼠标移到这个窗口上划一划，就能感受到当前档位的强弱。":
+        ("Windows 10 風格下，滑鼠移動會帶起一束光。"
+         "把滑鼠移到這個視窗上划一划，就能感受到目前檔位的強弱。",
+         "In the Windows 10 style the pointer carries a light. Move the mouse over this "
+         "window to feel how strong the current setting is.",
+         "Windows 10 スタイルではマウスに光が追従します。"
+         "このウィンドウ上でマウスを動かすと、現在の強さを確かめられます。"),
+    "界面文字的显示语言。选「跟随系统」就跟着 Windows 的显示语言走。":
+        ("介面文字的顯示語言。選「跟隨系統」就跟著 Windows 的顯示語言走。",
+         "The language of the interface. “Follow system” tracks the Windows display "
+         "language.",
+         "UI の表示言語です。「システムに従う」を選ぶと Windows の表示言語に追従します。"),
+    "都设置好了": ("都設定好了", "All set", "設定完了"),
+    "这些选项随时可以在设置里修改，也可以再运行一次这个引导。":
+        ("這些選項隨時可以在設定裡修改，也可以再執行一次這個引導。",
+         "You can change any of this in Settings, or run this guide again.",
+         "これらの設定は設定画面でいつでも変更できます。"
+         "このガイドを再度実行することもできます。"),
+    "界面风格：{0}": ("介面風格：{0}", "Interface style: {0}", "インターフェイス: {0}"),
+    "主题：{0}": ("主題：{0}", "Theme: {0}", "テーマ: {0}"),
+    "背景材质：{0}": ("背景材質：{0}", "Backdrop: {0}", "背景: {0}"),
+    "光效强度：{0}": ("光效強度：{0}", "Pointer light: {0}", "光の強さ: {0}"),
+    "界面语言：{0}": ("介面語言：{0}", "Language: {0}", "表示言語: {0}"),
+    "切换背景材质后，新打开的窗口会使用它":
+        ("切換背景材質後，新開啟的視窗會使用它",
+         "A new backdrop applies to windows opened from now on",
+         "背景の変更は、これ以降に開くウィンドウに適用されます"),
     "切换后立即生效，无需重启":
         ("切換後立即生效，無需重新啟動",
          "Applies immediately; no restart needed",

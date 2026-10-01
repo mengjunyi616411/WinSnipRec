@@ -29,6 +29,8 @@ get an H.264 MP4.
   the real Snipping Tool or another app already owns the combination
 - **Start with Windows**, silently into the notification area
 - **Light / dark theme** that follows the system, switchable at runtime
+- **First-run guide**: a seven-step wizard. The guide window *is* the preview -
+  picking a style or theme changes the window you are looking at.
 - **Minimize animation**: a snapshot ghost shrinks toward the taskbar while the
   real window minimizes at once, so the layout never reflows mid-flight.
 - **Four interface languages**: Simplified Chinese, Traditional Chinese, English
@@ -102,7 +104,7 @@ so WinSnipRec logs the conflict and switches to the fallback automatically.
 
 ## Tests
 
-Everything runs offline. 309 assertions across twelve suites:
+Everything runs offline. 326 assertions across thirteen suites:
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py        :: 51  recording core

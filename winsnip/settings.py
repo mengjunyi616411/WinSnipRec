@@ -67,6 +67,7 @@ class Settings:
     style: str = "win11"                  # interface style: win11 | win10 | system
     reveal_strength: str = "weak"         # Win10 pointer light: weak | normal | strong
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja
+    onboarded: bool = False               # has the first-run guide been shown
     backdrop: str = "auto"                # real DWM blur: auto | native | classic
     backdrop_native: bool | None = None   # cached result of the pixel probe
     backdrop_probe_version: int = 0       # invalidates the cache when the probe changes

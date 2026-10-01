@@ -152,6 +152,16 @@ def _watch_system_theme(app: QApplication, window: MainWindow) -> None:
     timer.start()
 
 
+def _show_first_run_guide() -> None:
+    """Show the first-run guide, unless it has already been dismissed."""
+    try:
+        from winsnip.ui.onboarding import show_onboarding
+
+        show_onboarding()
+    except Exception:
+        log.exception("failed to show the first-run guide")
+
+
 def main() -> int:
     _setup_logging()
     winapi.enable_per_monitor_dpi_awareness()
@@ -219,6 +229,11 @@ def main() -> int:
             window.show()
             window.tray.show()
         _after_startup(app, window)
+
+    # First run: show the guide once the main window is up, so the user has
+    # something to come back to while going through it.
+    if not silent and not getattr(settings, "onboarded", False):
+        QTimer.singleShot(400, _show_first_run_guide)
 
     logging.info("ready")
     return app.exec()

@@ -107,6 +107,10 @@ class SettingsWindow(FluentWindow):
         footer_layout.setSpacing(10)
         self.reset_button = FluentButton(_t("恢复默认"), footer, variant="subtle", height=36)
         self.reset_button.clicked.connect(self._reset)
+        self.guide_button = FluentButton(_t("重新运行引导"), footer, variant="subtle",
+                                         height=36)
+        self.guide_button.clicked.connect(self._run_onboarding)
+        footer_layout.addWidget(self.guide_button)
         footer_layout.addWidget(self.reset_button)
         footer_layout.addStretch(1)
         self.done_button = FluentButton(_t("完成"), footer, variant="accent", height=36)
@@ -367,6 +371,13 @@ class SettingsWindow(FluentWindow):
             window = parent._settings_window
             if window is not None:
                 window.setGeometry(geometry)
+
+    def _run_onboarding(self) -> None:
+        """Reopen the guide; the settings window gets out of the way."""
+        from .onboarding import show_onboarding
+
+        self.close()
+        show_onboarding()
 
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])

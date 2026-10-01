@@ -68,6 +68,19 @@
 > ③ 中间提示文字先淡出并上移，换文案后从下方淡入（共 300ms）。
 > 全部走同一套 `winsnip/anim.py` 时长令牌，并受「界面动画」开关与系统设置约束。
 
+### 首次运行引导
+
+第一次打开会在主窗口之上弹出一个 7 步的引导：欢迎 → 界面风格 → 主题 → 背景材质 →
+光效强度 → 界面语言 → 完成。左侧是步骤导航，底部是 跳过 / 第 N / 7 步 / 上一步 / 下一步。
+
+**引导窗口本身就是预览**：它就是一个真的 `FluentWindow`，所以选风格、选主题的那一刻，
+用户正在看的这个窗口立刻变成那个样子——没有缩略图要和实际外观同步，也不可能出现
+"预览和实际不一致"。光效强度那一步同理：窗口自带跟随鼠标的光，让用户直接把鼠标移上去
+划一划就能感受强弱，不需要额外的预览控件。
+
+每一步的选择立刻写入设置。只在首次运行弹出（静默启动 `--tray` 不弹），
+随时可以从 **设置 → 重新运行引导** 再来一次。
+
 ### 界面语言
 
 设置 → 外观 → **界面语言**，可选 跟随系统 / 简体中文 / 繁體中文 / English / 日本語。
@@ -418,6 +431,7 @@ WinSnipRec/
     ├── selftest_devices.py      设备枚举自测（15 项：绝不阻塞 GUI 线程）
     ├── selftest_backdrop.py     背景材质自测（13 项：像素探测、回退、设置项）
     ├── selftest_i18n.py         多语言自测（12 项：覆盖检查、路径不改写、字体）
+    ├── selftest_onboarding.py   引导自测（17 项：步骤顺序、写入设置、只弹一次）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
 
@@ -425,7 +439,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **309 项断言**，当前全部通过：
+全部自测均可离线运行，共 **326 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -440,6 +454,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_devices.py         :: 15/15  音频设备枚举不阻塞界面
 .venv\Scripts\python.exe tests\selftest_backdrop.py        :: 13/13  实时背景材质的探测与回退
 .venv\Scripts\python.exe tests\selftest_i18n.py            :: 12/12  四种语言与覆盖检查
+.venv\Scripts\python.exe tests\selftest_onboarding.py      :: 17/17  首次运行引导
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图
 ```
