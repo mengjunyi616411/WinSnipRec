@@ -55,6 +55,7 @@
 | 全局快捷键 | 默认 `Win+Shift+S` 截图、`Win+Shift+R` 录屏；被占用时自动回退并提示 |
 | 托盘 | 关闭窗口后驻留通知区域，可继续用快捷键唤起 |
 | 开机自启 | 可在设置或 `⋯` 菜单开关；登录 Windows 后**静默进入通知区域**（不弹窗口），快捷键随时可用 |
+| 界面语言 | **简体中文 / 繁體中文 / English / 日本語**，默认跟随系统 |
 | 主题 | 跟随系统浅色/深色，运行中实时切换 |
 | 界面风格 | **Windows 11 / Windows 10 两种风格**，可跟随系统；圆角、材质、标题栏按钮一起变 |
 | 启动动画 | 启动画面（图标 + Fluent 进度环）→ 淡入并轻微上滑进入主窗口；可关闭 |
@@ -66,6 +67,29 @@
 > ② 选中底色与图标颜色同步交叉渐变（旧变浅、新变深）；
 > ③ 中间提示文字先淡出并上移，换文案后从下方淡入（共 300ms）。
 > 全部走同一套 `winsnip/anim.py` 时长令牌，并受「界面动画」开关与系统设置约束。
+
+### 界面语言
+
+设置 → 外观 → **界面语言**，可选 跟随系统 / 简体中文 / 繁體中文 / English / 日本語。
+
+翻译以**简体中文原文为键**（`winsnip/i18n.py`）：漏翻的字符串会退回中文，而不是显示
+键名或空白。表格写成 `源文: (繁體, English, 日本語)` 三列，缺哪一列一眼可见；没有
+引入 Qt 的 `.ts`/`.qm` 工具链，所以不需要额外的构建步骤，打包也不受影响。
+
+字体随语言切换：日文用 **Yu Gothic UI**（假名在只列中文字体时会掉字形），
+繁中用 **Microsoft JhengHei UI**。
+
+**有几类字符串是故意不翻译的**，翻译会出问题：
+
+| 不翻译 | 原因 |
+|---|---|
+| `Videos\录制`、`Pictures\屏幕截图` | 是**文件夹名**，翻译会改变用户的保存位置 |
+| `winapi.py` 的窗口标题忽略表 | 用于**匹配**窗口，不是显示 |
+| `__init__.py` 的应用名 | 也用于识别自己的窗口 |
+| 输出文件名 `截图 xxx.png` | 保持跨语言稳定，脚本与自测依赖它 |
+
+`tests/selftest_i18n.py` 会遍历 AST 检查**所有用户可见的中文字符串都经过 `_t()`**，
+以后新加的标签不可能悄悄漏翻；同时也断言默认保存路径没被翻译。
 
 ### 两种界面风格
 
@@ -393,6 +417,7 @@ WinSnipRec/
     ├── selftest_style.py        风格自测（61 项：圆角、Acrylic、Reveal 光效/光色/菜单配色）
     ├── selftest_devices.py      设备枚举自测（15 项：绝不阻塞 GUI 线程）
     ├── selftest_backdrop.py     背景材质自测（13 项：像素探测、回退、设置项）
+    ├── selftest_i18n.py         多语言自测（12 项：覆盖检查、路径不改写、字体）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
 
@@ -400,7 +425,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **289 项断言**，当前全部通过：
+全部自测均可离线运行，共 **301 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -414,6 +439,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_style.py           :: 61/61  两种风格 + 光效 + 菜单配色 + 重绘预算
 .venv\Scripts\python.exe tests\selftest_devices.py         :: 15/15  音频设备枚举不阻塞界面
 .venv\Scripts\python.exe tests\selftest_backdrop.py        :: 13/13  实时背景材质的探测与回退
+.venv\Scripts\python.exe tests\selftest_i18n.py            :: 12/12  四种语言与覆盖检查
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图
 ```

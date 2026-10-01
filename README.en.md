@@ -29,6 +29,9 @@ get an H.264 MP4.
   the real Snipping Tool or another app already owns the combination
 - **Start with Windows**, silently into the notification area
 - **Light / dark theme** that follows the system, switchable at runtime
+- **Four interface languages**: Simplified Chinese, Traditional Chinese, English
+  and Japanese, following the system by default. Folder names, window-title
+  matching tables and output file names are deliberately NOT translated.
 - **Optional real-time backdrop blur**: Settings -> Appearance -> Backdrop
   (auto / classic / force). Auto *measures pixels* at startup to decide whether
   DWM actually renders a backdrop - both relevant APIs report success on
@@ -97,7 +100,7 @@ so WinSnipRec logs the conflict and switches to the fallback automatically.
 
 ## Tests
 
-Everything runs offline. 289 assertions across eleven suites:
+Everything runs offline. 301 assertions across twelve suites:
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py        :: 51  recording core

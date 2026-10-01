@@ -27,17 +27,18 @@ from .widgets import (
     FluentButton, FluentMenu, FluentWindow, IconButton, SegmentedControl, Separator,
     TitleBar, show_toast,
 )
+from ..i18n import t as _t
 
 SHAPES = [
-    ("rectangle", "矩形区域", "add_rect"),
-    ("window", "窗口", "window"),
-    ("fullscreen", "全屏", "fullscreen"),
-    ("freeform", "自由绘制", "freeform"),
+    ("rectangle", _t("矩形区域"), "add_rect"),
+    ("window", _t("窗口"), "window"),
+    ("fullscreen", _t("全屏"), "fullscreen"),
+    ("freeform", _t("自由绘制"), "freeform"),
 ]
 SHAPE_ICONS = {key: icon for key, _, icon in SHAPES}
 
-LOOPBACK_HINTS = ("stereo mix", "立体声混音", "what u hear", "voicemeeter", "cable output",
-                  "loopback", "监视器", "混音")
+LOOPBACK_HINTS = ("stereo mix", _t("立体声混音"), "what u hear", "voicemeeter", "cable output",
+                  "loopback", _t("监视器"), _t("混音"))
 
 
 class HotkeyHint(QWidget):
@@ -215,7 +216,7 @@ class MainWindow(FluentWindow):
 
     def __init__(self) -> None:
         super().__init__(None, resizable=True)
-        self.setWindowTitle("截图工具")
+        self.setWindowTitle(_t("截图工具"))
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(620, 300)
         self.setMinimumSize(620 + 40, 300 + 40)
@@ -243,7 +244,7 @@ class MainWindow(FluentWindow):
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(0)
 
-        self.title_bar = TitleBar("截图工具", self)
+        self.title_bar = TitleBar(_t("截图工具"), self)
         self.title_bar.icon_label.setPixmap(icons.app_icon().pixmap(16, 16))
         caption = self.title_bar.caption_buttons
         caption["min"].clicked.connect(self.showMinimized)
@@ -257,12 +258,12 @@ class MainWindow(FluentWindow):
         command_layout.setContentsMargins(16, 0, 16, 0)
         command_layout.setSpacing(10)
 
-        self.new_button = FluentButton("新建", command, variant="standard", icon_name="add",
+        self.new_button = FluentButton(_t("新建"), command, variant="standard", icon_name="add",
                                        accent_icon=True, height=36, font_size=14)
         self.new_button.clicked.connect(self.start_capture)
         command_layout.addWidget(self.new_button)
 
-        self.segmented = SegmentedControl([("camera", "截图"), ("video", "录屏")], command,
+        self.segmented = SegmentedControl([("camera", _t("截图")), ("video", _t("录屏"))], command,
                                           item_width=48, height=36)
         self.segmented.set_current(0 if self._mode == "camera" else 1, emit=False)
         self.segmented.itemClicked.connect(self._on_mode_clicked)
@@ -296,7 +297,7 @@ class MainWindow(FluentWindow):
         footer = QHBoxLayout()
         footer.setContentsMargins(0, 0, 0, 0)
         footer.addStretch(1)
-        self.folder_button = FluentButton("打开保存文件夹", self.content, variant="hyperlink",
+        self.folder_button = FluentButton(_t("打开保存文件夹"), self.content, variant="hyperlink",
                                           icon_name="folder", height=28, font_size=12)
         self.folder_button.clicked.connect(self.open_output_folder)
         footer.addWidget(self.folder_button)
@@ -310,15 +311,15 @@ class MainWindow(FluentWindow):
 
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(icons.app_icon(), self)
-        self.tray.setToolTip("截图工具")
+        self.tray.setToolTip(_t("截图工具"))
         menu = QMenu()
-        menu.addAction("新建截图", lambda: self.start_capture("camera"))
-        menu.addAction("新建录屏", lambda: self.start_capture("video"))
+        menu.addAction(_t("新建截图"), lambda: self.start_capture("camera"))
+        menu.addAction(_t("新建录屏"), lambda: self.start_capture("video"))
         menu.addSeparator()
-        menu.addAction("设置", self.open_settings)
-        menu.addAction("打开保存文件夹", self.open_output_folder)
+        menu.addAction(_t("设置"), self.open_settings)
+        menu.addAction(_t("打开保存文件夹"), self.open_output_folder)
         menu.addSeparator()
-        menu.addAction("退出", self._quit)
+        menu.addAction(_t("退出"), self._quit)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
 
@@ -359,14 +360,15 @@ class MainWindow(FluentWindow):
     def _update_hint(self) -> None:
         if self._mode == "camera":
             spec = settings.hotkey_snip
-            primary = f"按 {self._hotkey_display(spec)} 开始截图"
+            primary = _t("按 {0} 开始截图").format(self._hotkey_display(spec))
         else:
             spec = settings.hotkey_record
-            primary = f"按 {self._hotkey_display(spec)} 开始录屏"
+            primary = _t("按 {0} 开始录屏").format(self._hotkey_display(spec))
         if self._hint_mode == "capture":
-            primary = "拖动以选择区域 · Esc 取消"
+            primary = _t("拖动以选择区域 · Esc 取消")
         folder = settings.video_dir if self._mode == "video" else settings.image_dir
-        secondary = f"{'视频' if self._mode == 'video' else '图片'}将保存到 {folder}"
+        secondary = _t("{0}将保存到 {1}").format(
+                _t("视频") if self._mode == "video" else _t("图片"), folder)
         self.hint.set_hint(primary, secondary)
 
     @staticmethod
@@ -387,7 +389,7 @@ class MainWindow(FluentWindow):
         self.audio_button.set_icon_name("mic" if settings.mic_enabled else
                                         ("sound" if settings.system_audio else "mic_off"))
         self.audio_button.setEnabled(self._mode == "video")
-        self.audio_button.setToolTip("录制声音" if self._mode == "video" else "录屏时可选择声音来源")
+        self.audio_button.setToolTip(_t("录制声音") if self._mode == "video" else _t("录屏时可选择声音来源"))
 
     def _show_shape_menu(self) -> None:
         menu = FluentMenu(self, min_width=210)
@@ -407,9 +409,9 @@ class MainWindow(FluentWindow):
         from ..core.audio import list_microphones
 
         menu = FluentMenu(self, min_width=250)
-        menu.add_item("录制麦克风", icon_name="mic", checked=settings.mic_enabled,
+        menu.add_item(_t("录制麦克风"), icon_name="mic", checked=settings.mic_enabled,
                       on_activate=lambda: self._set_mic_enabled(not settings.mic_enabled))
-        menu.add_item("录制系统声音", icon_name="sound", checked=settings.system_audio,
+        menu.add_item(_t("录制系统声音"), icon_name="sound", checked=settings.system_audio,
                       on_activate=lambda: self._set_system_audio(not settings.system_audio))
         menu.add_separator()
 
@@ -423,23 +425,23 @@ class MainWindow(FluentWindow):
         microphones = [d for d in devices if not _is_loopback(d.name)]
         loopbacks = [d for d in devices if _is_loopback(d.name)]
         if not devices:
-            menu.add_header("音频设备")
-            menu.add_item("未找到音频设备" if microphones_scanned() else "正在检测音频设备…",
+            menu.add_header(_t("音频设备"))
+            menu.add_item(_t("未找到音频设备") if microphones_scanned() else _t("正在检测音频设备…"),
                           checked=False, on_activate=lambda: None)
             menu.add_separator()
         if microphones:
-            menu.add_header("麦克风设备")
+            menu.add_header(_t("麦克风设备"))
             for device in microphones[:12]:
                 menu.add_item(_shorten(device.name), checked=(device.id == settings.mic_device),
                               on_activate=lambda d=device: self._set_mic_device(d.id))
         if loopbacks:
-            menu.add_header("系统声音设备（回环）")
+            menu.add_header(_t("系统声音设备（回环）"))
             for device in loopbacks[:12]:
                 menu.add_item(_shorten(device.name),
                               checked=(device.id == settings.system_audio_device),
                               on_activate=lambda d=device: self._set_loopback_device(d.id))
         if not devices:
-            menu.add_item("未找到音频设备", enabled=False)
+            menu.add_item(_t("未找到音频设备"), enabled=False)
         menu.popup(self.audio_button.mapToGlobal(QPoint(0, self.audio_button.height() + 6)))
 
     def _set_mic_enabled(self, enabled: bool) -> None:
@@ -453,8 +455,8 @@ class MainWindow(FluentWindow):
             if device:
                 settings.mic_device = device.id
                 settings.save()
-        show_toast("麦克风已" + ("开启" if enabled else "关闭"),
-                   "录制时将" + ("采集" if enabled else "不采集") + "麦克风声音", "mic")
+        show_toast(_t(_t("麦克风已开启")) if enabled else _t(_t("麦克风已关闭")),
+                   _t("录制时将") + (_t("采集") if enabled else _t("不采集")) + _t("麦克风声音"), "mic")
 
     def _set_system_audio(self, enabled: bool) -> None:
         settings.system_audio = enabled
@@ -472,10 +474,10 @@ class MainWindow(FluentWindow):
                 settings.system_audio = False
                 settings.save()
                 self._update_audio_icon()
-                show_toast("无法录制系统声音",
-                           "未找到立体声混音等回环设备。可在“声音设置”中启用“立体声混音”。", "info")
+                show_toast(_t("无法录制系统声音"),
+                           _t("未找到立体声混音等回环设备。可在“声音设置”中启用“立体声混音”。"), "info")
                 return
-        show_toast("系统声音已" + ("开启" if enabled else "关闭"), "", "sound")
+        show_toast(_t(_t("系统声音已开启")) if enabled else _t(_t("系统声音已关闭")), "", "sound")
 
     def _set_mic_device(self, device_id: str) -> None:
         settings.mic_device = device_id
@@ -493,18 +495,19 @@ class MainWindow(FluentWindow):
         from .. import startup
 
         menu = FluentMenu(self, min_width=230)
-        menu.add_header("开始前延迟")
+        menu.add_header(_t("开始前延迟"))
         for value in (0, 3, 5, 10):
-            menu.add_item("无延迟" if value == 0 else f"{value} 秒", checked=(settings.countdown == value),
+            menu.add_item(_t("无延迟") if value == 0 else _t("{0} 秒").format(value),
+                            checked=(settings.countdown == value),
                           on_activate=lambda v=value: self._set_countdown(v))
         menu.add_separator()
         autostart = startup.is_enabled()
-        menu.add_item("开机自动启动", icon_name="monitor", checked=autostart,
+        menu.add_item(_t("开机自动启动"), icon_name="monitor", checked=autostart,
                       on_activate=self._toggle_autostart)
-        menu.add_item("设置", icon_name="settings", on_activate=self.open_settings)
-        menu.add_item("打开保存文件夹", icon_name="folder", on_activate=self.open_output_folder)
+        menu.add_item(_t("设置"), icon_name="settings", on_activate=self.open_settings)
+        menu.add_item(_t("打开保存文件夹"), icon_name="folder", on_activate=self.open_output_folder)
         menu.add_separator()
-        menu.add_item("关于截图工具", icon_name="info", on_activate=self._show_about)
+        menu.add_item(_t("关于截图工具"), icon_name="info", on_activate=self._show_about)
         menu.popup(self.more_button.mapToGlobal(QPoint(0, self.more_button.height() + 6)))
 
     def _toggle_autostart(self) -> None:
@@ -512,13 +515,13 @@ class MainWindow(FluentWindow):
 
         if startup.is_enabled():
             ok, message = startup.disable()
-            show_toast("开机自动启动已关闭" if ok else "操作失败",
-                       "已从注册表启动项中移除" if ok else message,
+            show_toast(_t("开机自动启动已关闭") if ok else _t("操作失败"),
+                       _t("已从注册表启动项中移除") if ok else message,
                        "info" if ok else "info", duration=4200 if ok else 5200)
         else:
             ok, message = startup.enable()
-            show_toast("开机自动启动已开启" if ok else "操作失败",
-                       "登录 Windows 后会在通知区域静默运行，可直接用快捷键唤起"
+            show_toast(_t("开机自动启动已开启") if ok else _t("操作失败"),
+                       _t("登录 Windows 后会在通知区域静默运行，可直接用快捷键唤起")
                        if ok else message,
                        "check" if ok else "info", duration=5200)
         if self._settings_window is not None:
@@ -527,7 +530,9 @@ class MainWindow(FluentWindow):
     def _set_countdown(self, value: int) -> None:
         settings.countdown = value
         settings.save()
-        show_toast("延迟已设置", "无延迟" if value == 0 else f"{value} 秒后开始", "timer")
+        show_toast(_t("延迟已设置"),
+                       _t("无延迟") if value == 0 else _t("{0} 秒后开始").format(value),
+                       "timer")
 
     def _show_about(self) -> None:
         from .settings_dialog import AboutWindow
@@ -557,7 +562,7 @@ class MainWindow(FluentWindow):
             # overlay on top of the running recording.
             logging.getLogger("winsnip.ui").info(
                 "start_capture(%s) ignored: a recording is in progress", mode)
-            show_toast("正在录制中", "按 Ctrl+Alt+Q 停止录制，Ctrl+Alt+P 暂停/继续",
+            show_toast(_t("正在录制中"), _t("按 Ctrl+Alt+Q 停止录制，Ctrl+Alt+P 暂停/继续"),
                        "record_ring", duration=2400)
             return
         logging.getLogger("winsnip.ui").info("start_capture(%s)", mode)
@@ -579,7 +584,7 @@ class MainWindow(FluentWindow):
         except Exception:
             logging.getLogger("winsnip.ui").exception("failed to open the capture overlay")
             self._overlay = None
-            show_toast("无法启动捕获", "请查看日志 %APPDATA%\\WinSnipRec\\app.log", "info")
+            show_toast(_t("无法启动捕获"), _t("请查看日志 %APPDATA%\\WinSnipRec\\app.log"), "info")
             self._restore_main()
 
     def _backup_visibility(self) -> None:
@@ -643,7 +648,7 @@ class MainWindow(FluentWindow):
             image = QImage()
             image.loadFromData(png, "PNG")
         if image is None or image.isNull():
-            show_toast("截图失败", "无法读取屏幕内容", "info")
+            show_toast(_t("截图失败"), _t("无法读取屏幕内容"), "info")
             self._restore_main()
             return
         if settings.copy_image_to_clipboard:
@@ -652,14 +657,14 @@ class MainWindow(FluentWindow):
         path = Path(settings.image_dir) / f"截图 {stamp}.png"
         try:
             if not image.save(str(path), "PNG"):
-                raise OSError("PNG 编码失败")
+                raise OSError(_t("PNG 编码失败"))
         except Exception as exc:
-            show_toast("保存失败", str(exc), "info")
+            show_toast(_t("保存失败"), str(exc), "info")
         self._preview = ImagePreviewWindow(str(path), image)
         self._preview.closed.connect(self._restore_main)
         self._preview.show()
         if settings.copy_image_to_clipboard:
-            show_toast("已复制到剪贴板", f"同时保存到 {path}", "copy")
+            show_toast(_t("已复制到剪贴板"), _t("同时保存到 {0}").format(path), "copy")
 
     def _resolve_audio_devices(self) -> list:
         from ..core.audio import AudioDevice, list_microphones
@@ -724,7 +729,7 @@ class MainWindow(FluentWindow):
             "recording started rect=%s fps=%s audio=%s out=%s",
             (physical.x(), physical.y(), physical.width(), physical.height()),
             settings.fps, [d.name for d in devices], out_path)
-        show_toast("录屏已开始", f"{physical.width()}×{physical.height()} · {settings.fps} fps",
+        show_toast(_t("录屏已开始"), f"{physical.width()}×{physical.height()} · {settings.fps} fps",
                    "record_ring", duration=2200)
 
     def _mic_available(self) -> bool:
@@ -746,7 +751,7 @@ class MainWindow(FluentWindow):
         if setter is None:
             if self._control_bar is not None:
                 self._control_bar.set_mic_enabled(not enabled, available=False)
-            show_toast("无法在录制中切换麦克风", "请先停止录制，然后在工具栏中选择声音来源", "info")
+            show_toast(_t("无法在录制中切换麦克风"), _t("请先停止录制，然后在工具栏中选择声音来源"), "info")
             return
         from ..core.audio import AudioDevice
 
@@ -760,7 +765,7 @@ class MainWindow(FluentWindow):
             if not device_id:
                 if self._control_bar is not None:
                     self._control_bar.set_mic_enabled(False, available=False)
-                show_toast("未找到麦克风", "", "info")
+                show_toast(_t("未找到麦克风"), "", "info")
                 return
             setter(AudioDevice(device_id, device_id))
         else:
@@ -787,7 +792,7 @@ class MainWindow(FluentWindow):
             self._control_bar.set_elapsed(seconds)
 
     def _on_recorder_error(self, message: str) -> None:
-        show_toast("录制出现问题", message, "info")
+        show_toast(_t("录制出现问题"), message, "info")
 
     def _on_recorder_finished(self, path: str) -> None:
         logging.getLogger("winsnip.ui").info("recording finished: %s", path or "(no output)")
@@ -800,7 +805,7 @@ class MainWindow(FluentWindow):
             size = os.path.getsize(path)
         except Exception:
             pass
-        show_toast("录制已保存", f"{Path(path).name} · {_human_size(size)}", "check",
+        show_toast(_t("录制已保存"), f"{Path(path).name} · {_human_size(size)}", "check",
                    duration=5200, on_click=lambda: self._reveal(path))
         if settings.open_folder_when_done:
             self._reveal(path)
@@ -814,7 +819,7 @@ class MainWindow(FluentWindow):
         if self._recorder is not None:
             self._recorder.discard()
             self._teardown_recording()
-            show_toast("已取消录制", "临时文件已删除", "trash")
+            show_toast(_t("已取消录制"), _t("临时文件已删除"), "trash")
         self._restore_main()
 
     def _teardown_recording(self) -> None:
@@ -901,7 +906,7 @@ class MainWindow(FluentWindow):
             Path(folder).mkdir(parents=True, exist_ok=True)
             os.startfile(folder)  # noqa: S606
         except Exception as exc:
-            show_toast("无法打开文件夹", str(exc), "info")
+            show_toast(_t("无法打开文件夹"), str(exc), "info")
 
     def _reveal(self, path: str) -> None:
         try:
@@ -950,7 +955,7 @@ class MainWindow(FluentWindow):
         if settings.minimize_to_tray and self.tray.isVisible():
             self.hide()
             event.ignore()
-            show_toast("截图工具仍在运行", "按 Win+Shift+S 截图，Win+Shift+R 录屏；右键托盘图标退出",
+            show_toast(_t("截图工具仍在运行"), _t("按 Win+Shift+S 截图，Win+Shift+R 录屏；右键托盘图标退出"),
                        "info", duration=4200)
             return
         super().closeEvent(event)

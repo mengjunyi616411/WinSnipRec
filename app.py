@@ -164,6 +164,9 @@ def main() -> int:
     app.setOrganizationName("WinSnipRec")
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(icons.app_icon())
+    from winsnip import i18n
+
+    i18n.set_language(getattr(settings, "language", "system"))
     theme.mode = settings.theme
     theme.style = getattr(settings, "style", "win11")
     apply_app_theme(app)

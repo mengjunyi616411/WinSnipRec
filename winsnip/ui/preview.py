@@ -17,6 +17,7 @@ from .. import icons
 from ..settings import settings
 from ..theme import theme, ui_font
 from .widgets import FluentButton, FluentWindow, IconButton, Separator, TitleBar, show_toast
+from ..i18n import t as _t
 
 
 class ImageCanvas(QWidget):
@@ -57,7 +58,7 @@ class ImagePreviewWindow(FluentWindow):
 
     def __init__(self, path: str, image: QImage) -> None:
         super().__init__(None, resizable=True)
-        self.setWindowTitle("截图工具")
+        self.setWindowTitle(_t("截图工具"))
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(720, 520)
         self.setMinimumSize(480 + 40, 360 + 40)
@@ -69,7 +70,7 @@ class ImagePreviewWindow(FluentWindow):
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(0)
 
-        self.title_bar = TitleBar("截图工具", self)
+        self.title_bar = TitleBar(_t("截图工具"), self)
         self.title_bar.icon_label.setPixmap(icons.app_icon().pixmap(16, 16))
         self.title_bar.caption_buttons["min"].clicked.connect(self.showMinimized)
         self.title_bar.caption_buttons["max"].clicked.connect(self._toggle_max)
@@ -82,19 +83,19 @@ class ImagePreviewWindow(FluentWindow):
         layout.setContentsMargins(16, 0, 16, 0)
         layout.setSpacing(10)
 
-        self.save_button = FluentButton("保存", command, variant="accent", icon_name="save",
+        self.save_button = FluentButton(_t("保存"), command, variant="accent", icon_name="save",
                                         height=36, font_size=14)
         self.save_button.clicked.connect(self.save_as)
         layout.addWidget(self.save_button)
 
-        self.copy_button = FluentButton("复制", command, variant="standard", icon_name="copy",
+        self.copy_button = FluentButton(_t("复制"), command, variant="standard", icon_name="copy",
                                         height=36, font_size=14)
         self.copy_button.clicked.connect(self.copy_to_clipboard)
         layout.addWidget(self.copy_button)
 
         layout.addWidget(Separator(command, height=22))
 
-        self.folder_button = FluentButton("在文件夹中显示", command, variant="subtle",
+        self.folder_button = FluentButton(_t("在文件夹中显示"), command, variant="subtle",
                                           icon_name="folder", height=36, font_size=14)
         self.folder_button.clicked.connect(self.reveal)
         layout.addWidget(self.folder_button)
@@ -105,7 +106,7 @@ class ImagePreviewWindow(FluentWindow):
         self.size_label.setFont(ui_font(12))
         layout.addWidget(self.size_label)
 
-        self.cancel_button = IconButton("close", command, width=40, height=36, tooltip="关闭")
+        self.cancel_button = IconButton("close", command, width=40, height=36, tooltip=_t("关闭"))
         self.cancel_button.clicked.connect(self.close)
         layout.addWidget(self.cancel_button)
         root.addWidget(command)
@@ -115,7 +116,7 @@ class ImagePreviewWindow(FluentWindow):
         root.addWidget(self.canvas, 1)
 
         self.size_label.setText(f"{self._pixmap.width()} × {self._pixmap.height()}")
-        self.title_bar.set_title(f"截图工具 — {Path(path).name}")
+        self.title_bar.set_title(_t("截图工具 — {0}").format(Path(path).name))
         self.refresh_theme()
 
         QShortcut(QKeySequence.StandardKey.Copy, self, self.copy_to_clipboard)
@@ -137,12 +138,12 @@ class ImagePreviewWindow(FluentWindow):
     # ------------------------------------------------------------------ #
     def copy_to_clipboard(self) -> None:
         QGuiApplication.clipboard().setPixmap(self._pixmap)
-        show_toast("已复制到剪贴板", f"{self._pixmap.width()} × {self._pixmap.height()}", "copy",
+        show_toast(_t("已复制到剪贴板"), f"{self._pixmap.width()} × {self._pixmap.height()}", "copy",
                    duration=2000)
 
     def save_as(self) -> None:
         default = self._path
-        target, _ = QFileDialog.getSaveFileName(self, "另存为", default, "PNG 图片 (*.png);;JPEG 图片 (*.jpg)")
+        target, _ = QFileDialog.getSaveFileName(self, _t("另存为"), default, _t("PNG 图片 (*.png);;JPEG 图片 (*.jpg)"))
         if not target:
             return
         try:
@@ -151,11 +152,11 @@ class ImagePreviewWindow(FluentWindow):
             else:
                 self._pixmap.save(target, "PNG")
         except Exception as exc:
-            show_toast("保存失败", str(exc), "info")
+            show_toast(_t("保存失败"), str(exc), "info")
             return
         self._path = target
-        self.title_bar.set_title(f"截图工具 — {Path(target).name}")
-        show_toast("已保存", target, "check")
+        self.title_bar.set_title(_t("截图工具 — {0}").format(Path(target).name))
+        show_toast(_t("已保存"), target, "check")
 
     def reveal(self) -> None:
         try:
@@ -165,7 +166,7 @@ class ImagePreviewWindow(FluentWindow):
             try:
                 os.startfile(folder)  # noqa: S606
             except Exception as exc:
-                show_toast("无法打开文件夹", str(exc), "info")
+                show_toast(_t("无法打开文件夹"), str(exc), "info")
 
     def closeEvent(self, event) -> None:  # noqa: N802
         super().closeEvent(event)

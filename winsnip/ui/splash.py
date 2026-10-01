@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from .. import __version__, anim, icons
 from ..theme import theme, ui_font
 from .widgets import FluentWindow
+from ..i18n import t as _t
 
 MIN_VISIBLE_MS = 900          # a splash that flashes for 80 ms feels broken
 MAX_VISIBLE_MS = 6000         # never let a slow start hold the splash forever
@@ -94,7 +95,7 @@ class SplashWindow(FluentWindow):
     def __init__(self) -> None:
         super().__init__(None, tint_strength=0.92, margin=22,
                          open_animation="none")
-        self.setWindowTitle("截图工具")
+        self.setWindowTitle(_t("截图工具"))
         # SplashScreen keeps it out of the taskbar and without decorations.
         self.setWindowFlags(Qt.WindowType.SplashScreen |
                             Qt.WindowType.FramelessWindowHint |
@@ -122,7 +123,7 @@ class SplashWindow(FluentWindow):
         # 3-4 s to resolve on a software-rendered desktop, and Qt pays it inside
         # show(), before showEvent — which would keep the splash unseen for that
         # whole time. showEvent applies the fonts once the window is on screen.
-        self.title = QLabel("截图工具", self)
+        self.title = QLabel(_t("截图工具"), self)
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self.title)

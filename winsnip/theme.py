@@ -53,6 +53,17 @@ WIN10_CLOSE_PRESSED = "#F1707A"
 UI_FAMILIES = ["Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI"]
 UI_FAMILIES_WIN10 = ["Segoe UI", "Microsoft YaHei UI", "Segoe UI Variable"]
 
+# Each writing system needs a family that actually carries its glyphs: kana in
+# particular fall back badly if only a Simplified Chinese face is listed.
+UI_FAMILIES_BY_LANGUAGE = {
+    "zh-Hans": UI_FAMILIES,
+    "zh-Hant": ["Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+                "Microsoft JhengHei UI", "Microsoft YaHei UI"],
+    "ja": ["Yu Gothic UI", "Meiryo UI", "Segoe UI Variable Text", "Segoe UI",
+           "Microsoft YaHei UI"],
+    "en": ["Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI"],
+}
+
 # style name -> radii / shadow / metrics
 STYLE_TOKENS: dict[str, dict[str, float]] = {
     "win11": {
@@ -76,9 +87,24 @@ STYLE_TOKENS: dict[str, dict[str, float]] = {
 }
 
 
+def current_font_families() -> list[str]:
+    """Families for the active language and style."""
+    try:
+        from . import i18n
+
+        families = UI_FAMILIES_BY_LANGUAGE.get(i18n.language())
+    except Exception:
+        families = None
+    if families is None:
+        families = UI_FAMILIES
+    if theme.is_win10 and families is UI_FAMILIES:
+        return UI_FAMILIES_WIN10
+    return families
+
+
 def ui_font(size: int = 14, weight: int = 400) -> QFont:
     font = QFont()
-    font.setFamilies(UI_FAMILIES_WIN10 if theme.is_win10 else UI_FAMILIES)
+    font.setFamilies(current_font_families())
     font.setPixelSize(size)
     font.setWeight(QFont.Weight(weight))
     return font

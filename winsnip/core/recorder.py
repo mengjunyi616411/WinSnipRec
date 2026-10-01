@@ -37,6 +37,7 @@ from .encoder import (
     run_ffmpeg_checked,
 )
 from .screen import ScreenGrabber, clamp_rect
+from ..i18n import t as _t
 
 __all__ = ["RecorderState", "Recorder"]
 
@@ -1193,8 +1194,9 @@ class Recorder(QObject):
                 return
             missing = expected - produced
             self._report_error(
-                f"本机编码速度跟不上：实际录制 {expected:.1f}s，写入成片 {produced:.1f}s"
-                f"（少 {missing:.1f}s）。建议降低帧率或缩小录制区域。",
+                _t("本机编码速度跟不上：实际录制 {0:.1f}s，写入成片 {1:.1f}s"
+                   "（少 {2:.1f}s）。建议降低帧率或缩小录制区域。").format(
+                    expected, produced, missing),
                 once=True,
             )
         except Exception:

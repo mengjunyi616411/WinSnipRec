@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QMenu, QWidget
 from .. import anim, icons, winapi
 from ..theme import mica, rgba, theme, ui_font
 from .widgets import FluentMenu, IconButton, Separator
+from ..i18n import t as _t
 
 HANDLE_SIZE = 8
 MIN_SIZE = 8
@@ -39,20 +40,20 @@ class CaptureBar(QWidget):
         from .widgets import SegmentedControl
 
         self.segmented = SegmentedControl(
-            [("camera", "截图"), ("video", "录屏")], item_width=48, height=36
+            [("camera", _t("截图")), ("video", _t("录屏"))], item_width=48, height=36
         )
         self.segmented.set_current(0 if mode == "camera" else 1)
         self.segmented.currentChanged.connect(self._on_mode)
         layout.addWidget(self.segmented)
 
         self.shape_button = IconButton("add_rect", self, width=64, height=36, with_chevron=True,
-                                       tooltip="选择捕获区域")
+                                       tooltip=_t("选择捕获区域"))
         self.shape_button.clicked.connect(self._show_shape_menu)
         layout.addWidget(self.shape_button)
 
         layout.addWidget(Separator(self, height=20))
 
-        self.cancel_button = IconButton("close", self, width=40, height=36, tooltip="取消 (Esc)")
+        self.cancel_button = IconButton("close", self, width=40, height=36, tooltip=_t("取消 (Esc)"))
         self.cancel_button.clicked.connect(self.cancelRequested.emit)
         layout.addWidget(self.cancel_button)
 
@@ -77,10 +78,10 @@ class CaptureBar(QWidget):
     def _show_shape_menu(self) -> None:
         menu = FluentMenu(self, min_width=200)
         options = [
-            ("rectangle", "矩形区域", "add_rect", True),
-            ("window", "窗口", "window", True),
-            ("fullscreen", "全屏", "fullscreen", True),
-            ("freeform", "自由绘制", "freeform", self._mode == "camera"),
+            ("rectangle", _t("矩形区域"), "add_rect", True),
+            ("window", _t("窗口"), "window", True),
+            ("fullscreen", _t("全屏"), "fullscreen", True),
+            ("freeform", _t("自由绘制"), "freeform", self._mode == "camera"),
         ]
         for key, label, icon_name, enabled in options:
             menu.add_item(label, icon_name=icon_name, checked=(key == self._shape), enabled=enabled,
@@ -598,7 +599,7 @@ class CaptureOverlay(QWidget):
 
     def _paint_confirm_chip(self, painter: QPainter, rect: QRect) -> None:
         palette = theme.palette
-        label = "开始录屏" if self._mode == "video" else "截图"
+        label = _t("开始录屏") if self._mode == "video" else _t("截图")
         size_text = f"{self._selection.width()} × {self._selection.height()}"
         font = ui_font(12)
         painter.setFont(font)

@@ -12,6 +12,7 @@ import logging
 import sys
 import winreg
 from pathlib import Path
+from .i18n import t as _t
 
 __all__ = [
     "VALUE_NAME", "RUN_KEY_PATH", "startup_command", "registered_command",
@@ -109,7 +110,7 @@ def enable() -> tuple[bool, str]:
             winreg.SetValueEx(key, VALUE_NAME, 0, winreg.REG_SZ, command)
     except OSError as exc:
         log.warning("cannot enable autostart: %s", exc)
-        return False, f"写入注册表失败：{exc}"
+        return False, _t("写入注册表失败：{0}").format(exc)
     log.info("autostart enabled: %s", command)
     return True, command
 
@@ -122,14 +123,14 @@ def disable() -> tuple[bool, str]:
             try:
                 winreg.DeleteValue(key, VALUE_NAME)
             except FileNotFoundError:
-                return True, "原本就没有开启"
+                return True, _t("原本就没有开启")
     except FileNotFoundError:
-        return True, "原本就没有开启"
+        return True, _t("原本就没有开启")
     except OSError as exc:
         log.warning("cannot disable autostart: %s", exc)
-        return False, f"删除注册表项失败：{exc}"
+        return False, _t("删除注册表项失败：{0}").format(exc)
     log.info("autostart disabled")
-    return True, "已关闭"
+    return True, _t("已关闭")
 
 
 def refresh_if_stale() -> bool:
@@ -155,9 +156,12 @@ def describe() -> str:
     """One line for the settings UI."""
     stored = registered_command()
     if not stored:
-        return "关闭时登录 Windows 不会自动运行"
+        return _t("关闭时登录 Windows 不会自动运行")
     if _stale():
-        return f"已开启，但指向的程序已不存在：{_short(_executable_of(stored))}"
+        return _t("已开启，但指向的程序已不存在：{0}").format(
+            _short(_executable_of(stored)))
     if not is_current():
-        return f"已开启（指向另一份程序）：{_short(_executable_of(stored))}"
-    return f"已开启：登录后静默运行在通知区域 · {_short(_executable_of(stored))}"
+        return _t("已开启（指向另一份程序）：{0}").format(
+            _short(_executable_of(stored)))
+    return _t("已开启：登录后静默运行在通知区域 · {0}").format(
+            _short(_executable_of(stored)))

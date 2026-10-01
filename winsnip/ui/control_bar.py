@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 from .. import icons, winapi
 from ..theme import rgba, theme, ui_font
 from .widgets import FluentWindow, IconButton, Separator
+from ..i18n import t as _t
 
 BAR_HEIGHT = 48
 BAR_MARGIN = 14
@@ -20,7 +21,7 @@ class _StopButton(QPushButton):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFixedSize(40, 36)
-        self.setToolTip("停止录制 (Ctrl+Alt+Q)")
+        self.setToolTip(_t("停止录制 (Ctrl+Alt+Q)"))
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self._hover = False
         self._pressed = False
@@ -104,13 +105,13 @@ class RecordControlBar(FluentWindow):
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         layout.addWidget(self.timer_label)
 
-        self.pause_button = IconButton("pause", self, width=40, height=36, tooltip="暂停 (Ctrl+Alt+P)")
+        self.pause_button = IconButton("pause", self, width=40, height=36, tooltip=_t("暂停 (Ctrl+Alt+P)"))
         self.pause_button.clicked.connect(self._toggle_pause)
         layout.addWidget(self.pause_button)
 
         self.mic_button = IconButton(
             "mic" if mic_enabled else "mic_off", self, width=40, height=36,
-            tooltip="麦克风", checkable=True,
+            tooltip=_t("麦克风"), checkable=True,
         )
         self.mic_button.setEnabled(mic_available)
         self.mic_button.setChecked(mic_enabled)
@@ -120,7 +121,7 @@ class RecordControlBar(FluentWindow):
         layout.addWidget(Separator(self, height=22))
 
         self.discard_button = IconButton("trash", self, width=40, height=36,
-                                         tooltip="取消并删除这段录制")
+                                         tooltip=_t("取消并删除这段录制"))
         self.discard_button.clicked.connect(self.discardRequested.emit)
         layout.addWidget(self.discard_button)
 
@@ -160,7 +161,7 @@ class RecordControlBar(FluentWindow):
     def set_paused(self, paused: bool) -> None:
         self._paused = paused
         self.pause_button.set_icon_name("play" if paused else "pause")
-        self.pause_button.setToolTip("继续 (Ctrl+Alt+P)" if paused else "暂停 (Ctrl+Alt+P)")
+        self.pause_button.setToolTip(_t("继续 (Ctrl+Alt+P)") if paused else _t("暂停 (Ctrl+Alt+P)"))
         self._pulse.stop() if paused else self._pulse.start()
         self.update()
 

@@ -22,6 +22,7 @@ from ..theme import (
     CAPTION_BUTTON_SIZE, WIN10_CLOSE_HOVER, WIN10_CLOSE_PRESSED, mica, render_shadow, rgba,
     theme, ui_font,
 )
+from ..i18n import t as _t
 
 SHADOW_MARGIN = 20
 
@@ -572,14 +573,14 @@ class FluentWindow(QWidget):
         if not hwnd:
             return
         if winapi.is_layered(hwnd):
-            self._fallback_from_native("窗口是分层窗口，DWM 背景会被绕过")
+            self._fallback_from_native(_t("窗口是分层窗口，DWM 背景会被绕过"))
             return
         tint = _native_tint(theme.palette.window_bg, self._tint_strength, theme.dark)
         applied = winapi.set_accent_blur(hwnd, winapi.ACCENT_ENABLE_ACRYLICBLURBEHIND, tint)
         if not applied:
             applied = winapi.set_system_backdrop(hwnd, winapi.DWMSBT_TRANSIENTWINDOW)
         if not applied:
-            self._fallback_from_native("系统拒绝了背景材质请求")
+            self._fallback_from_native(_t("系统拒绝了背景材质请求"))
             return
         self._sync_native_region()
 
@@ -650,7 +651,7 @@ class FluentWindow(QWidget):
         if not samples:
             return
         if total / samples < 12 and darkest < 6:
-            self._fallback_from_native("背景渲染为纯黑（accent API 的已知故障）")
+            self._fallback_from_native(_t("背景渲染为纯黑（accent API 的已知故障）"))
 
     def _apply_native_rounding(self) -> None:
         try:
@@ -1008,7 +1009,7 @@ class CaptionButton(QPushButton):
         self.setFixedSize(CAPTION_BUTTON_SIZE)
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self.setToolTip({"min": "最小化", "max": "最大化", "restore": "还原", "close": "关闭"}[kind])
+        self.setToolTip({"min": _t("最小化"), "max": _t("最大化"), "restore": _t("还原"), "close": _t("关闭")}[kind])
 
     def enterEvent(self, event) -> None:  # noqa: N802
         self._hover = True
