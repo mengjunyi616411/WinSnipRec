@@ -371,6 +371,92 @@ def main() -> int:
     check("win11 按钮悬停没有这条描边", win11_edge < win10_edge,
           f"win11 {win11_edge:.1f} vs win10 {win10_edge:.1f}")
 
+    # ---- 浅色模式的光不能是色块 ----
+    # 回归"在浅色模式下 Reveal 光效的色块明显"。三个成因都测：
+    #   a) 浮层原来只有卡片大小，300px 的光在卡片边缘被硬切成直角色块
+    #   b) 浅色模式用饱和强调色打光，在近白底上就是一块蓝
+    #   c) 300px 的 8bit 径向渐变会出色带
+    from winsnip.ui.widgets import FluentWindow
+
+    def bare_card(mode: str, pointer: QPointF | None):
+        theme.style = "win10"
+        theme.mode = mode
+        theme.refresh()
+        apply_app_theme(app)
+        card_window = FluentWindow(None, shadow=False)
+        card_window.set_card_size(560, 300)
+        card_window.show()
+        card_window._stop_reveal_tracking()
+        pump(app, 0.45)
+        card_window.repaint()
+        pump(app, 0.15)
+        plain = card_window.grab().toImage()
+        if pointer is None:
+            card_window.close()
+            card_window.deleteLater()
+            return plain, plain, None
+        card_window.set_reveal(pointer, 1.0)
+        card_window.repaint()
+        pump(app, 0.25)
+        lit = card_window.grab().toImage()
+        rect = card_window.card_rect()
+        card_window.close()
+        card_window.deleteLater()
+        pump(app, 0.12)
+        return plain, lit, rect
+
+    probe = QPointF(300.0, 180.0)
+    plain_light, lit_light, card_light = bare_card("light", probe)
+    ratio_light = lit_light.width() / (card_light.width() + card_light.x() * 2)
+
+    def sample(image, rect, lx: float, ly: float):
+        return image.pixelColor(min(image.width() - 1, int(lx * ratio_light)),
+                                min(image.height() - 1, int(ly * ratio_light)))
+
+    light_at = sample(lit_light, card_light, probe.x(), probe.y())
+    light_before = sample(plain_light, card_light, probe.x(), probe.y())
+    check("浅色模式的光是中性白，不是蓝色块",
+          abs(light_at.blue() - light_at.red()) <= 6,
+          f"光斑 R={light_at.red()} G={light_at.green()} B={light_at.blue()}，"
+          f"蓝红差 {abs(light_at.blue() - light_at.red())}")
+    check("光斑比无光时亮（是光不是污渍）", light_at.red() - light_before.red() >= 2,
+          f"亮了 {light_at.red() - light_before.red()} 级")
+
+    ray_steps = []
+    previous = None
+    for offset in range(0, 260, 2):
+        value = sample(lit_light, card_light, probe.x() + offset, probe.y()).red()
+        if previous is not None:
+            ray_steps.append(abs(value - previous))
+        previous = value
+    check("浅色模式的渐变没有色带", max(ray_steps) <= 2,
+          f"最大相邻跳变 {max(ray_steps)} 级")
+
+    edge_values = [sample(lit_light, card_light, card_light.x() + d, probe.y()).red()
+                   for d in (2, 6, 12, 24, 40)]
+    edge_drops = [abs(edge_values[i] - edge_values[i + 1])
+                  for i in range(len(edge_values) - 1)]
+    check("光在卡片边缘没有被硬切出色块", max(edge_drops) <= 3,
+          f"边缘内侧跳变 {edge_drops}")
+
+    _, lit_dark, card_dark = bare_card("dark", probe)
+    ratio_dark = lit_dark.width() / (card_dark.width() + card_dark.x() * 2)
+    dark_at = lit_dark.pixelColor(min(lit_dark.width() - 1, int(probe.x() * ratio_dark)),
+                                  min(lit_dark.height() - 1, int(probe.y() * ratio_dark)))
+    check("深色模式的光仍接近白色",
+          abs(dark_at.blue() - dark_at.red()) <= 24,
+          f"R={dark_at.red()} G={dark_at.green()} B={dark_at.blue()}")
+
+    # 恢复这一小节的默认状态：后面的标题栏分隔线是在浅色背景下量的
+    theme.style = "win10"
+    theme.mode = "light"
+    theme.refresh()
+    apply_app_theme(app)
+    for window in windows.values():
+        window.invalidate_backdrop()
+        window.repaint()
+    pump(app, 0.3)
+
     # ---- 动画生命周期：反复淡入淡出 + 关窗都不能崩 ----
     # 回归 "RuntimeError: libshiboken: Internal C++ object
     # (PySide6.QtCore.QVariantAnimation) already deleted."。

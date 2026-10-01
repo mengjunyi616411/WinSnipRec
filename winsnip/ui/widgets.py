@@ -105,9 +105,12 @@ class RevealOverlay(QWidget):
             light = QColor("#FFFFFF")
             peak = 0.26 * strength
         else:
-            # A white light on a near-white surface is a ~4% change: invisible.
-            light = QColor(theme.palette.accent)
-            peak = 0.32 * strength
+            # The light card is #F3F3F3: 12 levels of headroom before white, so
+            # ANY tint reads as a stain rather than as light. Stay neutral and
+            # push the alpha near the maximum instead - the control border
+            # highlight is what makes the pointer feel connected.
+            light = QColor("#FFFFFF")
+            peak = 0.85 * strength
         gradient.setColorAt(0.0, rgba(light, min(1.0, peak)))
         gradient.setColorAt(0.30, rgba(light, min(1.0, peak * 0.55)))
         gradient.setColorAt(0.65, rgba(light, min(1.0, peak * 0.14)))
@@ -115,6 +118,16 @@ class RevealOverlay(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(gradient)
         painter.drawEllipse(0, 0, size * 2, size * 2)
+
+        # An 8-bit radial falloff over 300 px bands into visible rings; a little
+        # grain breaks them, the same trick Acrylic uses on its surfaces.
+        circle = QPainterPath()
+        circle.addEllipse(QRectF(0, 0, size * 2, size * 2))
+        painter.setClipPath(circle)
+        painter.setOpacity(0.6)
+        painter.drawTiledPixmap(QRectF(0, 0, size * 2, size * 2),
+                                mica.noise_tile())
+        painter.setOpacity(1.0)
         painter.end()
         self._glow = pixmap
         self._glow_key = key
@@ -134,6 +147,19 @@ class RevealOverlay(QWidget):
         glow = self.glow_pixmap(radius)
         painter = QPainter(self)
         painter.setOpacity(max(0.0, min(1.0, reveal)))
+        # Clip to the card so the light stops at the window border the way a real
+        # surface would, instead of being cut by the layer's own bounds.
+        card = None
+        card_rect = getattr(window, "card_rect", None)
+        if callable(card_rect):
+            try:
+                card = QRectF(card_rect())
+            except Exception:
+                card = None
+        if card is not None:
+            path = QPainterPath()
+            path.addRoundedRect(card, theme.radius_window, theme.radius_window)
+            painter.setClipPath(path)
         painter.drawPixmap(QPointF(centre.x() - radius, centre.y() - radius), glow)
         painter.setOpacity(1.0)
         painter.end()
@@ -370,9 +396,15 @@ class FluentWindow(QWidget):
         self._stop_reveal_animation()
 
     def sync_reveal_overlay(self) -> None:
-        """Keep the light's layer aligned with the card and on top."""
+        """Keep the light's layer covering the window, and on top.
+
+        The layer spans the whole window rather than just the card: a 300 px
+        light clipped to card_rect() left a straight colour block along the card
+        edge. RevealOverlay clips the light to the card's rounded shape instead,
+        so it fades out naturally and stops cleanly at the window border.
+        """
         overlay = self._reveal_overlay
-        overlay.setGeometry(self.card_rect())
+        overlay.setGeometry(self.rect())
         if theme.uses_reveal:
             overlay.show()
             overlay.raise_()
