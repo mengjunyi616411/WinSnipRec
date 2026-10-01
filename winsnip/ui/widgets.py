@@ -6,6 +6,8 @@ import time
 
 from collections.abc import Callable
 
+import logging
+
 from PySide6.QtCore import (
     QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
 )
@@ -14,6 +16,7 @@ from PySide6.QtGui import (
     QPainterPath, QPixmap, QRadialGradient,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -1004,6 +1007,35 @@ class IconButton(QPushButton):
         painter.end()
 
 
+#: Caption-button tooltips, keyed by kind.
+_CAPTION_TITLES = {
+    "min": "最小化",
+    "max": "最大化",
+    "restore": "还原",
+    "close": "关闭",
+}
+
+
+def retranslate_windows() -> None:
+    """Re-apply the labels of every top-level window that supports it.
+
+    Called after the interface language changes. A window opts in by defining
+    retranslate(), so a new window cannot be silently left behind.
+    """
+    app = QApplication.instance()
+    if app is None:
+        return
+    for widget in app.topLevelWidgets():
+        method = getattr(widget, "retranslate", None)
+        if not callable(method):
+            continue
+        try:
+            method()
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "failed to retranslate %s", type(widget).__name__)
+
+
 class CaptionButton(QPushButton):
     """Minimise / maximise / close button sized like the Windows caption buttons."""
 
@@ -1015,7 +1047,11 @@ class CaptionButton(QPushButton):
         self.setFixedSize(CAPTION_BUTTON_SIZE)
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self.setToolTip({"min": _t("最小化"), "max": _t("最大化"), "restore": _t("还原"), "close": _t("关闭")}[kind])
+        self.retranslate()
+
+    def retranslate(self) -> None:
+        """Re-apply the tooltip after an interface-language change."""
+        self.setToolTip(_t(_CAPTION_TITLES.get(self.kind, _CAPTION_TITLES["close"])))
 
     def enterEvent(self, event) -> None:  # noqa: N802
         self._hover = True
@@ -1107,6 +1143,13 @@ class SegmentedControl(QWidget):
         for index, (_, tooltip) in enumerate(items):
             if tooltip:
                 self.setToolTip(tooltip)
+
+    def set_labels(self, labels: list[str]) -> None:
+        """Re-label the segments in place (used when the language changes)."""
+        for index, label in enumerate(labels):
+            if index < len(self._items):
+                self._items[index] = (self._items[index][0], label)
+        self.update()
 
     def current(self) -> int:
         return self._current
@@ -1614,6 +1657,10 @@ class TitleBar(QWidget):
         palette = theme.palette
         self.title_label.setStyleSheet(f"color: {palette.text_primary};")
         self.title_label.setFont(ui_font(12))
+
+    def retranslate(self) -> None:
+        for button in self.caption_buttons.values():
+            button.retranslate()
 
     def set_title(self, text: str) -> None:
         self.title_label.setText(text)

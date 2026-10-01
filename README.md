@@ -89,6 +89,10 @@
 键名或空白。表格写成 `源文: (繁體, English, 日本語)` 三列，缺哪一列一眼可见；没有
 引入 Qt 的 `.ts`/`.qm` 工具链，所以不需要额外的构建步骤，打包也不受影响。
 
+切换语言会**立即作用于整个应用**：任何窗口只要实现 `retranslate()`，
+`retranslate_windows()` 就会在切换时重译它——主窗口标题、按钮、截图/录屏分段控件、
+托盘菜单、标题栏按钮提示都在内。菜单、通知与对话框是按需构建的，本来就会用新语言。
+
 字体随语言切换：日文用 **Yu Gothic UI**（假名在只列中文字体时会掉字形），
 繁中用 **Microsoft JhengHei UI**。
 
@@ -430,7 +434,7 @@ WinSnipRec/
     ├── selftest_style.py        风格自测（61 项：圆角、Acrylic、Reveal 光效/光色/菜单配色）
     ├── selftest_devices.py      设备枚举自测（15 项：绝不阻塞 GUI 线程）
     ├── selftest_backdrop.py     背景材质自测（13 项：像素探测、回退、设置项）
-    ├── selftest_i18n.py         多语言自测（12 项：覆盖检查、路径不改写、字体）
+    ├── selftest_i18n.py         多语言自测（21 项：覆盖检查、整应用重译、路径不改写）
     ├── selftest_onboarding.py   引导自测（17 项：步骤顺序、写入设置、只弹一次）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
@@ -439,7 +443,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **326 项断言**，当前全部通过：
+全部自测均可离线运行，共 **335 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -453,7 +457,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_style.py           :: 61/61  两种风格 + 光效 + 菜单配色 + 重绘预算
 .venv\Scripts\python.exe tests\selftest_devices.py         :: 15/15  音频设备枚举不阻塞界面
 .venv\Scripts\python.exe tests\selftest_backdrop.py        :: 13/13  实时背景材质的探测与回退
-.venv\Scripts\python.exe tests\selftest_i18n.py            :: 12/12  四种语言与覆盖检查
+.venv\Scripts\python.exe tests\selftest_i18n.py            :: 21/21  四种语言、整应用重译与覆盖检查
 .venv\Scripts\python.exe tests\selftest_onboarding.py      :: 17/17  首次运行引导
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图

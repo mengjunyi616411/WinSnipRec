@@ -70,6 +70,7 @@ class ImagePreviewWindow(FluentWindow):
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(0)
 
+        self._title_path: str | None = None
         self.title_bar = TitleBar(_t("截图工具"), self)
         self.title_bar.icon_label.setPixmap(icons.app_icon().pixmap(16, 16))
         self.title_bar.caption_buttons["min"].clicked.connect(self.minimize_animated)
@@ -116,6 +117,7 @@ class ImagePreviewWindow(FluentWindow):
         root.addWidget(self.canvas, 1)
 
         self.size_label.setText(f"{self._pixmap.width()} × {self._pixmap.height()}")
+        self._title_path = path
         self.title_bar.set_title(_t("截图工具 — {0}").format(Path(path).name))
         self.refresh_theme()
 
@@ -123,6 +125,18 @@ class ImagePreviewWindow(FluentWindow):
         QShortcut(QKeySequence.StandardKey.Save, self, self.save_as)
         QShortcut(QKeySequence("Ctrl+Shift+S"), self, self.save_as)
         QShortcut(QKeySequence.StandardKey.Close, self, self.close)
+
+    def retranslate(self) -> None:
+        """Re-apply the labels after an interface-language change."""
+        if self._title_path:
+            self.title_bar.set_title(_t("截图工具 — {0}").format(Path(self._title_path).name))
+        else:
+            self.title_bar.set_title(_t("截图工具"))
+        self.title_bar.retranslate()
+        self.save_button.setText(_t("保存"))
+        self.copy_button.setText(_t("复制"))
+        self.folder_button.setText(_t("在文件夹中显示"))
+        self.cancel_button.setToolTip(_t("关闭"))
 
     def refresh_theme(self) -> None:
         self.title_bar.refresh()
@@ -155,6 +169,7 @@ class ImagePreviewWindow(FluentWindow):
             show_toast(_t("保存失败"), str(exc), "info")
             return
         self._path = target
+        self._title_path = target
         self.title_bar.set_title(_t("截图工具 — {0}").format(Path(target).name))
         show_toast(_t("已保存"), target, "check")
 

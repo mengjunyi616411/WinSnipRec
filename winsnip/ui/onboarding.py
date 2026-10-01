@@ -445,8 +445,13 @@ class OnboardingWindow(FluentWindow):
         code = _language_options()[index][0]
         self._persist(language=code)
         from .. import i18n
+        from .widgets import retranslate_windows
 
         i18n.set_language(code)
+        # The guide rebuilds itself below, but the main window stays open behind
+        # it - without this it kept the old language, which looked exactly like
+        # the setting had not worked at all.
+        retranslate_windows()
         # Every label would have to be re-translated in place; rebuilding the
         # short-lived guide is simpler and cannot miss one.
         restart_onboarding(step=len(self._pages))

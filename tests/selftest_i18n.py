@@ -31,16 +31,26 @@ checks: list[tuple[str, bool, str]] = []
 CJK = re.compile(r"[\u4e00-\u9fff]")
 SKIP_FILES = {"selftest_ui.py", "selftest_frozen.py", "i18n.py"}
 # Deliberately not translated: folder names, matching tables, the app name.
-ALLOWED = {
-    # 保存路径的文件夹名：翻译会改变用户的保存位置
+#: Deliberately NOT translated at all - folder names, matching tables, the app
+#: name, output file names. These must NOT appear in the translation table.
+UNTRANSLATED = {
     ("settings.py", "屏幕截图"), ("settings.py", "录制"),
-    # 窗口标题匹配表：用于识别，不用于显示
     ("winapi.py", "windows 输入体验"), ("winapi.py", "窗口"),
-    # 应用名：也用于识别自己的窗口
     ("__init__.py", "截图工具"),
-    # 输出文件名：保持跨语言稳定，脚本与自测依赖它
     ("main_window.py", "截图 "), ("main_window.py", "屏幕录制 "),
 }
+
+#: Stored as source strings and translated later, so the AST walk sees the raw
+#: Chinese. These MUST appear in the translation table.
+DEFERRED = {
+    ("main_window.py", "新建截图"), ("main_window.py", "新建录屏"),
+    ("main_window.py", "设置"), ("main_window.py", "打开保存文件夹"),
+    ("main_window.py", "退出"),
+    ("widgets.py", "最小化"), ("widgets.py", "最大化"),
+    ("widgets.py", "还原"), ("widgets.py", "关闭"),
+}
+
+ALLOWED = UNTRANSLATED | DEFERRED
 LOG_CALLS = {"debug", "info", "warning", "error", "exception", "critical", "log"}
 
 
@@ -165,6 +175,16 @@ def main() -> int:
           f"{len(i18n.TABLE)} 条" + (f"，缺 {missing[:3]}" if missing else ""))
 
     # ---------------- 4. 覆盖：用户可见文案都要走 _t() ----------------
+    # 延后翻译的那些必须先存原文、后查表，所以必须真的在翻译表里，
+    # 否则这个例外就成了漏译的藏身处。
+    deferred_missing = sorted({key for _file, key in DEFERRED if key not in i18n.TABLE})
+    check("延后翻译的例外都在翻译表里（例外不会掩盖漏译）",
+          not deferred_missing,
+          ", ".join(deferred_missing) or f"{len(DEFERRED)} 条全部已翻译")
+    # 注意：这里不能断言"故意不翻译的那些不在表里"——同一个中文字符串在别处可能
+    # 确实要翻译（"窗口" 同时是截图形状选项，"截图工具" 是应用名）。真正要保证的是
+    # *使用位置*不被翻译，而这一点由上面对 AST 的遍历已经确认。
+
     leftover = unwrapped_strings()
     count = sum(len(items) for items in leftover.values())
     detail = "; ".join(f"{name}:{items[0][1][:16]}" for name, items in list(leftover.items())[:3])
@@ -253,6 +273,71 @@ def main() -> int:
     settings_window.close()
     settings_window.deleteLater()
     pump(app, 0.2)
+
+    # ---------------- 9. 切换语言要影响到整个应用 ----------------
+    # 复现过的 bug：在引导里选了英文，引导自己变了，但主窗口和托盘菜单还是中文，
+    # 看起来就像"设置语言没成功"。
+    i18n.set_language("zh-Hans")
+    apply_app_theme(app)
+    main = MainWindow()
+    main.show()
+    pump(app, 1.0)
+
+    def tray_texts(win) -> list[str]:
+        menu = win.tray.contextMenu()
+        return [a.text() for a in menu.actions() if a.text()]
+
+    before_title = main.windowTitle()
+    before_new = main.new_button.text()
+    before_folder = main.folder_button.text()
+    before_tray = tray_texts(main)
+    check("切换前主窗口是中文", "截图工具" in before_title,
+          f"{before_title!r} / {before_new!r} / {before_tray[:2]}")
+
+    i18n.set_language("en")
+    from winsnip.ui.widgets import retranslate_windows
+
+    retranslate_windows()
+    pump(app, 0.3)
+
+    after_title = main.windowTitle()
+    after_new = main.new_button.text()
+    after_folder = main.folder_button.text()
+    after_tray = tray_texts(main)
+    check("切换语言后主窗口标题跟着变",
+          after_title != before_title and not CJK.search(after_title),
+          f"{before_title!r} -> {after_title!r}")
+    check("切换语言后主窗口按钮跟着变",
+          after_new != before_new and after_folder != before_folder
+          and not CJK.search(after_new + after_folder),
+          f"{before_new!r}/{before_folder!r} -> {after_new!r}/{after_folder!r}")
+    check("切换语言后托盘菜单跟着变",
+          after_tray != before_tray and not CJK.search(" ".join(after_tray)),
+          f"{before_tray} -> {after_tray}")
+    check("模式切换（截图/录屏）也跟着变",
+          main.segmented._items[0][1] == "Screenshot"
+          and main.segmented._items[1][1] == "Recording",
+          f"{[item[1] for item in main.segmented._items]}")
+    check("标题栏按钮的提示也跟着变",
+          main.title_bar.caption_buttons["close"].toolTip() == "Close",
+          f"关闭按钮提示={main.title_bar.caption_buttons['close'].toolTip()!r}")
+
+    onboarding_source = (ROOT / "winsnip" / "ui" / "onboarding.py").read_text(encoding="utf-8")
+    settings_source = (ROOT / "winsnip" / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
+    check("引导切换语言时会重译其它窗口",
+          "retranslate_windows()" in onboarding_source,
+          "onboarding 调用了 retranslate_windows")
+    check("设置切换语言时也会重译其它窗口",
+          "retranslate_windows()" in settings_source,
+          "settings 调用了 retranslate_windows")
+
+    i18n.set_language("zh-Hans")
+    retranslate_windows()
+    pump(app, 0.2)
+    main._quitting = True
+    main.close()
+    main.deleteLater()
+    pump(app, 0.3)
 
     i18n.set_language("system")
 

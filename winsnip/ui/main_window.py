@@ -313,19 +313,43 @@ class MainWindow(FluentWindow):
         self.tray = QSystemTrayIcon(icons.app_icon(), self)
         self.tray.setToolTip(_t("截图工具"))
         menu = QMenu()
-        menu.addAction(_t("新建截图"), lambda: self.start_capture("camera"))
-        menu.addAction(_t("新建录屏"), lambda: self.start_capture("video"))
+        self._tray_actions: list[tuple[object, str]] = []
+
+        def add(source: str, slot) -> None:
+            action = menu.addAction(_t(source), slot)
+            self._tray_actions.append((action, source))
+
+        add("新建截图", lambda: self.start_capture("camera"))
+        add("新建录屏", lambda: self.start_capture("video"))
         menu.addSeparator()
-        menu.addAction(_t("设置"), self.open_settings)
-        menu.addAction(_t("打开保存文件夹"), self.open_output_folder)
+        add("设置", self.open_settings)
+        add("打开保存文件夹", self.open_output_folder)
         menu.addSeparator()
-        menu.addAction(_t("退出"), self._quit)
+        add("退出", self._quit)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
 
     # ------------------------------------------------------------------ #
     # Theme
     # ------------------------------------------------------------------ #
+    def retranslate(self) -> None:
+        """Re-apply every persistent label (interface language changed).
+
+        Menus, toasts and dialogs are built on demand and pick up the new
+        language by themselves; only long-lived widgets need this.
+        """
+        self.setWindowTitle(_t("截图工具"))
+        self.title_bar.set_title(_t("截图工具"))
+        self.title_bar.retranslate()
+        self.new_button.setText(_t("新建"))
+        self.segmented.set_labels([_t("截图"), _t("录屏")])
+        self.folder_button.setText(_t("打开保存文件夹"))
+        self.tray.setToolTip(_t("截图工具"))
+        for action, source in getattr(self, "_tray_actions", []):
+            action.setText(_t(source))
+        self._update_hint()
+        self._update_audio_icon()
+
     def refresh_theme(self) -> None:
         self.title_bar.refresh()
         palette = theme.palette

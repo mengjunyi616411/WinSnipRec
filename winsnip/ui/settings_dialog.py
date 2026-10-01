@@ -357,6 +357,9 @@ class SettingsWindow(FluentWindow):
         code = self.language_combo.itemData(index) or "system"
         self._set("language", code)
         _i18n.set_language(code)
+        from .widgets import retranslate_windows
+
+        retranslate_windows()
         # Rebuild the window so every label picks up the new language. The
         # dialog is cheap to rebuild and the user sees the result immediately.
         QTimer.singleShot(0, self._rebuild_after_language_change)
