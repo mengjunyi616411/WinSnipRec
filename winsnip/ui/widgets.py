@@ -610,6 +610,17 @@ class FluentWindow(QWidget):
 
         logging.getLogger(__name__).warning(
             "native backdrop off, using the wallpaper material instead: %s", reason)
+
+        # Remember the card before the margins come back: with margin=0 the card
+        # is the whole window.
+        old_margin = self._margin
+        card_width = max(1, self.width() - 2 * old_margin)
+        card_height = max(1, self.height() - 2 * old_margin)
+        try:
+            card_origin = self.mapToGlobal(QPoint(old_margin, old_margin))
+        except Exception:
+            card_origin = None
+
         self._native_backdrop = False
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._margin = SHADOW_MARGIN
@@ -622,6 +633,14 @@ class FluentWindow(QWidget):
             pass
         self._static_card = None
         self._static_key = None
+
+        # Grow the window around the card by the margin that just came back.
+        # Without this the card ended up smaller than the window and the whole
+        # layout was squeezed - the "main window cannot display properly" report.
+        if self._margin != old_margin:
+            self.set_card_size(card_width, card_height)
+            if card_origin is not None:
+                self.move(card_origin.x() - self._margin, card_origin.y() - self._margin)
         self.invalidate_backdrop()
 
     def _verify_native_backdrop(self) -> None:

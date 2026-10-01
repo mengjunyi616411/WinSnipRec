@@ -153,6 +153,49 @@ def main() -> int:
           f"backdrop_native={settings.backdrop_native} "
           f"version={settings.backdrop_probe_version}")
 
+    # ---------------- 回退后卡片不能被挤小 ----------------
+    # 复现过的 bug：原生路径以 margin=0 创建窗口（原生背景与分层窗口不能共存，
+    # 而分层窗口正是透明阴影边距的来源）。回退时只恢复了 margin，却没把窗口补大，
+    # 于是卡片比窗口小一圈、内容被压进更小的卡片里 —— 就是"主窗口无法正常显示"。
+    from winsnip.ui.main_window import MainWindow
+
+    settings.backdrop = "native"
+    settings.backdrop_native = False
+    probe_window = MainWindow()
+    probe_window.show()
+    pump(app, 1.2)
+
+    card_before = probe_window.card_rect()
+    card_origin_before = probe_window.mapToGlobal(card_before.topLeft())
+    margin_before = probe_window._margin
+
+    probe_window._fallback_from_native("自测：模拟回退")
+    pump(app, 0.8)
+
+    card_after = probe_window.card_rect()
+    card_origin_after = probe_window.mapToGlobal(card_after.topLeft())
+
+    check("回退后卡片尺寸不变（内容不会被压小）",
+          card_after.size() == card_before.size(),
+          f"{card_before.width()}x{card_before.height()} -> "
+          f"{card_after.width()}x{card_after.height()}")
+    check("回退后卡片在屏幕上的位置不变",
+          card_origin_after == card_origin_before,
+          f"{card_origin_before} -> {card_origin_after}")
+    check("回退后窗口向外扩出阴影边距",
+          probe_window._margin > margin_before
+          and probe_window.width() == card_after.width() + 2 * probe_window._margin
+          and probe_window.height() == card_after.height() + 2 * probe_window._margin,
+          f"窗口 {probe_window.width()}x{probe_window.height()} "
+          f"= 卡片 {card_after.width()}x{card_after.height()} + 2x{probe_window._margin}")
+
+    probe_window._quitting = True
+    probe_window.close()
+    probe_window.deleteLater()
+    pump(app, 0.4)
+    settings.backdrop = "auto"
+    settings.backdrop_native = None
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- BACKDROP SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
