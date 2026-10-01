@@ -102,7 +102,7 @@ so WinSnipRec logs the conflict and switches to the fallback automatically.
 
 ## Tests
 
-Everything runs offline. 308 assertions across twelve suites:
+Everything runs offline. 309 assertions across twelve suites:
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py        :: 51  recording core

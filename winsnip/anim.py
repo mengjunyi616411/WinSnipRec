@@ -147,14 +147,36 @@ def hide_window_animated(window: QWidget, *, on_finished=None,
     fade.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
 
-#: Ghosts currently animating. Holding them also stops Python from collecting
-#: the widget mid-flight.
-_live_ghosts: list = []
+#: The single reusable ghost, plus whether it is currently animating. Holding the
+#: instance keeps Python from collecting the widget mid-flight.
+_ghost: _MinimizeGhost | None = None
+_ghost_live = False
 
 
 def _minimize_ghost_count() -> int:
     """How many minimize snapshots are on screen (used by the self-tests)."""
-    return len(_live_ghosts)
+    return 1 if _ghost_live else 0
+
+
+def _acquire_ghost(snapshot: QPixmap, radius: float) -> _MinimizeGhost:
+    """The reusable ghost, re-pointed at the new snapshot.
+
+    NOTE: the previous version cleared the pool list on release, so every call
+    allocated a fresh widget and the reuse never happened.
+    """
+    global _ghost, _ghost_live
+    if _ghost is None:
+        _ghost = _MinimizeGhost(snapshot, radius)
+    else:
+        _ghost.retarget(snapshot, radius)
+    _ghost_live = True
+    return _ghost
+
+
+def _release_ghost() -> None:
+    """Keep the widget alive for the next minimize, just stop counting it."""
+    global _ghost_live
+    _ghost_live = False
 
 
 def minimize_target(window: QWidget, scale: float = 0.34) -> QRect:
@@ -177,12 +199,22 @@ def minimize_target(window: QWidget, scale: float = 0.34) -> QRect:
 
 
 class _MinimizeGhost(QWidget):
-    """A snapshot of a window, animated down to the taskbar."""
+    """A snapshot of a window, animated down to the taskbar.
+
+    One instance is reused for the whole process: creating and compositing a
+    translucent window costs ~70 ms here, and the animation used to start before
+    that finished, so the ghost appeared already part-shrunk.
+    """
 
     def __init__(self, snapshot: QPixmap, radius: float) -> None:
         super().__init__()
         self._snapshot = snapshot
         self._radius = radius
+        self.painted_frames = 0
+        #: Size of the first frame after a retarget. The animation must start at
+        #: the window's full size; if it starts any later the ghost pops in
+        #: already shrunk, which is exactly the judder this guards against.
+        self.first_frame_size: tuple[int, int] | None = None
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.Tool |
                             Qt.WindowType.WindowStaysOnTopHint |
@@ -191,9 +223,18 @@ class _MinimizeGhost(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
+    def retarget(self, snapshot: QPixmap, radius: float) -> None:
+        self._snapshot = snapshot
+        self._radius = radius
+        self.painted_frames = 0
+        self.first_frame_size = None
+
     def paintEvent(self, event) -> None:  # noqa: N802
         from PySide6.QtGui import QPainter, QPainterPath
 
+        self.painted_frames += 1
+        if self.first_frame_size is None:
+            self.first_frame_size = (self.width(), self.height())
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -231,43 +272,52 @@ def minimize_window_animated(window: QWidget, *, on_finished=None,
 
     origin = window.geometry()
     target = minimize_target(window)
-    window.showMinimized()
 
-    ghost = _MinimizeGhost(snapshot, 14.0)
-    _live_ghosts.append(ghost)
+    ghost = _acquire_ghost(snapshot, 14.0)
     ghost.setGeometry(origin)
     ghost.setWindowOpacity(1.0)
+    window.showMinimized()
     ghost.show()
+    # Draw one frame synchronously: starting the timeline before the ghost has
+    # any content is what made it pop in already half-shrunk.
+    ghost.repaint()
+
+    finished_flag = {"done": False}
 
     def cleanup() -> None:
+        if finished_flag["done"]:
+            return
+        finished_flag["done"] = True
         ghost.hide()
-        try:
-            _live_ghosts.remove(ghost)
-        except ValueError:
-            pass
-        ghost.deleteLater()
+        _release_ghost()
         if on_finished is not None:
             on_finished()
 
-    group = QParallelAnimationGroup()
-    group.setParent(ghost)
+    def begin() -> None:
+        if finished_flag["done"]:
+            return
+        group = QParallelAnimationGroup()
+        group.setParent(ghost)
 
-    move = QPropertyAnimation(ghost, b"geometry", group)
-    move.setDuration(duration)
-    move.setStartValue(origin)
-    move.setEndValue(target)
-    move.setEasingCurve(curve("in_out"))
+        move = QPropertyAnimation(ghost, b"geometry", group)
+        move.setDuration(duration)
+        move.setStartValue(origin)
+        move.setEndValue(target)
+        move.setEasingCurve(curve("in_out"))
 
-    fade = QPropertyAnimation(ghost, b"windowOpacity", group)
-    fade.setDuration(duration)
-    fade.setStartValue(1.0)
-    fade.setEndValue(0.0)
-    fade.setEasingCurve(curve("in"))
+        fade = QPropertyAnimation(ghost, b"windowOpacity", group)
+        fade.setDuration(duration)
+        fade.setStartValue(1.0)
+        fade.setEndValue(0.0)
+        fade.setEasingCurve(curve("in"))
 
-    group.addAnimation(move)
-    group.addAnimation(fade)
-    group.finished.connect(cleanup)
-    group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+        group.addAnimation(move)
+        group.addAnimation(fade)
+        group.finished.connect(cleanup)
+        group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+
+    # One turn of the event loop: the ghost is on screen at full size by then.
+    QTimer.singleShot(0, begin)
 
 
 def fade_in(widget: QWidget, *, duration: int = DURATION_NORMAL, start: float = 0.0,

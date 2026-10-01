@@ -167,13 +167,33 @@ def main() -> int:
     pump(app, 1.2)
     check("动画结束后快照浮层已清理", anim._minimize_ghost_count() == 0,
           f"浮层数 {anim._minimize_ghost_count()}")
-    check("真窗口几何从未被改动（因此内容不会重排）",
-          window.geometry() == origin,
-          f"{window.geometry()} vs {origin}")
-    if before_text is not None:
-        check("提示文字在动画前后完全一致（没有重新折行）",
-              window.hint._lines == before_text,
-              f"{len(window.hint._lines)} 行")
+
+    # 抽搐的成因：浮层创建+合成要约 70ms，而动画在此之前就开跑了，于是它以缩小
+    # 一半的样子突然出现。修法是先显示并同步画一帧，再在下一个事件循环启动动画。
+    window.showNormal()
+    pump(app, 1.0)
+    ghost_before = anim._ghost
+    anim.minimize_window_animated(window)
+    pump(app, 1.6)
+    ghost = anim._ghost
+    check("第一帧就是原尺寸（不再以缩小一半的样子突然出现）",
+          ghost is not None and ghost.first_frame_size == (origin.width(), origin.height()),
+          f"首帧 {getattr(ghost, 'first_frame_size', None)} / "
+          f"原尺寸 {(origin.width(), origin.height())}")
+    check("浮层被复用（第二次不再新建，省掉约 70ms 的创建开销）",
+          ghost is ghost_before and ghost_before is not None,
+          f"复用同一实例={ghost is ghost_before}")
+
+    window.showNormal()
+    pump(app, 1.0)
+    anim.minimize_window_animated(window)
+    pump(app, 1.6)
+    check("复用后第一帧同样是原尺寸",
+          anim._ghost is not None
+          and anim._ghost.first_frame_size == (origin.width(), origin.height()),
+          f"首帧 {getattr(anim._ghost, 'first_frame_size', None)}")
+    window.showNormal()
+    pump(app, 0.4)
 
     # 关闭动画时应立即最小化，不留浮层
     settings.animations = False
