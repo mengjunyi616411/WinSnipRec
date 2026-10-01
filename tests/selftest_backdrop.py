@@ -182,6 +182,45 @@ def main() -> int:
     check("回退后卡片在屏幕上的位置不变",
           card_origin_after == card_origin_before,
           f"{card_origin_before} -> {card_origin_after}")
+    # 原生路径用 SetWindowRgn 裁剪窗口；回退时如果不清掉这个区域，窗口仍被裁在
+    # 旧尺寸上，放大后多出来的右侧与底部（标题栏按钮、"打开保存文件夹"）会被切掉。
+    import ctypes
+    import ctypes.wintypes as wt
+
+    user32 = ctypes.windll.user32
+    gdi32 = ctypes.windll.gdi32
+
+    def window_region(hwnd: int) -> str:
+        """'none' when the window is a plain rectangle, else its size."""
+        handle = gdi32.CreateRectRgn(0, 0, 1, 1)
+        kind = user32.GetWindowRgn(wt.HWND(hwnd), handle)
+        if kind == 0:
+            gdi32.DeleteObject(handle)
+            return "none"
+        box = wt.RECT()
+        gdi32.GetRgnBox(handle, ctypes.byref(box))
+        gdi32.DeleteObject(handle)
+        return f"{box.right - box.left}x{box.bottom - box.top}"
+
+    probe2 = MainWindow()
+    probe2.show()
+    pump(app, 1.2)
+    handle2 = int(probe2.windowHandle().winId())
+    region_native = window_region(handle2)
+    check("原生路径确实给窗口设了裁剪区域（前提成立）",
+          region_native != "none", f"区域={region_native}")
+
+    probe2._fallback_from_native("自测：模拟回退")
+    pump(app, 0.8)
+    region_after = window_region(int(probe2.windowHandle().winId()))
+    check("回退后窗口区域被清除（否则放大后右侧与底部会被切掉）",
+          region_after == "none",
+          f"回退前 {region_native} -> 回退后 {region_after}")
+    probe2._quitting = True
+    probe2.close()
+    probe2.deleteLater()
+    pump(app, 0.4)
+
     check("回退后窗口向外扩出阴影边距",
           probe_window._margin > margin_before
           and probe_window.width() == card_after.width() + 2 * probe_window._margin

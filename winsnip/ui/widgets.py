@@ -629,6 +629,12 @@ class FluentWindow(QWidget):
             handle = self.windowHandle()
             if handle is not None:
                 winapi.clear_backdrop(int(handle.winId()))
+                # The native path shaped this window with SetWindowRgn, which
+                # clips it. clear_backdrop does not touch the region, and after
+                # this fallback _sync_native_region() returns early - so without
+                # this the window stayed clipped to its old size and the caption
+                # buttons and footer were cut off.
+                winapi.clear_rounded_region(int(handle.winId()))
         except Exception:
             pass
         self._static_card = None

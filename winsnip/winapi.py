@@ -105,6 +105,18 @@ def set_accent_blur(hwnd: int, state: int = ACCENT_ENABLE_ACRYLICBLURBEHIND,
         return False
 
 
+def clear_rounded_region(hwnd: int) -> bool:
+    """Undo set_rounded_region().
+
+    A window region CLIPS the window. Leaving one behind after the window grows
+    cuts off whatever falls outside the old region.
+    """
+    try:
+        return bool(user32.SetWindowRgn(wt.HWND(hwnd), None, True))
+    except Exception:
+        return False
+
+
 def clear_backdrop(hwnd: int) -> None:
     """Turn both mechanisms off again."""
     set_system_backdrop(hwnd, DWMSBT_NONE)
