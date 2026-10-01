@@ -654,6 +654,35 @@ def application_stylesheet() -> str:
         padding: 6px 10px;
         font-size: 12px;
     }}
+    /* QMenu (the tray menu and the overlay's right-click menu) is a native popup:
+       without an explicit rule Qt draws it from the system palette, which is a
+       white menu inside a dark app. */
+    QMenu {{
+        background-color: {p.flyout_bg};
+        color: {p.text_primary};
+        border: 1px solid {p.flyout_border};
+        border-radius: 8px;
+        padding: 6px;
+    }}
+    QMenu::item {{
+        background: transparent;
+        color: {p.text_primary};
+        padding: 7px 30px 7px 16px;
+        border-radius: 5px;
+        min-width: 120px;
+    }}
+    QMenu::item:selected {{
+        background-color: {item_hover};
+        color: {p.text_primary};
+    }}
+    QMenu::item:disabled {{ color: {p.text_disabled}; }}
+    QMenu::separator {{
+        height: 1px;
+        background: {p.flyout_border};
+        margin: 5px 10px;
+    }}
+    QMenu::icon {{ padding-left: 10px; }}
+    QMenu::right-arrow {{ width: 12px; height: 12px; }}
     QScrollBar:vertical {{
         background: transparent; width: 12px; margin: 4px 2px 4px 2px;
     }}

@@ -120,17 +120,18 @@ class RevealOverlay(QWidget):
         gradient = QRadialGradient(QPointF(size, size), size)
         if theme.dark:
             light = QColor("#FFFFFF")
-            peak = 0.26 * strength
+            peak = 0.15 * strength
         else:
             # The light card is #F3F3F3: 12 levels of headroom before white, so
-            # ANY tint reads as a stain rather than as light. Stay neutral and
-            # push the alpha near the maximum instead - the control border
-            # highlight is what makes the pointer feel connected.
+            # ANY tint reads as a stain rather than as light. Stay neutral; the
+            # control border highlight is what makes the pointer feel connected.
             light = QColor("#FFFFFF")
-            peak = 0.85 * strength
+            peak = 0.50 * strength
+        # A tighter falloff keeps the light near the pointer instead of washing
+        # the whole surface, which is what made it feel too bright.
         gradient.setColorAt(0.0, rgba(light, min(1.0, peak)))
-        gradient.setColorAt(0.30, rgba(light, min(1.0, peak * 0.55)))
-        gradient.setColorAt(0.65, rgba(light, min(1.0, peak * 0.14)))
+        gradient.setColorAt(0.30, rgba(light, min(1.0, peak * 0.42)))
+        gradient.setColorAt(0.65, rgba(light, min(1.0, peak * 0.10)))
         gradient.setColorAt(1.0, rgba(light, 0.0))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(gradient)
@@ -443,7 +444,10 @@ class FluentWindow(QWidget):
         overlay.setGeometry(self.rect())
         if theme.uses_reveal:
             overlay.show()
-            overlay.raise_()
+            # LOWER, not raise: the light belongs on top of the card but BELOW
+            # the controls. Raised, it washed over the hint text and any label it
+            # passed, which read as the light "covering" the text.
+            overlay.lower()
         else:
             overlay.hide()
 

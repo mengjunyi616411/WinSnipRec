@@ -24,7 +24,9 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from winsnip import icons, winapi  # noqa: E402
 from winsnip.settings import settings  # noqa: E402
-from winsnip.theme import WIN10_CLOSE_HOVER, apply_app_theme, theme  # noqa: E402
+from winsnip.theme import (  # noqa: E402
+    WIN10_CLOSE_HOVER, apply_app_theme, application_stylesheet, theme,
+)
 
 checks: list[tuple[str, bool, str]] = []
 
@@ -266,7 +268,10 @@ def main() -> int:
         bar_delta += delta_at(before3, after3, window10, lx, window10.height() * 0.30)
         samples += 1
     bar_average = bar_delta / max(1, samples)
-    check("光会扫过命令栏上的按钮（不只是窗口背景）", bar_average >= 3.0,
+    # 契约变了：光现在画在控件下面，所以命令栏的平均变化应当很小 ——
+    # 它照亮的是按钮之间的表面，而不是把按钮本身罩白。
+    check("光不会把命令栏的按钮罩白（光在控件下层）",
+          0.0 <= bar_average <= 6.0,
           f"命令栏平均色差 {bar_average:.2f}")
 
     # win11 不应该有光效（先把主题切回 win11，否则窗口仍按 win10 规则绘制）
@@ -494,6 +499,97 @@ def main() -> int:
         window.invalidate_backdrop()
         window.repaint()
     pump(app, 0.3)
+
+    # ---- 三处用户反馈的回归 ----
+    # a) 光画在所有控件上层 -> 移动时把文字罩白了
+    # b) 原生 QMenu 没被样式表覆盖 -> 深色模式下弹出白色菜单
+    # c) 光太亮
+    theme.style = "win10"
+    theme.mode = "dark"
+    theme.refresh()
+    apply_app_theme(app)
+
+    light_window = windows["win10"]
+    overlay = light_window._reveal_overlay
+    siblings = [child for child in light_window.children()]
+    overlay_index = siblings.index(overlay) if overlay in siblings else -1
+    check("Reveal 浮层在子控件栈的最底层（光在控件下面，不会罩住文字）",
+          overlay_index == 0,
+          f"浮层 index={overlay_index} / 共 {len(siblings)} 个子对象")
+
+    # 光停在文字上时，文字区域不应该被明显提亮
+    light_window._stop_reveal_tracking()
+    light_window.set_reveal(QPointF(-1.0, -1.0), 0.0)
+    light_window.repaint()
+    pump(app, 0.25)
+    before = light_window.grab().toImage()
+    spot = QPointF(light_window.width() * 0.50, light_window.height() * 0.47)
+    light_window.set_reveal(spot, 1.0)
+    light_window.repaint()
+    pump(app, 0.35)
+    after = light_window.grab().toImage()
+
+    card_box = light_window.card_rect()
+    ratio_win = before.width() / light_window.width()
+    brightest_before = brightest_after = 0
+    for y in range(int((card_box.y() + card_box.height() * 0.40) * ratio_win),
+                   int((card_box.y() + card_box.height() * 0.56) * ratio_win)):
+        for x in range(int((card_box.x() + card_box.width() * 0.28) * ratio_win),
+                       int((card_box.x() + card_box.width() * 0.72) * ratio_win)):
+            brightest_before = max(brightest_before, before.pixelColor(x, y).lightness())
+            brightest_after = max(brightest_after, after.pixelColor(x, y).lightness())
+    check("光经过文字时不会把文字罩白", brightest_after - brightest_before <= 30,
+          f"文字区最亮像素 {brightest_before} -> {brightest_after}"
+          f"（+{brightest_after - brightest_before}）")
+
+    # c) 亮度：光斑中心相对无光时的提升应当是克制的
+    centre_lift = 0
+    plain_bare, lit_bare, card_bare = bare_card("dark", QPointF(280.0, 150.0))
+    ratio_bare = lit_bare.width() / (card_bare.width() + card_bare.x() * 2)
+
+    def bare_pixel(image, lx: float, ly: float):
+        return image.pixelColor(min(image.width() - 1, int(lx * ratio_bare)),
+                                min(image.height() - 1, int(ly * ratio_bare)))
+
+    centre_lift = (bare_pixel(lit_bare, 280.0, 150.0).red()
+                   - bare_pixel(plain_bare, 280.0, 150.0).red())
+    check("光斑中心提升是克制的（不再过亮）", 2 <= centre_lift <= 26,
+          f"提升 {centre_lift} 级")
+
+    # b) 原生 QMenu 必须跟随主题，否则深色下是白底菜单
+    from PySide6.QtWidgets import QMenu as _QMenu
+
+    menu_colours = {}
+    for mode in ("dark", "light"):
+        theme.mode = mode
+        theme.refresh()
+        apply_app_theme(app)
+        menu = _QMenu()
+        menu.addAction("新建截图")
+        menu.addAction("设置")
+        menu.show()
+        pump(app, 0.25)
+        image = menu.grab().toImage()
+        sample = image.pixelColor(image.width() // 2, image.height() - 14)
+        menu_colours[mode] = (sample.red(), sample.green(), sample.blue())
+        menu.close()
+        menu.deleteLater()
+        pump(app, 0.15)
+
+    check("QMenu 深色模式是深底（不再是白底菜单）",
+          sum(menu_colours["dark"]) < 200,
+          f"深色菜单底色 #{menu_colours['dark'][0]:02X}"
+          f"{menu_colours['dark'][1]:02X}{menu_colours['dark'][2]:02X}")
+    check("QMenu 浅色模式是浅底", sum(menu_colours["light"]) > 600,
+          f"浅色菜单底色 #{menu_colours['light'][0]:02X}"
+          f"{menu_colours['light'][1]:02X}{menu_colours['light'][2]:02X}")
+    check("样式表里有 QMenu 规则", "QMenu {" in application_stylesheet())
+
+    # 恢复浅色：后面的标题栏分隔线断言是在浅色背景下量的
+    theme.style = "win10"
+    theme.mode = "light"
+    theme.refresh()
+    apply_app_theme(app)
 
     # ---- 动画生命周期：反复淡入淡出 + 关窗都不能崩 ----
     # 回归 "RuntimeError: libshiboken: Internal C++ object

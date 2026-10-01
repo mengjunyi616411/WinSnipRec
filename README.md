@@ -390,7 +390,7 @@ WinSnipRec/
     ├── selftest_startup.py      开机自启自测（22 项：注册表读写 + 失效修复 + 模拟登录）
     ├── selftest_animation.py    动效自测（41 项：启动动画、全窗口淡入、模式切换、进度环、居中）
     ├── selftest_duration.py     时长回归（8 项：人为拖慢抓屏，验证分段不被静默丢弃）
-    ├── selftest_style.py        风格自测（55 项：圆角、Acrylic、Reveal 光效/光色/默认档位）
+    ├── selftest_style.py        风格自测（61 项：圆角、Acrylic、Reveal 光效/光色/菜单配色）
     ├── selftest_devices.py      设备枚举自测（15 项：绝不阻塞 GUI 线程）
     ├── selftest_backdrop.py     背景材质自测（13 项：像素探测、回退、设置项）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
@@ -400,7 +400,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **283 项断言**，当前全部通过：
+全部自测均可离线运行，共 **289 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -411,7 +411,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_startup.py         :: 22/22  开机自启（含模拟登录）
 .venv\Scripts\python.exe tests\selftest_animation.py       :: 41/41  启动动画、模式切换、全窗口打开动画
 .venv\Scripts\python.exe tests\selftest_duration.py        ::  8/8   时长回归（拖慢抓屏的最坏情况）
-.venv\Scripts\python.exe tests\selftest_style.py           :: 55/55  两种风格 + 光色判据 + 重绘预算
+.venv\Scripts\python.exe tests\selftest_style.py           :: 61/61  两种风格 + 光效 + 菜单配色 + 重绘预算
 .venv\Scripts\python.exe tests\selftest_devices.py         :: 15/15  音频设备枚举不阻塞界面
 .venv\Scripts\python.exe tests\selftest_backdrop.py        :: 13/13  实时背景材质的探测与回退
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
