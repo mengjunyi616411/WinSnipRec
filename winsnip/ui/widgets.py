@@ -16,11 +16,17 @@ from PySide6.QtWidgets import (
 
 from .. import anim, icons, winapi
 from ..theme import (
-    CAPTION_BUTTON_SIZE, RADIUS_CONTROL, RADIUS_FLYOUT, RADIUS_WINDOW, mica, render_shadow,
-    rgba, theme, ui_font,
+    CAPTION_BUTTON_SIZE, WIN10_CLOSE_HOVER, WIN10_CLOSE_PRESSED, mica, render_shadow, rgba,
+    theme, ui_font,
 )
 
 SHADOW_MARGIN = 20
+
+
+def control_radius(widget) -> int:
+    """Radius for buttons and other controls, honouring the active style."""
+    override = getattr(widget, "_radius_override", None)
+    return override if override is not None else theme.radius_control
 
 
 def _mix(first: QColor, second: QColor, amount: float) -> QColor:
@@ -46,7 +52,7 @@ class FluentWindow(QWidget):
         parent: QWidget | None = None,
         *,
         resizable: bool = False,
-        radius: int = RADIUS_WINDOW,
+        radius: int | None = None,        # None = follow the active style
         shadow: bool = True,
         tint_strength: float = 0.90,
         margin: int = SHADOW_MARGIN,
@@ -76,6 +82,11 @@ class FluentWindow(QWidget):
         self._freeze_backdrop = False
         self.setMouseTracking(True)
 
+    @property
+    def radius(self) -> int:
+        """Corner radius in device-independent pixels (style-aware)."""
+        return self._radius if self._radius is not None else theme.radius_window
+
     # -- geometry ---------------------------------------------------------- #
     def card_rect(self) -> QRect:
         m = self._margin
@@ -102,6 +113,11 @@ class FluentWindow(QWidget):
     def _ensure_backdrop(self) -> None:
         if self._backdrop is not None or self._freeze_backdrop:
             return
+        if not theme.uses_mica:
+            # Windows 10 has no Mica: the window is an opaque colour instead of
+            # a blurred crop of the wallpaper.
+            self._backdrop = None
+            return
         card = self.card_rect()
         handle = self.windowHandle()
         dpr = handle.devicePixelRatio() if handle else 1.0
@@ -125,7 +141,7 @@ class FluentWindow(QWidget):
             try:
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QColor(theme.palette.window_bg))
-                painter.drawRoundedRect(QRectF(self.card_rect()), self._radius, self._radius)
+                painter.drawRoundedRect(QRectF(self.card_rect()), self.radius, self.radius)
             except Exception:
                 pass
         finally:
@@ -138,8 +154,9 @@ class FluentWindow(QWidget):
 
         if self._shadow:
             if self._shadow_pixmap is None or self._shadow_pixmap.size() != self.size():
-                self._shadow_pixmap = render_shadow(self.size(), self._radius * 2,
-                                                    spread=self._margin, opacity=0.30)
+                self._shadow_pixmap = render_shadow(self.size(), max(1, self.radius * 2),
+                                                    spread=self._margin,
+                                                    opacity=theme.shadow_opacity)
             painter.drawPixmap(0, 0, self._shadow_pixmap)
 
         self._ensure_backdrop()
@@ -149,14 +166,14 @@ class FluentWindow(QWidget):
 
             painter.save()
             rounded = QPainterPath()
-            rounded.addRoundedRect(path_rect, self._radius, self._radius)
+            rounded.addRoundedRect(path_rect, self.radius, self.radius)
             painter.setClipPath(rounded)
             painter.drawPixmap(QRectF(card), self._backdrop, QRectF(self._backdrop.rect()))
             painter.restore()
         else:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(theme.palette.window_bg))
-            painter.drawRoundedRect(path_rect, self._radius, self._radius)
+            painter.drawRoundedRect(path_rect, self.radius, self.radius)
 
         border = rgba("#000000" if not theme.dark else "#FFFFFF", 0.10 if not theme.dark else 0.09)
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -165,7 +182,7 @@ class FluentWindow(QWidget):
         pen.setColor(border)
         painter.setPen(pen)
         painter.drawRoundedRect(QRectF(card).adjusted(0.5, 0.5, -0.5, -0.5),
-                                self._radius, self._radius)
+                                self.radius, self.radius)
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -202,7 +219,7 @@ class FluentWindow(QWidget):
     def _apply_native_rounding(self) -> None:
         try:
             handle = self.windowHandle()
-            if handle is not None and winapi.is_windows_11():
+            if handle is not None and theme.radius_window > 0 and winapi.is_windows_11():
                 winapi.set_rounded_corners(int(handle.winId()), 2)
         except Exception:
             pass
@@ -308,7 +325,7 @@ class FluentButton(QPushButton):
         icon_name: str | None = None,
         icon_size: int = 16,
         height: int = 36,
-        radius: int = RADIUS_CONTROL,
+        radius: int | None = None,
         accent_icon: bool = False,
         font_size: int = 14,
         font_weight: int = 400,
@@ -317,7 +334,7 @@ class FluentButton(QPushButton):
         self.variant = variant
         self.icon_name = icon_name
         self.icon_size = icon_size
-        self.radius = radius
+        self._radius_override = radius
         self.accent_icon = accent_icon
         self._hover = False
         self._pressed = False
@@ -396,14 +413,14 @@ class FluentButton(QPushButton):
         if bg is not None:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bg)
-            painter.drawRoundedRect(rect, self.radius, self.radius)
+            painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
         if border is not None:
             pen = painter.pen()
             pen.setWidthF(1.0)
             pen.setColor(border if enabled else rgba(border, 0.5))
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(rect, self.radius, self.radius)
+            painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
 
         # content
         if self.variant == "accent":
@@ -445,7 +462,7 @@ class IconButton(QPushButton):
         size: int = 20,
         width: int = 40,
         height: int = 36,
-        radius: int = RADIUS_CONTROL,
+        radius: int | None = None,
         tooltip: str = "",
         color: QColor | str | None = None,
         checkable: bool = False,
@@ -454,7 +471,7 @@ class IconButton(QPushButton):
         super().__init__(parent)
         self.icon_name = icon_name
         self.icon_size = size
-        self.radius = radius
+        self._radius_override = radius
         self.chevron = with_chevron
         self._hover = False
         self._pressed = False
@@ -514,7 +531,7 @@ class IconButton(QPushButton):
         if bg is not None:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bg)
-            painter.drawRoundedRect(rect, self.radius, self.radius)
+            painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
 
         color = self._custom_color or QColor(
             palette.icon_primary if enabled else palette.text_disabled
@@ -578,18 +595,29 @@ class CaptionButton(QPushButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         palette = theme.palette
         is_close = self.kind == "close"
+        # win10: the hover fills the whole button and corners are square;
+        # win11: an inset rounded wash, and a softer red for the close button.
+        inset = theme.caption_inset
+        radius = theme.radius_caption
         if self._hover or self._pressed:
             if is_close:
-                color = QColor("#C42B1C") if not self._pressed else QColor("#B02419")
+                if theme.is_win10:
+                    color = QColor(WIN10_CLOSE_PRESSED if self._pressed else WIN10_CLOSE_HOVER)
+                else:
+                    color = QColor("#B02419" if self._pressed else "#C42B1C")
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(color)
-                painter.drawRoundedRect(QRectF(self.rect()).adjusted(2, 2, -2, -2), 5, 5)
+                painter.drawRoundedRect(QRectF(self.rect()).adjusted(inset, inset, -inset, -inset),
+                                        radius, radius)
                 glyph = QColor("#FFFFFF")
             else:
                 alpha = 0.075 if self._pressed else 0.05
+                if theme.is_win10:
+                    alpha = 0.14 if self._pressed else 0.10
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
-                painter.drawRoundedRect(QRectF(self.rect()).adjusted(2, 2, -2, -2), 5, 5)
+                painter.drawRoundedRect(QRectF(self.rect()).adjusted(inset, inset, -inset, -inset),
+                                        radius, radius)
                 glyph = QColor(palette.icon_primary)
         else:
             glyph = QColor(palette.icon_primary)
@@ -699,7 +727,7 @@ class SegmentedControl(QWidget):
         palette = theme.palette
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(palette.toggle_track))
-        painter.drawRoundedRect(QRectF(self.rect()), RADIUS_CONTROL, RADIUS_CONTROL)
+        painter.drawRoundedRect(QRectF(self.rect()), theme.radius_control, theme.radius_control)
 
         base = QColor(palette.icon_secondary)
         active = QColor(palette.icon_primary)
@@ -723,10 +751,10 @@ class SegmentedControl(QWidget):
                 colour = QColor(fill)
                 colour.setAlphaF(colour.alphaF() * selectedness)
                 painter.setBrush(colour)
-                painter.drawRoundedRect(item_rect, RADIUS_CONTROL - 1, RADIUS_CONTROL - 1)
+                painter.drawRoundedRect(item_rect, theme.radius_control - 1, theme.radius_control - 1)
             elif index == self._hover:
                 painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", 0.04))
-                painter.drawRoundedRect(item_rect, RADIUS_CONTROL - 1, RADIUS_CONTROL - 1)
+                painter.drawRoundedRect(item_rect, theme.radius_control - 1, theme.radius_control - 1)
 
             icon_colour = _mix(base, active, selectedness)
             size = 20
@@ -995,7 +1023,7 @@ class FluentMenu(FluentWindow):
     _open: set["FluentMenu"] = set()
 
     def __init__(self, parent: QWidget | None = None, *, min_width: int = 200) -> None:
-        super().__init__(None, radius=8, tint_strength=0.93, margin=14, open_slide=8)
+        super().__init__(None, tint_strength=0.93, margin=14, open_slide=8)
         self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.NoDropShadowWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -1122,6 +1150,18 @@ class TitleBar(QWidget):
             layout.addSpacing(4)
         self.refresh()
 
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)
+        # Windows 10 draws a clear line between the caption bar and the content;
+        # Windows 11 merges the two, so this only appears in the win10 style.
+        if theme.is_win10:
+            painter = QPainter(self)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(rgba("#000000" if not theme.dark else "#FFFFFF",
+                                  0.10 if not theme.dark else 0.08))
+            painter.drawRect(0, self.height() - 1, self.width(), 1)
+            painter.end()
+
     def refresh(self) -> None:
         palette = theme.palette
         self.title_label.setStyleSheet(f"color: {palette.text_primary};")
@@ -1149,9 +1189,9 @@ class ClickableWidget(QWidget):
 
     clicked = Signal()
 
-    def __init__(self, parent: QWidget | None = None, *, radius: int = RADIUS_CONTROL) -> None:
+    def __init__(self, parent: QWidget | None = None, *, radius: int | None = None) -> None:
         super().__init__(parent)
-        self.radius = radius
+        self._radius_override = radius
         self._hover = False
         self._pressed = False
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
@@ -1188,7 +1228,7 @@ class ClickableWidget(QWidget):
         alpha = 0.06 if self._pressed else 0.04
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
-        painter.drawRoundedRect(QRectF(self.rect()), self.radius, self.radius)
+        painter.drawRoundedRect(QRectF(self.rect()), control_radius(self), control_radius(self))
         painter.end()
 
 
@@ -1202,7 +1242,7 @@ class Toast(FluentWindow):
 
     def __init__(self, title: str, message: str = "", icon_name: str = "check",
                  *, duration: int = 3200, on_click: Callable[[], None] | None = None) -> None:
-        super().__init__(None, radius=8, tint_strength=0.90, margin=16, open_slide=22)
+        super().__init__(None, tint_strength=0.90, margin=16, open_slide=22)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)

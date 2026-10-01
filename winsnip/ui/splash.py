@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from .. import __version__, anim, icons
-from ..theme import RADIUS_WINDOW, theme, ui_font
+from ..theme import theme, ui_font
 from .widgets import FluentWindow
 
 MIN_VISIBLE_MS = 900          # a splash that flashes for 80 ms feels broken
@@ -92,7 +92,7 @@ class SplashWindow(FluentWindow):
     closed = Signal()
 
     def __init__(self) -> None:
-        super().__init__(None, radius=RADIUS_WINDOW, tint_strength=0.92, margin=22,
+        super().__init__(None, tint_strength=0.92, margin=22,
                          open_animation="none")
         self.setWindowTitle("截图工具")
         # SplashScreen keeps it out of the taskbar and without decorations.

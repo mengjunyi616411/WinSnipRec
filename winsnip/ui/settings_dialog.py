@@ -8,12 +8,12 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
-    QFileDialog, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QApplication, QFileDialog, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from .. import __version__, icons, startup
 from ..settings import Settings, settings
-from ..theme import rgba, theme, ui_font
+from ..theme import apply_app_theme, rgba, theme, ui_font
 from .widgets import (
     FluentButton, FluentComboBox, FluentWindow, Separator, TitleBar, ToggleSwitch, show_toast,
 )
@@ -128,6 +128,13 @@ class SettingsWindow(FluentWindow):
         self.theme_combo.setCurrentIndex({"system": 0, "light": 1, "dark": 2}.get(settings.theme, 0))
         self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         self._add_row("主题", "浅色或深色外观，默认跟随 Windows 设置", self.theme_combo)
+
+        self.style_combo = FluentComboBox(self)
+        self.style_combo.addItems(["跟随系统", "Windows 11", "Windows 10"])
+        self.style_combo.setCurrentIndex(
+            {"system": 0, "win11": 1, "win10": 2}.get(getattr(settings, "style", "win11"), 1))
+        self.style_combo.currentIndexChanged.connect(self._on_style_changed)
+        self._add_row("界面风格", "窗口圆角、材质与标题栏按钮的样式", self.style_combo)
 
         self.tray_toggle = ToggleSwitch(settings.minimize_to_tray, self)
         self.tray_toggle.toggled.connect(lambda v: self._set("minimize_to_tray", v))
@@ -272,6 +279,21 @@ class SettingsWindow(FluentWindow):
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])
 
+    def _on_style_changed(self, index: int) -> None:
+        name = ["system", "win11", "win10"][index]
+        self._set("style", name)
+        theme.style = name
+        theme.refresh()
+        apply_app_theme(QApplication.instance())
+        # 已打开的窗口要重新计算圆角与背景，所以整体刷新一遍
+        for widget in QApplication.topLevelWidgets():
+            if hasattr(widget, "invalidate_backdrop"):
+                widget.invalidate_backdrop()
+            if hasattr(widget, "refresh_theme"):
+                widget.refresh_theme()
+        label = {"system": "跟随系统", "win11": "Windows 11", "win10": "Windows 10"}[name]
+        show_toast("界面风格已切换", f"当前：{label}", "check", duration=2600)
+
     def _on_autostart_toggled(self, enabled: bool) -> None:
         ok, message = startup.enable() if enabled else startup.disable()
         if not ok:
@@ -380,7 +402,7 @@ class SettingsWindow(FluentWindow):
 
 class AboutWindow(FluentWindow):
     def __init__(self) -> None:
-        super().__init__(None, radius=8)
+        super().__init__(None)
         self.setWindowTitle("关于")
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(430, 300)

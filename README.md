@@ -56,6 +56,7 @@
 | 托盘 | 关闭窗口后驻留通知区域，可继续用快捷键唤起 |
 | 开机自启 | 可在设置或 `⋯` 菜单开关；登录 Windows 后**静默进入通知区域**（不弹窗口），快捷键随时可用 |
 | 主题 | 跟随系统浅色/深色，运行中实时切换 |
+| 界面风格 | **Windows 11 / Windows 10 两种风格**，可跟随系统；圆角、材质、标题栏按钮一起变 |
 | 启动动画 | 启动画面（图标 + Fluent 进度环）→ 淡入并轻微上滑进入主窗口；可关闭 |
 | 界面动画 | Fluent 动效时长与缓动；Windows 关闭「显示动画」时自动跳过 |
 | 模式切换动画 | 截图 ⇄ 录屏：底部强调条滑动、选中底色与图标颜色交叉渐变、提示文字淡出上移再淡入 |
@@ -65,6 +66,24 @@
 > ② 选中底色与图标颜色同步交叉渐变（旧变浅、新变深）；
 > ③ 中间提示文字先淡出并上移，换文案后从下方淡入（共 300ms）。
 > 全部走同一套 `winsnip/anim.py` 时长令牌，并受「界面动画」开关与系统设置约束。
+
+### 两种界面风格
+
+设置里的「界面风格」可以选 **跟随系统 / Windows 11 / Windows 10**，默认 Windows 11：
+
+| | Windows 11（默认） | Windows 10 |
+|---|---|---|
+| 窗口圆角 | 8px 圆角 | **直角** |
+| 背景 | **Mica 毛玻璃**（模糊壁纸） | 不透明纯色 |
+| 标题栏按钮 | 悬停内缩圆角、关闭键 `#C42B1C` | 悬停**铺满整格直角**、关闭键经典红 `#E81123` |
+| 标题栏分隔线 | 无（与内容融为一体） | **有**一条分隔线 |
+| 控件圆角 / 字体 | 5px / Segoe UI Variable | 2px / Segoe UI |
+| 阴影 | 柔和、扩散大 | 更紧更深 |
+
+![两种风格对比](docs/screenshots/17_style_compare.png)
+
+切换是**即时生效**的：所有窗口都改成在绘制时读主题（`theme.radius_window` 等），
+不需要重建窗口，也不需要重启。
 
 ### 关于 WinUI 3
 
@@ -293,7 +312,7 @@ WinSnipRec/
 ├── promo/video/               宣传视频（30s MP4 + 字幕 + 分镜表）
 ├── perf/                      性能图表
 ├── winsnip/
-│   ├── theme.py               Fluent 设计令牌 + Mica 材质渲染 + 投影
+│   ├── theme.py               Fluent 设计令牌 + 双风格（Win11/Win10）+ Mica 渲染
 │   ├── icons.py               全部矢量图标（20×20 网格 / 1.5 描边）
 │   ├── winapi.py              DWM、注册表主题、窗口枚举、全局热键、DPI
 │   ├── startup.py             开机自启（HKCU Run 项读写与失效修复）
@@ -324,6 +343,7 @@ WinSnipRec/
     ├── selftest_startup.py      开机自启自测（22 项：注册表读写 + 失效修复 + 模拟登录）
     ├── selftest_animation.py    动效自测（41 项：启动动画、全窗口淡入、模式切换、进度环、居中）
     ├── selftest_duration.py     时长回归（8 项：人为拖慢抓屏，验证分段不被静默丢弃）
+    ├── selftest_style.py        风格自测（23 项：圆角、材质、标题栏按钮、分割线、实时切换）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
 
@@ -331,7 +351,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **205 项断言**，当前全部通过：
+全部自测均可离线运行，共 **228 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -342,6 +362,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_startup.py         :: 22/22  开机自启（含模拟登录）
 .venv\Scripts\python.exe tests\selftest_animation.py       :: 41/41  启动动画、模式切换、全窗口打开动画
 .venv\Scripts\python.exe tests\selftest_duration.py        ::  8/8   时长回归（拖慢抓屏的最坏情况）
+.venv\Scripts\python.exe tests\selftest_style.py           :: 23/23  Windows 11 / Windows 10 两种风格
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图
 ```

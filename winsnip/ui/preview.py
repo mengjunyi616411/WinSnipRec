@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from .. import icons
 from ..settings import settings
-from ..theme import RADIUS_CONTROL, theme, ui_font
+from ..theme import theme, ui_font
 from .widgets import FluentButton, FluentWindow, IconButton, Separator, TitleBar, show_toast
 
 

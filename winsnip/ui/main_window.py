@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from .. import anim, icons, winapi
 from ..settings import settings
-from ..theme import RADIUS_CONTROL, rgba, theme, ui_font
+from ..theme import rgba, theme, ui_font
 from .control_bar import CountdownOverlay, RecordControlBar
 from .overlay import CaptureOverlay
 from .preview import ImagePreviewWindow

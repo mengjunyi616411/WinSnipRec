@@ -38,6 +38,9 @@ jobs:
       - name: 全局快捷键自测（7 项）
         run: python tests/selftest_hotkeys.py
 
+      - name: 界面风格自测（23 项）
+        run: python tests/selftest_style.py
+
       # 时长回归：人为把抓屏拖慢，验证"分段不会被静默丢弃"。
       # 这条专门覆盖慢机器场景，是硬性门槛。
       - name: 时长回归自测（8 项）

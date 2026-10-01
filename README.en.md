@@ -29,6 +29,11 @@ get an H.264 MP4.
   the real Snipping Tool or another app already owns the combination
 - **Start with Windows**, silently into the notification area
 - **Light / dark theme** that follows the system, switchable at runtime
+- **Two interface styles** - Windows 11 (rounded, Mica, Segoe UI Variable) or
+  Windows 10 (square corners, opaque background, inset-free square caption
+  hover with the classic `#E81123` close button, Segoe UI), or follow the OS.
+  Switching is instant: widgets read the radius/material from the theme at
+  paint time, so no window is rebuilt and no restart is needed.
 - Output: **H.264 MP4** (libx264, adjustable CRF, `+faststart`), 15/24/30/60 fps
 
 ## Why it looks like Windows 11 even on Windows 10
@@ -68,6 +73,8 @@ powershell -ExecutionPolicy Bypass -File build_exe.ps1
 The result lands in `dist\截图工具\` (~200 MB, ffmpeg included). Install it to
 `%LOCALAPPDATA%` with shortcuts via `安装到本机.bat`.
 
+![Windows 11 vs Windows 10 style](docs/screenshots/17_style_compare.png)
+
 ## Hotkeys
 
 | Action | Default | Fallback when taken |
@@ -80,7 +87,7 @@ so WinSnipRec logs the conflict and switches to the fallback automatically.
 
 ## Tests
 
-Everything runs offline. 205 assertions across eight suites:
+Everything runs offline. 228 assertions across nine suites:
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py        :: 51  recording core
@@ -92,6 +99,7 @@ Everything runs offline. 205 assertions across eight suites:
 .venv\Scripts\python.exe tests\selftest_duration.py    ::  8  duration regression
 .venv\Scripts\python.exe tests\selftest_hotkeys.py     ::  7  global hotkeys
 .venv\Scripts\python.exe tests\selftest_mic_switch.py  ::  9  microphone switching
+.venv\Scripts\python.exe tests\selftest_style.py      :: 23  win11 / win10 interface styles
 ```
 
 `selftest_duration.py` deliberately slows the screen grab down to reproduce the
@@ -103,7 +111,7 @@ recording still comes out the right length.
 ```
 app.py                 entry point (logging, single instance, DPI, hotkeys, theme)
 winsnip/
-  theme.py             Fluent design tokens + Mica renderer
+  theme.py             Fluent tokens, both interface styles, Mica renderer
   icons.py             every vector icon (20x20 grid, 1.5 px strokes)
   winapi.py            DWM, registry theme, window enumeration, global hotkeys
   startup.py           run-at-logon (HKCU Run key, stale-entry repair)

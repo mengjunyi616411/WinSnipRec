@@ -10,7 +10,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QMenu, QWidget
 
 from .. import anim, icons, winapi
-from ..theme import RADIUS_CONTROL, RADIUS_WINDOW, mica, rgba, theme, ui_font
+from ..theme import mica, rgba, theme, ui_font
 from .widgets import FluentMenu, IconButton, Separator
 
 HANDLE_SIZE = 8
@@ -93,13 +93,13 @@ class CaptureBar(QWidget):
         rect = QRectF(self.rect()).adjusted(0, 0, -0.5, -0.5)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(theme.palette.overlay_chip_bg))
-        painter.drawRoundedRect(rect, RADIUS_WINDOW, RADIUS_WINDOW)
+        painter.drawRoundedRect(rect, theme.radius_window, theme.radius_window)
         pen = painter.pen()
         pen.setWidthF(1.0)
         pen.setColor(QColor(theme.palette.flyout_border))
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(rect, RADIUS_WINDOW, RADIUS_WINDOW)
+        painter.drawRoundedRect(rect, theme.radius_window, theme.radius_window)
         painter.end()
 
 
@@ -617,7 +617,7 @@ class CaptureOverlay(QWidget):
         chip = QRect(int(x), int(y), int(chip_w), chip_h)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(palette.accent))
-        painter.drawRoundedRect(QRectF(chip), RADIUS_CONTROL, RADIUS_CONTROL)
+        painter.drawRoundedRect(QRectF(chip), theme.radius_control, theme.radius_control)
         icons.paint_icon(painter, "record" if self._mode == "video" else "add_rect",
                          QRectF(chip.left() + 10, chip.top() + 8, 16, 16), QColor("#FFFFFF"))
         painter.setPen(QColor("#FFFFFF"))

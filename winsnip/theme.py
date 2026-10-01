@@ -3,6 +3,17 @@
 Colour values were sampled from the real Windows 11 Snipping Tool on build
 26100 and then normalised, so the light and dark palettes below reproduce what
 the shipped app looks like when its Mica backdrop is opaque.
+
+Two interface styles are supported and they are orthogonal to light/dark:
+
+* ``win11`` (default) - rounded corners, Mica backdrop, inset rounded caption
+  button hover, soft large shadow, Segoe UI Variable.
+* ``win10`` - square corners, opaque background (no wallpaper showing through),
+  full-bleed square caption hover with the classic #E81123 close button, tighter
+  shadow, Segoe UI, and a separator under the caption bar.
+
+Style-dependent values are exposed as :class:`ThemeState` properties so widgets
+read them at paint time and a switch takes effect without rebuilding windows.
 """
 
 from __future__ import annotations
@@ -20,19 +31,47 @@ from . import winapi
 # --------------------------------------------------------------------------- #
 # Motion / metrics
 # --------------------------------------------------------------------------- #
-RADIUS_WINDOW = 8
+RADIUS_WINDOW = 8          # win11 defaults; widgets read theme.radius_* instead
 RADIUS_CONTROL = 5
 RADIUS_FLYOUT = 8
 CAPTION_BUTTON_SIZE = QSize(46, 32)
 COMMAND_BAR_HEIGHT = 56
 CAPTION_BAR_HEIGHT = 40
 
+# Windows 10 caption buttons are the same size but hover fills the whole button
+# and the close button uses the older, more saturated red.
+WIN10_CLOSE_HOVER = "#E81123"
+WIN10_CLOSE_PRESSED = "#F1707A"
+
 UI_FAMILIES = ["Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI"]
+UI_FAMILIES_WIN10 = ["Segoe UI", "Microsoft YaHei UI", "Segoe UI Variable"]
+
+# style name -> radii / shadow / metrics
+STYLE_TOKENS: dict[str, dict[str, float]] = {
+    "win11": {
+        "radius_window": RADIUS_WINDOW,
+        "radius_control": RADIUS_CONTROL,
+        "radius_flyout": RADIUS_FLYOUT,
+        "radius_caption": 5,
+        "shadow_opacity": 0.28,
+        "shadow_spread_scale": 1.0,
+        "caption_inset": 2,
+    },
+    "win10": {
+        "radius_window": 0,          # Windows 10 windows are square
+        "radius_control": 2,
+        "radius_flyout": 4,
+        "radius_caption": 0,
+        "shadow_opacity": 0.40,      # tighter and darker, like Win10
+        "shadow_spread_scale": 0.62,
+        "caption_inset": 0,          # hover fills the whole button
+    },
+}
 
 
 def ui_font(size: int = 14, weight: int = 400) -> QFont:
     font = QFont()
-    font.setFamilies(UI_FAMILIES)
+    font.setFamilies(UI_FAMILIES_WIN10 if theme.is_win10 else UI_FAMILIES)
     font.setPixelSize(size)
     font.setWeight(QFont.Weight(weight))
     return font
@@ -130,7 +169,8 @@ DARK = Palette(
 
 @dataclass
 class ThemeState:
-    mode: str = "system"  # system | light | dark
+    mode: str = "system"    # system | light | dark
+    style: str = "win11"    # win11 | win10 | system
     _palette: Palette | None = field(default=None, repr=False)
 
     def refresh(self) -> None:
@@ -143,6 +183,54 @@ class ThemeState:
         if self.mode == "light":
             return False
         return winapi.is_dark_mode()
+
+    # -- interface style ---------------------------------------------------- #
+    @property
+    def resolved_style(self) -> str:
+        """'win11' or 'win10' after resolving 'system'."""
+        if self.style == "system":
+            return "win11" if winapi.is_windows_11() else "win10"
+        return "win10" if self.style == "win10" else "win11"
+
+    @property
+    def is_win10(self) -> bool:
+        return self.resolved_style == "win10"
+
+    def _token(self, name: str) -> float:
+        return STYLE_TOKENS[self.resolved_style][name]
+
+    @property
+    def radius_window(self) -> int:
+        return int(self._token("radius_window"))
+
+    @property
+    def radius_control(self) -> int:
+        return int(self._token("radius_control"))
+
+    @property
+    def radius_flyout(self) -> int:
+        return int(self._token("radius_flyout"))
+
+    @property
+    def radius_caption(self) -> int:
+        return int(self._token("radius_caption"))
+
+    @property
+    def caption_inset(self) -> int:
+        return int(self._token("caption_inset"))
+
+    @property
+    def shadow_opacity(self) -> float:
+        return float(self._token("shadow_opacity"))
+
+    @property
+    def shadow_spread(self) -> int:
+        return int(self._token("shadow_spread_scale") * 22)
+
+    @property
+    def uses_mica(self) -> bool:
+        """Windows 10 has no Mica, so the window paints an opaque colour."""
+        return not self.is_win10
 
     @property
     def palette(self) -> Palette:

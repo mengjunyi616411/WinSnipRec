@@ -7,7 +7,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from .. import icons, winapi
-from ..theme import RADIUS_CONTROL, RADIUS_WINDOW, rgba, theme, ui_font
+from ..theme import rgba, theme, ui_font
 from .widgets import FluentWindow, IconButton, Separator
 
 BAR_HEIGHT = 48
@@ -55,7 +55,7 @@ class _StopButton(QPushButton):
             color = color.lighter(115)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
-        painter.drawRoundedRect(rect, RADIUS_CONTROL, RADIUS_CONTROL)
+        painter.drawRoundedRect(rect, theme.radius_control, theme.radius_control)
         size = 14
         icons.paint_icon(painter, "stop",
                          QRectF((self.width() - size) / 2, (self.height() - size) / 2, size, size),
@@ -72,7 +72,7 @@ class RecordControlBar(FluentWindow):
     micToggled = Signal(bool)
 
     def __init__(self, *, mic_available: bool = True, mic_enabled: bool = False) -> None:
-        super().__init__(None, radius=RADIUS_WINDOW, tint_strength=0.88, open_slide=10, margin=BAR_MARGIN)
+        super().__init__(None, tint_strength=0.88, open_slide=10, margin=BAR_MARGIN)
         self.setWindowFlags(
             Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowDoesNotAcceptFocus
@@ -272,7 +272,7 @@ class CountdownOverlay(FluentWindow):
     finished = Signal()
 
     def __init__(self, logical_region: QRect, seconds: int) -> None:
-        super().__init__(None, radius=RADIUS_WINDOW, tint_strength=0.80, margin=12,
+        super().__init__(None, tint_strength=0.80, margin=12,
                          open_animation="fade")
         self.setWindowFlags(
             Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |

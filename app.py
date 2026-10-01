@@ -165,6 +165,7 @@ def main() -> int:
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(icons.app_icon())
     theme.mode = settings.theme
+    theme.style = getattr(settings, "style", "win11")
     apply_app_theme(app)
     _install_excepthook(app)
 
