@@ -1,5 +1,5 @@
 """WinSnipRec - a Windows 10 screen recorder with a Windows 11 Snipping Tool UI."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __app_name__ = "WinSnipRec"
 __app_display_name__ = "截图工具"

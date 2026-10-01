@@ -3,7 +3,7 @@
 > Screen recording and screenshots for **Windows 10**, with the look, icons and
 > interaction flow of the **Windows 11 Snipping Tool**.
 
-[中文说明](README.md) · [![](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) · [![](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-lightgrey)](#requirements)
+[中文说明](README.md) · [Changelog](CHANGELOG.md) · [![](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) · [![](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-lightgrey)](#requirements)
 
 On Windows 10, `Win+Shift+S` takes a screenshot and `Win+Shift+R` records — but the
 recorder Microsoft ships is the old, plain Game Bar. WinSnipRec reproduces the

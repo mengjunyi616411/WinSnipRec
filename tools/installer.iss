@@ -1,7 +1,7 @@
 ; WinSnipRec 安装包脚本（Inno Setup 6）
 ;
 ; 由 build_installer.ps1 调用，通常不用手工执行：
-;   ISCC.exe /DAppVersion=1.0.0 tools\installer.iss
+;   ISCC.exe /DAppVersion=<版本号> tools\installer.iss   （build_installer.ps1 会自动填）
 ;
 ; 设计取舍：
 ;   * 按用户安装（{localappdata}\Programs），全程不需要管理员权限，
@@ -15,7 +15,7 @@
 #define AppPublisher   "WinSnipRec contributors"
 #define AppUrl         "https://github.com/OWNER/REPO"
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.1.0"
 #endif
 #define SourceDir      "..\dist\截图工具"
 

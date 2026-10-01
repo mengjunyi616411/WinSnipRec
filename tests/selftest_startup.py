@@ -113,7 +113,11 @@ def main() -> int:
         else:
             check("启动后窗口是隐藏的（静默进托盘）", True, "offscreen 平台跳过窗口枚举")
 
-        log = Path(os.environ["APPDATA"]) / "WinSnipRec" / "app.log"
+        # 子进程继承了 WINSNIPREC_HOME，日志落在隔离目录里；以前这里写死
+        # %APPDATA%，全靠真实安装留下的旧日志才"通过"，删掉日志就露馅了。
+        from winsnip.settings import app_data_dir
+
+        log = Path(app_data_dir()) / "app.log"
         content = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
         check("日志里记录了 ready", "ready" in content,
               content.strip().splitlines()[-1] if content.strip() else "无日志")

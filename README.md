@@ -2,7 +2,7 @@
 
 > 在 Windows 10 上复刻 Windows 11「截图工具」的录屏与截图体验。
 
-[English](README.en.md) · [中文](README.md)
+[English](README.en.md) · [中文](README.md) · [更新日志](CHANGELOG.md)
 
 [![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -273,9 +273,12 @@ winget install --id JRSoftware.InnoSetup -e
 网页上传上限 25 MB）。走 Release：
 
 ```bat
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
+
+版本号只有一个来源：`winsnip/__init__.py` 里的 `__version__`。安装包文件名、
+程序「关于」窗口、启动画面都读它；Release 工作流则从 tag 推导（`v1.1.0` → `1.1.0`）。
 
 推 tag 后 GitHub Actions 自动完成：跑自测 → 打包主程序 → 压缩免安装版 →
 编译安装包 → 生成 `SHA256SUMS.txt` → 创建 Release 并附上两个产物。
