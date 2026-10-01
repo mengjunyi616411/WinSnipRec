@@ -32,6 +32,105 @@ DWMWCP_DONOTROUND = 1
 DWMWCP_ROUND = 2
 DWMWCP_ROUNDSMALL = 3
 
+# Windows 11 22H2+ system backdrop (attribute 38).
+DWMWA_SYSTEMBACKDROP_TYPE = 38
+DWMSBT_AUTO = 0
+DWMSBT_NONE = 1
+DWMSBT_MAINWINDOW = 2        # Mica
+DWMSBT_TRANSIENTWINDOW = 3   # Acrylic
+DWMSBT_TABBEDWINDOW = 4
+
+# Windows 10 1803+ composition attribute: a real blur the DWM composites.
+WCA_ACCENT_POLICY = 19
+ACCENT_DISABLED = 0
+ACCENT_ENABLE_BLURBEHIND = 3
+ACCENT_ENABLE_ACRYLICBLURBEHIND = 4
+
+GWL_EXSTYLE = -20
+WS_EX_LAYERED = 0x00080000
+RGN_OR = 2
+RGN_DIFF = 4
+
+
+class _ACCENTPOLICY(ctypes.Structure):
+    _fields_ = [("AccentState", ctypes.c_int),
+                ("AccentFlags", ctypes.c_int),
+                ("GradientColor", ctypes.c_uint),
+                ("AnimationId", ctypes.c_int)]
+
+
+class _WINCOMPATTRDATA(ctypes.Structure):
+    _fields_ = [("Attribute", ctypes.c_int),
+                ("Data", ctypes.POINTER(_ACCENTPOLICY)),
+                ("SizeOfData", ctypes.c_size_t)]
+
+
+def is_layered(hwnd: int) -> bool:
+    """Layered windows bypass DWM backdrop effects entirely."""
+    try:
+        return bool(user32.GetWindowLongW(wt.HWND(hwnd), GWL_EXSTYLE) & WS_EX_LAYERED)
+    except Exception:
+        return False
+
+
+def set_system_backdrop(hwnd: int, kind: int = DWMSBT_TRANSIENTWINDOW) -> bool:
+    """Ask DWM for a live backdrop material (Windows 11 22H2+).
+
+    Returns True when the attribute was accepted; that is NOT proof it renders -
+    see backsplash.probe_native_backdrop, which checks the pixels.
+    """
+    if not dwmapi:
+        return False
+    try:
+        value = ctypes.c_int(kind)
+        hr = dwmapi.DwmSetWindowAttribute(
+            wt.HWND(hwnd), ctypes.c_uint(DWMWA_SYSTEMBACKDROP_TYPE),
+            ctypes.byref(value), ctypes.sizeof(value),
+        )
+        return hr == 0
+    except Exception:
+        return False
+
+
+def set_accent_blur(hwnd: int, state: int = ACCENT_ENABLE_ACRYLICBLURBEHIND,
+                    tint: int = 0x00000000) -> bool:
+    """Windows 10's undocumented live blur. Also works on Windows 11."""
+    try:
+        policy = _ACCENTPOLICY(state, 2, tint, 0)
+        data = _WINCOMPATTRDATA(WCA_ACCENT_POLICY, ctypes.pointer(policy),
+                                ctypes.sizeof(policy))
+        user32.SetWindowCompositionAttribute(wt.HWND(hwnd), ctypes.byref(data))
+        return True
+    except Exception:
+        return False
+
+
+def clear_backdrop(hwnd: int) -> None:
+    """Turn both mechanisms off again."""
+    set_system_backdrop(hwnd, DWMSBT_NONE)
+    set_accent_blur(hwnd, ACCENT_DISABLED)
+
+
+def set_rounded_region(hwnd: int, width: int, height: int, radius: int) -> bool:
+    """Shape a non-layered window like a rounded rectangle.
+
+    The native backdrop covers the whole window rect, so a window that wants
+    rounded corners without a layered (per-pixel alpha) surface has to clip
+    itself with a window region instead.
+    """
+    try:
+        region = gdi32.CreateRoundRectRgn(0, 0, width + 1, height + 1,
+                                          radius * 2, radius * 2)
+        if not region:
+            return False
+        # SetWindowRgn takes ownership of the region on success.
+        ok = user32.SetWindowRgn(wt.HWND(hwnd), region, True)
+        if not ok:
+            gdi32.DeleteObject(region)
+        return bool(ok)
+    except Exception:
+        return False
+
 
 def is_windows_11() -> bool:
     """True on Windows 11 (build >= 22000)."""

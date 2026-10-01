@@ -44,6 +44,9 @@ jobs:
       - name: 设备枚举自测（15 项，确保不阻塞界面）
         run: python tests/selftest_devices.py
 
+      - name: 背景材质自测（13 项，探测与回退）
+        run: python tests/selftest_backdrop.py
+
       # 时长回归：人为把抓屏拖慢，验证"分段不会被静默丢弃"。
       # 这条专门覆盖慢机器场景，是硬性门槛。
       - name: 时长回归自测（8 项）

@@ -18,6 +18,7 @@ from .widgets import (
     FluentButton, FluentComboBox, FluentWindow, Separator, TitleBar, ToggleSwitch, show_toast,
 )
 
+BACKDROP_LEVELS = ["自动", "经典（壁纸）", "强制实时"]
 REVEAL_LEVELS = ["低", "中", "高"]
 REVEAL_VALUES = ["weak", "normal", "strong"]
 
@@ -143,6 +144,14 @@ class SettingsWindow(FluentWindow):
             {"system": 0, "win11": 1, "win10": 2}.get(getattr(settings, "style", "win11"), 1))
         self.style_combo.currentIndexChanged.connect(self._on_style_changed)
         self._add_row("界面风格", "窗口圆角、材质与标题栏按钮的样式", self.style_combo)
+
+        self.backdrop_combo = FluentComboBox(self)
+        self.backdrop_combo.addItems(BACKDROP_LEVELS)
+        self.backdrop_combo.setCurrentIndex(
+            {"auto": 0, "classic": 1, "native": 2}.get(
+                getattr(settings, "backdrop", "auto"), 0))
+        self.backdrop_combo.currentIndexChanged.connect(self._on_backdrop_changed)
+        self._add_row("背景材质", self._backdrop_note(), self.backdrop_combo)
 
         self.reveal_combo = FluentComboBox(self)
         self.reveal_combo.addItems(REVEAL_LEVELS)
@@ -309,6 +318,18 @@ class SettingsWindow(FluentWindow):
         combo.blockSignals(False)
 
     # ------------------------------------------------------------------ #
+    def _backdrop_note(self) -> str:
+        """Say what the probe found, so the choice is not a mystery."""
+        from .. import backdrop
+
+        supported = backdrop.native_available()
+        if supported:
+            return "本机支持实时模糊，用它更真实；不支持时会自动回退"
+        return "本机实测不支持系统实时模糊（已自动回退到壁纸材质）"
+
+    def _on_backdrop_changed(self, index: int) -> None:
+        self._set("backdrop", ["auto", "classic", "native"][index])
+
     def _set(self, attribute: str, value) -> None:
         setattr(settings, attribute, value)
         settings.save()

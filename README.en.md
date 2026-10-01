@@ -29,6 +29,11 @@ get an H.264 MP4.
   the real Snipping Tool or another app already owns the combination
 - **Start with Windows**, silently into the notification area
 - **Light / dark theme** that follows the system, switchable at runtime
+- **Optional real-time backdrop blur**: Settings -> Appearance -> Backdrop
+  (auto / classic / force). Auto *measures pixels* at startup to decide whether
+  DWM actually renders a backdrop - both relevant APIs report success on
+  machines that draw nothing - and quietly falls back to the wallpaper
+  material when it does not.
 - **Two interface styles** - Windows 11 (rounded, Mica, Segoe UI Variable) or
   Windows 10 (square corners, **Acrylic** = heavy Gaussian blur + noise grain,
   inset-free square caption hover with the classic `#E81123` close button,
@@ -92,7 +97,7 @@ so WinSnipRec logs the conflict and switches to the fallback automatically.
 
 ## Tests
 
-Everything runs offline. 270 assertions across ten suites:
+Everything runs offline. 283 assertions across eleven suites:
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py        :: 51  recording core

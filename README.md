@@ -86,6 +86,31 @@
 切换是**即时生效**的：所有窗口都改成在绘制时读主题（`theme.radius_window` 等），
 不需要重建窗口，也不需要重启。
 
+### 背景材质：实时模糊还是壁纸模糊
+
+设置里的「背景材质」有三档：
+
+| 档位 | 行为 |
+|---|---|
+| **自动**（默认） | 启动时探测本机能否真正渲染系统背景模糊，能就用真的，不能就回退 |
+| 经典（壁纸） | 始终用下面这套壁纸材质的实现 |
+| 强制实时 | 跳过探测，直接要求系统实时模糊 |
+
+**两种做法的区别**：经典的实现是"读壁纸文件 → 缩小 → 放大 → 染色"，只对壁纸有效，
+窗口后面的其他窗口不会出现在模糊里；系统实时模糊则由 **DWM 合成**，真·实时、CPU
+零开销（Win11 22H2+ 用 `DWMWA_SYSTEMBACKDROP_TYPE`，Win10 1803+ 用
+`SetWindowCompositionAttribute` 的 `ACCENT_ENABLE_ACRYLICBLURBEHIND`）。
+
+**为什么默认是"自动"而不是直接用系统接口**：这两个 API 在不少环境里会**返回成功
+却什么都不画**。所以可用性是**用像素判定**的（`winsnip/backdrop.py`）：建一个临时的
+非分层窗口，先截屏、应用材质、再截屏、比像素；没变化就判定不支持。作者这台机器就是
+这种情况 —— API 返回 `hr=0`，像素零变化，系统自带的开始菜单在这里也是不透明的。
+任何异常都会被当作"用经典材质"，失败不会冒泡。
+
+> 原生路径有个前置条件：窗口不能是**分层窗口**，而 `WA_TranslucentBackground` 正是
+> 分层窗口的来源。所以原生路径会把阴影留白归零，另用 `SetWindowRgn` 把窗口裁成圆角，
+> 客户区只画一条 1px 描边（多画一点就会盖住背景）。菜单、通知这类小浮层仍然走经典路径。
+
 **Acrylic 与 Mica 的区别不是"有没有模糊"，而是模糊的程度和配方**：Mica 用 1/16
 缩放的壁纸做一次平滑放大，保留壁纸的构图；Acrylic 额外走三级平滑下采样/上采样
 近似高斯模糊，把构图彻底糊掉，再叠一层噪点（否则大面积极渐变会出现色带），最后
@@ -367,6 +392,7 @@ WinSnipRec/
     ├── selftest_duration.py     时长回归（8 项：人为拖慢抓屏，验证分段不被静默丢弃）
     ├── selftest_style.py        风格自测（55 项：圆角、Acrylic、Reveal 光效/光色/默认档位）
     ├── selftest_devices.py      设备枚举自测（15 项：绝不阻塞 GUI 线程）
+    ├── selftest_backdrop.py     背景材质自测（13 项：像素探测、回退、设置项）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
 
@@ -374,7 +400,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **270 项断言**，当前全部通过：
+全部自测均可离线运行，共 **283 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -387,6 +413,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_duration.py        ::  8/8   时长回归（拖慢抓屏的最坏情况）
 .venv\Scripts\python.exe tests\selftest_style.py           :: 55/55  两种风格 + 光色判据 + 重绘预算
 .venv\Scripts\python.exe tests\selftest_devices.py         :: 15/15  音频设备枚举不阻塞界面
+.venv\Scripts\python.exe tests\selftest_backdrop.py        :: 13/13  实时背景材质的探测与回退
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图
 ```

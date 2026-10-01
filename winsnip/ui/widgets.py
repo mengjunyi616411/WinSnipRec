@@ -43,6 +43,23 @@ def paint_reveal_border(widget, painter: QPainter, radius: float) -> None:
     painter.restore()
 
 
+def _native_backdrop_wanted() -> bool:
+    """Ask the backdrop module; any failure means "use the classic material"."""
+    try:
+        from .. import backdrop
+
+        return backdrop.wanted()
+    except Exception:
+        return False
+
+
+def _native_tint(colour, strength: float, dark: bool) -> int:
+    """Pack the card tint as the 0xAABBGGRR the accent API expects."""
+    value = QColor(colour)
+    alpha = int(max(0, min(255, round((170 if dark else 150) * strength))))
+    return (alpha << 24) | (value.blue() << 16) | (value.green() << 8) | value.red()
+
+
 def control_radius(widget) -> int:
     """Radius for buttons and other controls, honouring the active style."""
     override = getattr(widget, "_radius_override", None)
@@ -180,11 +197,22 @@ class FluentWindow(QWidget):
         margin: int = SHADOW_MARGIN,
         open_animation: str = "slide",        # slide | fade | none
         open_slide: int = 14,
+        native_backdrop: bool | None = None,   # None = ask backdrop.wanted()
     ) -> None:
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+
+        # A real DWM backdrop cannot coexist with a layered window, and a layered
+        # window is what gives us the transparent shadow margin - so the native
+        # path drops the margin and shapes the window with a region instead.
+        self._native_backdrop = (_native_backdrop_wanted() if native_backdrop is None
+                                 else native_backdrop)
+        if self._native_backdrop:
+            margin = 0
+            shadow = False
+        else:
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._radius = radius
         self._shadow = shadow
         self._tint_strength = tint_strength
@@ -309,6 +337,11 @@ class FluentWindow(QWidget):
 
     def _paint_static_card(self, painter: QPainter) -> None:
         """Everything in the card that does not change between frames."""
+        if self._native_backdrop:
+            # DWM draws the material behind the window; anything opaque painted
+            # here would hide it. Only the hairline border is ours.
+            self._paint_native_border(painter)
+            return
         card = self.card_rect()
         if self._shadow:
             if self._shadow_pixmap is None or self._shadow_pixmap.size() != self.size():
@@ -352,6 +385,9 @@ class FluentWindow(QWidget):
         self._start_open_animation()
         self._start_reveal_tracking()
         self.sync_reveal_overlay()
+        self._apply_native_backdrop()
+        if self._native_backdrop:
+            QTimer.singleShot(200, self._verify_native_backdrop)
 
     def _start_open_animation(self) -> None:
         """Every window fades (and usually slides) in when it is opened."""
@@ -510,6 +546,108 @@ class FluentWindow(QWidget):
         self._stop_reveal_tracking()
         super().hideEvent(event)
 
+    def _paint_native_border(self, painter: QPainter) -> None:
+        card = QRectF(self.card_rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        border = rgba("#000000" if not theme.dark else "#FFFFFF",
+                      0.10 if not theme.dark else 0.09)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        pen = painter.pen()
+        pen.setWidthF(1.0)
+        pen.setColor(border)
+        painter.setPen(pen)
+        painter.drawRoundedRect(card, self.radius, self.radius)
+
+    def _apply_native_backdrop(self) -> None:
+        """Hand the window over to DWM and clip it to the card's shape."""
+        if not self._native_backdrop:
+            return
+        handle = self.windowHandle()
+        if handle is None:
+            return
+        hwnd = int(handle.winId())
+        if not hwnd:
+            return
+        if winapi.is_layered(hwnd):
+            self._fallback_from_native("窗口是分层窗口，DWM 背景会被绕过")
+            return
+        tint = _native_tint(theme.palette.window_bg, self._tint_strength, theme.dark)
+        applied = winapi.set_accent_blur(hwnd, winapi.ACCENT_ENABLE_ACRYLICBLURBEHIND, tint)
+        if not applied:
+            applied = winapi.set_system_backdrop(hwnd, winapi.DWMSBT_TRANSIENTWINDOW)
+        if not applied:
+            self._fallback_from_native("系统拒绝了背景材质请求")
+            return
+        self._sync_native_region()
+
+    def _sync_native_region(self) -> None:
+        if not self._native_backdrop:
+            return
+        handle = self.windowHandle()
+        if handle is None:
+            return
+        winapi.set_rounded_region(int(handle.winId()), self.width(), self.height(),
+                                  self.radius * 2)
+
+    def _fallback_from_native(self, reason: str) -> None:
+        """Give up on the native material and go back to the wallpaper one."""
+        if not self._native_backdrop:
+            return
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "native backdrop off, using the wallpaper material instead: %s", reason)
+        self._native_backdrop = False
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self._margin = SHADOW_MARGIN
+        self._shadow = True
+        try:
+            handle = self.windowHandle()
+            if handle is not None:
+                winapi.clear_backdrop(int(handle.winId()))
+        except Exception:
+            pass
+        self._static_card = None
+        self._static_key = None
+        self.invalidate_backdrop()
+
+    def _verify_native_backdrop(self) -> None:
+        """Catch the accent API's known failure: a black client area.
+
+        NOTE: this must capture the SCREEN, not self.grab(). A native-backdrop
+        window paints nothing in its client area on purpose, so grab() renders it
+        offscreen and always comes back near-black - the check would then revert
+        on every machine and silently disable the very feature it guards.
+        """
+        if not self._native_backdrop:
+            return
+        from PySide6.QtGui import QGuiApplication
+
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        try:
+            card = self.card_rect()
+            origin = self.mapToGlobal(card.topLeft())
+            image = screen.grabWindow(0, origin.x(), origin.y(),
+                                      card.width(), card.height()).toImage()
+        except Exception:
+            return
+
+        step = max(4, card.width() // 40)
+        total = 0
+        darkest = 255
+        samples = 0
+        for x in range(step, image.width() - step, step):
+            for y in range(step, image.height() - step, step):
+                value = image.pixelColor(x, y).lightness()
+                total += value
+                darkest = min(darkest, value)
+                samples += 1
+        if not samples:
+            return
+        if total / samples < 12 and darkest < 6:
+            self._fallback_from_native("背景渲染为纯黑（accent API 的已知故障）")
+
     def _apply_native_rounding(self) -> None:
         try:
             handle = self.windowHandle()
@@ -520,6 +658,7 @@ class FluentWindow(QWidget):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
+        self._sync_native_region()
         self.invalidate_backdrop()
 
     def moveEvent(self, event) -> None:  # noqa: N802
@@ -1320,7 +1459,8 @@ class FluentMenu(FluentWindow):
     _open: set["FluentMenu"] = set()
 
     def __init__(self, parent: QWidget | None = None, *, min_width: int = 200) -> None:
-        super().__init__(None, tint_strength=0.93, margin=14, open_slide=8)
+        super().__init__(None, tint_strength=0.93, margin=14, open_slide=8,
+                         native_backdrop=False)
         self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.NoDropShadowWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -1539,7 +1679,8 @@ class Toast(FluentWindow):
 
     def __init__(self, title: str, message: str = "", icon_name: str = "check",
                  *, duration: int = 3200, on_click: Callable[[], None] | None = None) -> None:
-        super().__init__(None, tint_strength=0.90, margin=16, open_slide=22)
+        super().__init__(None, tint_strength=0.90, margin=16, open_slide=22,
+                         native_backdrop=False)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)

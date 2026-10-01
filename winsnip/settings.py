@@ -66,6 +66,10 @@ class Settings:
     animations: bool = True               # Fluent motion: splash, window fade / slide
     style: str = "win11"                  # interface style: win11 | win10 | system
     reveal_strength: str = "weak"         # Win10 pointer light: weak | normal | strong
+    backdrop: str = "auto"                # real DWM blur: auto | native | classic
+    backdrop_native: bool | None = None   # cached result of the pixel probe
+    backdrop_probe_version: int = 0       # invalidates the cache when the probe changes
+    backdrop_probe_build: int | None = None   # re-probe after a Windows update
     hotkey_snip: str = "Win+Shift+S"
     hotkey_record: str = "Win+Shift+R"
     last_mode: str = "video"              # camera | video
