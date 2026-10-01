@@ -22,9 +22,13 @@ from ..settings import settings
 from ..theme import apply_app_theme, rgba, theme
 from .widgets import FluentButton, FluentWindow, Separator, TitleBar
 
-RAIL_WIDTH = 176
 CARD_WIDTH = 720
 CARD_HEIGHT = 470
+RAIL_MIN, RAIL_MAX = 150, 236
+#: Horizontal chrome around the content, needed to work out what is left over for
+#: the choice rows: body margins (18 + 22), the gap after the rail, and the page
+#: margins (8 + 8).
+CHROME = 18 + 22 + 16 + 8 + 8
 
 STYLE_CHOICES = [("win11", "Windows 11"), ("win10", "Windows 10")]
 THEME_CHOICES = ["system", "light", "dark"]
@@ -126,9 +130,14 @@ class _StepItem(QWidget):
         painter.setFont(font)
         painter.setPen(QColor(palette.text_primary if self._active
                               else palette.text_secondary))
-        painter.drawText(int(centre_x + diameter / 2 + 12), 0,
-                         int(self.width() - centre_x - diameter / 2 - 16), self.height(),
-                         Qt.AlignmentFlag.AlignVCenter, self.title)
+        from PySide6.QtGui import QFontMetrics
+
+        available = int(self.width() - centre_x - diameter / 2 - 16)
+        # Last-resort ellipsis: a longer translation must never paint outside.
+        label = QFontMetrics(font).elidedText(self.title, Qt.TextElideMode.ElideRight,
+                                              available)
+        painter.drawText(int(centre_x + diameter / 2 + 12), 0, available, self.height(),
+                         Qt.AlignmentFlag.AlignVCenter, label)
         painter.end()
 
 
@@ -146,12 +155,28 @@ class _ChoiceRow(QWidget):
         self._buttons: list[FluentButton] = []
         for index, label in enumerate(labels):
             button = _button(label, self, on_click=lambda i=index: self.select(i))
-            button.setMinimumWidth(108)
             button.setMinimumHeight(36)
             self._buttons.append(button)
             layout.addWidget(button)
+        self._available = CARD_WIDTH - CHROME - RAIL_MIN
+        self.fit(self._available)
         layout.addStretch(1)
         self.select(current, emit=False)
+
+    def fit(self, available: int) -> None:
+        """Share the width this row may use between its buttons.
+
+        A fixed 108px minimum was fine for two or three options, but the language
+        row has five: 5*108 + 4*8 = 572px, which stretched the whole window 100px
+        past its design width.
+        """
+        self._available = available
+        count = max(1, len(self._buttons))
+        spacing_total = 8 * (count - 1)
+        per_button = (available - spacing_total) // count
+        min_width = max(60, min(108, per_button))
+        for button in self._buttons:
+            button.setMinimumWidth(min_width)
 
     def select(self, index: int, *, emit: bool = True) -> None:
         for position, button in enumerate(self._buttons):
@@ -212,6 +237,7 @@ class OnboardingWindow(FluentWindow):
         self._index = 0
         self._pages: list[_StepPage] = []
         self._items: list[_StepItem] = []
+        self._choice_rows: list[_ChoiceRow] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(self._margin, self._margin, self._margin, self._margin)
@@ -229,7 +255,7 @@ class OnboardingWindow(FluentWindow):
         body_layout.setSpacing(16)
 
         self.rail = QWidget(body)
-        self.rail.setFixedWidth(RAIL_WIDTH)
+        self.rail.setFixedWidth(RAIL_MIN)
         self.rail_layout = QVBoxLayout(self.rail)
         self.rail_layout.setContentsMargins(0, 4, 0, 0)
         self.rail_layout.setSpacing(2)
@@ -261,8 +287,32 @@ class OnboardingWindow(FluentWindow):
         root.addWidget(footer)
 
         self._build_steps()
+        self._fit_rail()
         self.refresh_theme()
         self._go_to(0)
+
+    def _fit_rail(self) -> None:
+        """Size the rail from the longest step title, then re-share the rest.
+
+        Japanese titles are noticeably longer than the Chinese ones and were
+        being clipped by a fixed 176px rail.
+        """
+        from PySide6.QtGui import QFont, QFontMetrics
+
+        # Must match _StepItem.paintEvent: it sets pixelSize(13) on a copy of the
+        # widget font. Measuring with self.font() gave smaller numbers and left
+        # the longest Japanese title ellipsised.
+        font = QFont(self.font())
+        font.setPixelSize(13)
+        metrics = QFontMetrics(font)
+        widest = max((metrics.horizontalAdvance(item.title) for item in self._items),
+                     default=0)
+        # badge column (12 + 22) + gap 12 + text + trailing padding
+        needed = 12 + 22 + 12 + widest + 12
+        width = max(RAIL_MIN, min(RAIL_MAX, needed))
+        self.rail.setFixedWidth(width)
+        for row in self._choice_rows:
+            row.fit(CARD_WIDTH - CHROME - width)
 
     # ------------------------------------------------------------------ #
     # Building
@@ -305,6 +355,7 @@ class OnboardingWindow(FluentWindow):
         # 2) 界面风格
         self.style_choice = _ChoiceRow([label for _v, label in STYLE_CHOICES],
                                        self._style_index())
+        self._choice_rows.append(self.style_choice)
         self.style_choice.changed.connect(self._on_style)
         self._add_step(_t("界面风格"), _StepPage(
             _t("界面风格"),
@@ -314,6 +365,7 @@ class OnboardingWindow(FluentWindow):
 
         # 3) 主题
         self.theme_choice = _ChoiceRow(_theme_labels(), self._theme_index())
+        self._choice_rows.append(self.theme_choice)
         self.theme_choice.changed.connect(self._on_theme)
         self._add_step(_t("主题"), _StepPage(
             _t("主题"),
@@ -323,12 +375,14 @@ class OnboardingWindow(FluentWindow):
 
         # 4) 背景材质
         self.backdrop_choice = _ChoiceRow(_backdrop_labels(), self._backdrop_index())
+        self._choice_rows.append(self.backdrop_choice)
         self.backdrop_choice.changed.connect(self._on_backdrop)
         self._add_step(_t("背景材质"), _StepPage(
             _t("背景材质"), self._backdrop_note(), self.backdrop_choice, self))
 
         # 5) 光效强度
         self.reveal_choice = _ChoiceRow(_reveal_labels(), self._reveal_index())
+        self._choice_rows.append(self.reveal_choice)
         self.reveal_choice.changed.connect(self._on_reveal)
         self._add_step(_t("光效强度"), _StepPage(
             _t("光效强度"),
@@ -339,6 +393,7 @@ class OnboardingWindow(FluentWindow):
         # 6) 界面语言
         self.language_choice = _ChoiceRow(
             [label for _code, label in _language_options()], self._language_index())
+        self._choice_rows.append(self.language_choice)
         self.language_choice.changed.connect(self._on_language)
         self._add_step(_t("界面语言"), _StepPage(
             _t("界面语言"),

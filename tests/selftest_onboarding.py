@@ -183,6 +183,57 @@ def main() -> int:
         window.show()
     pump(app, 0.5)
 
+    # ---------------- 2c. 窗口几何在每种语言下都必须成立 ----------------
+    # 曾经的 bug：语言那一行 5 个按钮各设 108px 最小宽度 = 572px，把窗口从设计
+    # 的 760x510 撑到 860x510，比例就"不对"了。日文更糟：导航栏固定 176px，
+    # 「インターフェイス スタイル」被截断。
+    from PySide6.QtGui import QFont, QFontMetrics
+
+    from winsnip.ui.onboarding import CARD_HEIGHT, CARD_WIDTH
+
+    expected_size = (CARD_WIDTH + 2 * window._margin, CARD_HEIGHT + 2 * window._margin)
+    geometry_bad = []
+    for code in ("zh-Hans", "zh-Hant", "en", "ja"):
+        i18n.set_language(code)
+        apply_app_theme(app)
+        probe = OnboardingWindow()
+        probe.show()
+        pump(app, 0.7)
+        size = (probe.width(), probe.height())
+        if size != expected_size:
+            geometry_bad.append(f"{code}: 窗口 {size} != 设计 {expected_size}")
+
+        rail = probe.rail.width()
+        clipped = []
+        for item in probe._items:
+            font = QFont(item.font())
+            font.setPixelSize(13)
+            available = int(rail - (12 + 11) - 11 - 16)
+            if QFontMetrics(font).elidedText(item.title, Qt.TextElideMode.ElideRight,
+                                             available) != item.title:
+                clipped.append(item.title)
+        if clipped:
+            geometry_bad.append(f"{code}: 导航栏标题被截断 {clipped}")
+
+        for row in probe._choice_rows:
+            need = (sum(b.minimumWidth() for b in row._buttons)
+                    + 8 * (len(row._buttons) - 1))
+            if need > row._available:
+                geometry_bad.append(f"{code}: 选择行 {need}px > 可用 {row._available}px")
+
+        probe.close()
+        probe.deleteLater()
+        pump(app, 0.3)
+
+    check("四种语言下窗口都是设计尺寸、导航栏不截断、按钮行不溢出",
+          not geometry_bad,
+          "; ".join(geometry_bad) or f"窗口恒为 {expected_size[0]}x{expected_size[1]}")
+
+    i18n.set_language("zh-Hans")
+    apply_app_theme(app)
+    window.show()
+    pump(app, 0.4)
+
     # ---------------- 3. 切换语言会重建 ----------------
     before_window = onboarding.current_onboarding()
     window._go_to(5)
