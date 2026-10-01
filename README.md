@@ -75,7 +75,7 @@
 |---|---|---|
 | 窗口圆角 | 8px 圆角 | **直角** |
 | 材质 | **Mica**：轻模糊壁纸 + 主题着色 | **Acrylic 亚克力**：重高斯模糊 + 噪点颗粒 + 更实的着色 |
-| 鼠标光效 | 无 | **Reveal**：一束柔光跟随鼠标，扫过窗口和按钮，移出淡出 |
+| 鼠标光效 | 无 | **Reveal**：柔光跟随鼠标（强度可调），按钮另有悬停描边 |
 | 标题栏按钮 | 悬停内缩圆角、关闭键 `#C42B1C` | 悬停**铺满整格直角**、关闭键经典红 `#E81123` |
 | 标题栏分隔线 | 无（与内容融为一体） | **有**一条分隔线 |
 | 控件圆角 / 字体 | 5px / Segoe UI Variable | 2px / Segoe UI |
@@ -91,10 +91,17 @@
 近似高斯模糊，把构图彻底糊掉，再叠一层噪点（否则大面积极渐变会出现色带），最后
 用更实的窗口色压上去。所以 Win10 风格下"感觉得到桌面在背后，但看不出来是什么"。
 
-**Reveal** 是 Windows 10 首创的高光跟随效果。窗口每 33ms 读一次光标位置（子控件会
-吃掉 mouseMove，所以不能只靠事件），在指针处画一圈柔光并随位置更新；子控件画在
-窗口之上，所以按钮也会自己补一份光，光才能连续扫过去。浅色主题下用强调色做光
-（白光在近白背景上只有 4% 对比，等于看不见），深色主题用白光。
+**Reveal** 是 Windows 10 首创的高光跟随效果，设置里可选强度（弱 / 标准 / 强）。
+
+窗口每 33ms 读一次光标位置（子控件会吃掉 mouseMove，所以不能只靠事件），在指针处
+画一圈柔光。浅色主题下用强调色做光（白光在近白背景上只有 4% 对比，等于看不见），
+深色主题用白光。按钮悬停时另有一条 1px 描边，这是 Reveal 的另一半。
+
+**流畅度**：光画在**独立浮层**上，而不是窗口自己或各控件里。设置窗口有几十个控件，
+整窗重绘要 45 ms；让每个控件各自补一份光更慢。改成浮层之后，移动鼠标只会重绘浮层
+上光斑所在的一小块（约 34% 窗口面积），控件一次都不重绘——设置窗口从
+**18 fps 提到 58 fps**。另外卡片本身（阴影 + 材质 + 边框）会缓存成一张位图，
+每帧只需贴一次图，不用重新合成阴影和亚克力背景。
 
 ### 关于 WinUI 3
 
@@ -357,7 +364,7 @@ WinSnipRec/
     ├── selftest_startup.py      开机自启自测（22 项：注册表读写 + 失效修复 + 模拟登录）
     ├── selftest_animation.py    动效自测（41 项：启动动画、全窗口淡入、模式切换、进度环、居中）
     ├── selftest_duration.py     时长回归（8 项：人为拖慢抓屏，验证分段不被静默丢弃）
-    ├── selftest_style.py        风格自测（35 项：圆角、Acrylic、Reveal 光效、标题栏、实时切换）
+    ├── selftest_style.py        风格自测（44 项：圆角、Acrylic、Reveal、性能回归、实时切换）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
 
@@ -365,7 +372,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **240 项断言**，当前全部通过：
+全部自测均可离线运行，共 **249 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -376,7 +383,7 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_startup.py         :: 22/22  开机自启（含模拟登录）
 .venv\Scripts\python.exe tests\selftest_animation.py       :: 41/41  启动动画、模式切换、全窗口打开动画
 .venv\Scripts\python.exe tests\selftest_duration.py        ::  8/8   时长回归（拖慢抓屏的最坏情况）
-.venv\Scripts\python.exe tests\selftest_style.py           :: 35/35  Windows 11 / Windows 10 两种风格
+.venv\Scripts\python.exe tests\selftest_style.py           :: 44/44  两种风格 + Acrylic + Reveal + 重绘预算
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图
 ```

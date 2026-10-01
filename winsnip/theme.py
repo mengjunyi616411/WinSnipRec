@@ -245,6 +245,17 @@ class ThemeState:
         return self.is_win10
 
     @property
+    def reveal_strength(self) -> float:
+        """Reveal intensity multiplier from the settings (weak/normal/strong)."""
+        try:
+            from .settings import settings
+
+            return {"weak": 0.55, "normal": 1.0, "strong": 1.65}.get(
+                getattr(settings, "reveal_strength", "normal"), 1.0)
+        except Exception:
+            return 1.0
+
+    @property
     def uses_reveal(self) -> bool:
         """Windows 10's 'Reveal' highlight: a soft light that follows the pointer.
 

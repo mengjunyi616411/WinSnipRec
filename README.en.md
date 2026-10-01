@@ -33,8 +33,10 @@ get an H.264 MP4.
   Windows 10 (square corners, **Acrylic** = heavy Gaussian blur + noise grain,
   inset-free square caption hover with the classic `#E81123` close button,
   Segoe UI), or follow the OS. The win10 style also enables **Reveal**, the
-  Windows 10 pointer light that sweeps across the surface and its controls and
-  fades out when the cursor leaves. Switching is instant: widgets read the
+  Windows 10 pointer light (intensity selectable, plus a 1px hover border on
+  controls). It is drawn on its own overlay layer, so moving the cursor
+  repaints only the light's band and never the controls - the settings window
+  went from 18 fps to 58 fps. Switching is instant: widgets read the
   radius/material from the theme at paint time, so no window is rebuilt and no
   restart is needed.
 - Output: **H.264 MP4** (libx264, adjustable CRF, `+faststart`), 15/24/30/60 fps
@@ -90,7 +92,7 @@ so WinSnipRec logs the conflict and switches to the fallback automatically.
 
 ## Tests
 
-Everything runs offline. 240 assertions across nine suites:
+Everything runs offline. 249 assertions across nine suites:
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py        :: 51  recording core
@@ -102,7 +104,7 @@ Everything runs offline. 240 assertions across nine suites:
 .venv\Scripts\python.exe tests\selftest_duration.py    ::  8  duration regression
 .venv\Scripts\python.exe tests\selftest_hotkeys.py     ::  7  global hotkeys
 .venv\Scripts\python.exe tests\selftest_mic_switch.py  ::  9  microphone switching
-.venv\Scripts\python.exe tests\selftest_style.py      :: 35  win11 / win10 styles, Acrylic, Reveal
+.venv\Scripts\python.exe tests\selftest_style.py      :: 44  styles, Acrylic, Reveal, repaint budget
 ```
 
 `selftest_duration.py` deliberately slows the screen grab down to reproduce the

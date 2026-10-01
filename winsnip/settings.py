@@ -65,6 +65,7 @@ class Settings:
     confirm_region: bool = False          # False = start as soon as the drag ends (Win11 behaviour)
     animations: bool = True               # Fluent motion: splash, window fade / slide
     style: str = "win11"                  # interface style: win11 | win10 | system
+    reveal_strength: str = "normal"       # Win10 pointer light: weak | normal | strong
     hotkey_snip: str = "Win+Shift+S"
     hotkey_record: str = "Win+Shift+R"
     last_mode: str = "video"              # camera | video

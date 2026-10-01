@@ -136,6 +136,16 @@ class SettingsWindow(FluentWindow):
         self.style_combo.currentIndexChanged.connect(self._on_style_changed)
         self._add_row("界面风格", "窗口圆角、材质与标题栏按钮的样式", self.style_combo)
 
+        self.reveal_combo = FluentComboBox(self)
+        self.reveal_combo.addItems(["弱", "标准", "强"])
+        self.reveal_combo.setCurrentIndex(
+            {"weak": 0, "normal": 1, "strong": 2}.get(
+                getattr(settings, "reveal_strength", "normal"), 1))
+        self.reveal_combo.currentIndexChanged.connect(
+            lambda index: self._set("reveal_strength", ["weak", "normal", "strong"][index]))
+        self._add_row("光效强度", "Windows 10 风格下跟随鼠标的高光强度，"
+                                "也用于按钮悬停边框", self.reveal_combo)
+
         self.tray_toggle = ToggleSwitch(settings.minimize_to_tray, self)
         self.tray_toggle.toggled.connect(lambda v: self._set("minimize_to_tray", v))
         self._add_row("最小化到系统托盘", "关闭窗口时继续在后台运行，可随时用快捷键唤起", self.tray_toggle)

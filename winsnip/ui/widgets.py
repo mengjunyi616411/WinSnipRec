@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from collections.abc import Callable
 
 from PySide6.QtCore import (
@@ -24,44 +26,20 @@ from ..theme import (
 SHADOW_MARGIN = 20
 
 
-def paint_reveal_on(widget, painter: QPainter, radius: float = 0.0,
-                    strength: float = 0.55) -> None:
-    """Paint the window's Reveal light clipped to ``widget``.
-
-    Drawn in the widget's own coordinates so the light continues smoothly
-    across buttons instead of stopping at their edges.
-    """
-    window = widget.window()
-    getter = getattr(window, "reveal_centre_for", None)
-    if getter is None:
+def paint_reveal_border(widget, painter: QPainter, radius: float) -> None:
+    """Windows 10 Reveal also lights the edge of the control under the pointer."""
+    if not theme.is_win10:
         return
-    found = getter(widget)
-    if found is None:
-        return
-    centre, reveal = found
-    clip = QRectF(widget.rect())
-    extent = max(clip.width(), clip.height()) * 1.35
-    if extent <= 1:
-        return
-    glow = QRadialGradient(centre, extent)
-    if theme.dark:
-        light = QColor("#FFFFFF")
-        peak = 0.20 * reveal * strength
-    else:
-        light = QColor(theme.palette.accent)
-        peak = 0.24 * reveal * strength
-    glow.setColorAt(0.0, rgba(light, peak))
-    glow.setColorAt(0.45, rgba(light, peak * 0.5))
-    glow.setColorAt(1.0, rgba(light, 0.0))
+    colour = rgba("#FFFFFF" if theme.dark else "#000000",
+                  0.13 if theme.dark else 0.16)
+    rect = QRectF(widget.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
     painter.save()
-    if radius > 0:
-        path = QPainterPath()
-        path.addRoundedRect(clip, radius, radius)
-        painter.setClipPath(path)
-    else:
-        painter.setClipRect(clip)
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.fillRect(clip, glow)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    pen = painter.pen()
+    pen.setWidthF(1.0)
+    pen.setColor(colour)
+    painter.setPen(pen)
+    painter.drawRoundedRect(rect, radius, radius)
     painter.restore()
 
 
@@ -85,6 +63,82 @@ def _mix(first: QColor, second: QColor, amount: float) -> QColor:
 # --------------------------------------------------------------------------- #
 # Frameless Mica window
 # --------------------------------------------------------------------------- #
+class RevealOverlay(QWidget):
+    """The Windows 10 'Reveal' light, drawn above every control.
+
+    Keeping it on its own layer means the light can move without repainting the
+    window or its children. The settings dialog has dozens of controls and costs
+    ~45 ms for a full repaint, which no in-place tuning could make smooth.
+    """
+
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+        # Pure decoration: never takes input, never paints an opaque background.
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._glow: QPixmap | None = None
+        self._glow_key: tuple | None = None
+        self.hide()
+
+    def local_centre(self) -> QPointF:
+        window = self.parentWidget()
+        pointer = getattr(window, "_pointer", None)
+        if pointer is None:
+            return QPointF(-1.0, -1.0)
+        return pointer - QPointF(self.pos())
+
+    def glow_pixmap(self, radius: float) -> QPixmap:
+        """The radial light, baked once per (radius, theme, strength)."""
+        strength = theme.reveal_strength
+        key = (int(radius), theme.dark, round(strength, 3))
+        if self._glow is not None and self._glow_key == key:
+            return self._glow
+        size = max(2, int(radius))
+        pixmap = QPixmap(size * 2, size * 2)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        gradient = QRadialGradient(QPointF(size, size), size)
+        if theme.dark:
+            light = QColor("#FFFFFF")
+            peak = 0.26 * strength
+        else:
+            # A white light on a near-white surface is a ~4% change: invisible.
+            light = QColor(theme.palette.accent)
+            peak = 0.32 * strength
+        gradient.setColorAt(0.0, rgba(light, min(1.0, peak)))
+        gradient.setColorAt(0.30, rgba(light, min(1.0, peak * 0.55)))
+        gradient.setColorAt(0.65, rgba(light, min(1.0, peak * 0.14)))
+        gradient.setColorAt(1.0, rgba(light, 0.0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(gradient)
+        painter.drawEllipse(0, 0, size * 2, size * 2)
+        painter.end()
+        self._glow = pixmap
+        self._glow_key = key
+        return pixmap
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        window = self.parentWidget()
+        reveal = getattr(window, "_reveal", 0.0)
+        if not theme.uses_reveal or reveal <= 0.02:
+            return
+        centre = self.local_centre()
+        if centre.x() < -self.width() or centre.y() < -self.height():
+            return
+        radius = min(max(self.width(), self.height()) * 0.34, 300.0)
+        if radius <= 1:
+            return
+        glow = self.glow_pixmap(radius)
+        painter = QPainter(self)
+        painter.setOpacity(max(0.0, min(1.0, reveal)))
+        painter.drawPixmap(QPointF(centre.x() - radius, centre.y() - radius), glow)
+        painter.setOpacity(1.0)
+        painter.end()
+
+
 class FluentWindow(QWidget):
     """A frameless window painted with a Mica backdrop, rounded corners and a
     soft drop shadow. Works identically on Windows 10 and 11."""
@@ -124,6 +178,11 @@ class FluentWindow(QWidget):
         self._reveal = 0.0
         self._reveal_timer: QTimer | None = None
         self._reveal_anim: QVariantAnimation | None = None
+        self._reveal_band = QRect()
+        self._frame_ms = 0.0
+        self._reveal_overlay = RevealOverlay(self)
+        self._static_card: QPixmap | None = None
+        self._static_key: tuple | None = None
         # While a show/hide animation is moving the window the Mica backdrop is
         # left alone: recomputing it every frame would stutter.
         self._freeze_backdrop = False
@@ -155,6 +214,10 @@ class FluentWindow(QWidget):
     def invalidate_backdrop(self) -> None:
         self._backdrop = None
         self._shadow_pixmap = None
+        self._static_card = None
+        self._static_key = None
+        if hasattr(self, "_reveal_overlay"):
+            self.sync_reveal_overlay()
         self.update()
 
     def _ensure_backdrop(self) -> None:
@@ -191,10 +254,36 @@ class FluentWindow(QWidget):
             if painter.isActive():
                 painter.end()
 
-    def _paint_card(self, painter: QPainter) -> None:
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        card = self.card_rect()
+    def _static_card_key(self) -> tuple:
+        return (self.width(), self.height(), self.radius, theme.dark,
+                theme.resolved_style, self._tint_strength, self._shadow,
+                id(self._backdrop))
 
+    def static_card(self) -> QPixmap:
+        """Shadow + backdrop + border, rendered once and reused.
+
+        The Reveal light repaints at up to 30 Hz; re-blitting the shadow and
+        the Acrylic backdrop on every one of those frames is what made the
+        settings window judder (51 ms/frame before the light was even drawn).
+        """
+        self._ensure_backdrop()
+        key = self._static_card_key()
+        if self._static_card is not None and self._static_key == key:
+            return self._static_card
+
+        pixmap = QPixmap(self.size())
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        self._paint_static_card(painter)
+        painter.end()
+        self._static_card = pixmap
+        self._static_key = key
+        return pixmap
+
+    def _paint_static_card(self, painter: QPainter) -> None:
+        """Everything in the card that does not change between frames."""
+        card = self.card_rect()
         if self._shadow:
             if self._shadow_pixmap is None or self._shadow_pixmap.size() != self.size():
                 self._shadow_pixmap = render_shadow(self.size(), max(1, self.radius * 2),
@@ -202,11 +291,8 @@ class FluentWindow(QWidget):
                                                     opacity=theme.shadow_opacity)
             painter.drawPixmap(0, 0, self._shadow_pixmap)
 
-        self._ensure_backdrop()
         path_rect = QRectF(card)
         if self._backdrop is not None:
-            from PySide6.QtGui import QPainterPath
-
             painter.save()
             rounded = QPainterPath()
             rounded.addRoundedRect(path_rect, self.radius, self.radius)
@@ -218,9 +304,8 @@ class FluentWindow(QWidget):
             painter.setBrush(QColor(theme.palette.window_bg))
             painter.drawRoundedRect(path_rect, self.radius, self.radius)
 
-        self.paint_reveal(painter, QRectF(card), float(self.radius))
-
-        border = rgba("#000000" if not theme.dark else "#FFFFFF", 0.10 if not theme.dark else 0.09)
+        border = rgba("#000000" if not theme.dark else "#FFFFFF",
+                      0.10 if not theme.dark else 0.09)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         pen = painter.pen()
         pen.setWidthF(1.0)
@@ -229,12 +314,18 @@ class FluentWindow(QWidget):
         painter.drawRoundedRect(QRectF(card).adjusted(0.5, 0.5, -0.5, -0.5),
                                 self.radius, self.radius)
 
+    def _paint_card(self, painter: QPainter) -> None:
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        card = self.card_rect()
+        painter.drawPixmap(0, 0, self.static_card())
+
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self.invalidate_backdrop()
         self._apply_native_rounding()
         self._start_open_animation()
         self._start_reveal_tracking()
+        self.sync_reveal_overlay()
 
     def _start_open_animation(self) -> None:
         """Every window fades (and usually slides) in when it is opened."""
@@ -277,20 +368,74 @@ class FluentWindow(QWidget):
         if self._reveal_timer is not None:
             self._reveal_timer.stop()
 
+    def sync_reveal_overlay(self) -> None:
+        """Keep the light's layer aligned with the card and on top."""
+        overlay = self._reveal_overlay
+        overlay.setGeometry(self.card_rect())
+        if theme.uses_reveal:
+            overlay.show()
+            overlay.raise_()
+        else:
+            overlay.hide()
+
+    def set_reveal(self, pointer: QPointF | None, reveal: float) -> None:
+        """Move the light. The only path that marks the overlay dirty.
+
+        Both the cursor tracker and the self-tests go through here, so there
+        is no way to change the light without it actually being redrawn.
+        """
+        overlay = self._reveal_overlay
+        if theme.uses_reveal and not overlay.isVisible():
+            # The style or the animation switch may have changed since show().
+            self.sync_reveal_overlay()
+        old_band = self.reveal_band(self._pointer)
+        if pointer is not None:
+            self._pointer = QPointF(pointer)
+        self._reveal = float(reveal)
+        overlay.update(old_band.united(self.reveal_band()).translated(-overlay.pos()))
+
+    def reveal_band(self, centre: QPointF | None = None) -> QRect:
+        """The area the light can touch — the only part worth repainting."""
+        point = self._pointer if centre is None else centre
+        if point.x() < 0:
+            return QRect()
+        card = self.card_rect()
+        # Only the inner part needs repainting: at 62% of the radius the glow is
+        # already down to ~14% of its peak, so the outer falloff moves by well
+        # under one colour level between frames. A translucent band this size
+        # costs roughly a third of the full square on a software renderer.
+        extent = int(min(max(card.width(), card.height()) * 0.34, 300.0) * 0.62) + 4
+        return QRect(int(point.x()) - extent, int(point.y()) - extent,
+                     extent * 2, extent * 2)
+
     def _track_pointer(self) -> None:
         """Poll the cursor: child widgets swallow mouseMoveEvent."""
         if not theme.uses_reveal:
             return
+        started = time.perf_counter()
         local = self.mapFromGlobal(QCursor.pos())
         inside = self.rect().contains(local)
         moved = (QPointF(local) - self._pointer).manhattanLength() >= 3.0
-        if inside:
-            self._pointer = QPointF(local)
+        new_pointer = QPointF(local) if inside else self._pointer
         target = 1.0 if inside else 0.0
         if abs(self._reveal - target) > 0.02:
             self._animate_reveal(target)
         if inside and moved:
-            self.update()
+            # Only the overlay repaints, never the window or its controls:
+            # that is what took the settings window from 18 fps to ~58.
+            self.set_reveal(new_pointer, self._reveal)
+            self._adapt_rate(time.perf_counter() - started)
+        elif inside:
+            self._pointer = new_pointer
+
+    def _adapt_rate(self, elapsed: float) -> None:
+        """Ease off the tick rate when frames are more expensive than the tick."""
+        if self._reveal_timer is None:
+            return
+        self._frame_ms = self._frame_ms * 0.7 + elapsed * 1000.0 * 0.3
+        wanted = int(max(33, min(90, self._frame_ms * 1.6)))
+        if abs(self._reveal_timer.interval() - wanted) >= 8:
+            self._reveal_timer.setInterval(wanted)
 
     def _animate_reveal(self, target: float) -> None:
         if self._reveal_anim is not None:
@@ -306,53 +451,7 @@ class FluentWindow(QWidget):
 
     def _on_reveal_tick(self, value) -> None:
         self._reveal = float(value)
-        self.update()
-
-    def reveal_centre_for(self, widget) -> tuple[QPointF, float] | None:
-        """Pointer position in ``widget``'s coordinates, or None when off.
-
-        Child controls paint after the window, so they have to draw the
-        Reveal light themselves or it would stop at their edges.
-        """
-        if not theme.uses_reveal or self._reveal <= 0.02 or self._pointer.x() < 0:
-            return None
-        local = widget.mapFrom(self, QPoint(int(self._pointer.x()),
-                                            int(self._pointer.y())))
-        return QPointF(local), self._reveal
-
-    def paint_reveal(self, painter: QPainter, clip: QRectF, radius: float = 0.0,
-                     strength: float = 1.0) -> None:
-        """Paint the Reveal light into ``clip`` (window or a single control)."""
-        if not theme.uses_reveal or self._reveal <= 0.02 or self._pointer.x() < 0:
-            return
-        # Tight enough to read as a light rather than a wash over the surface.
-        extent = max(clip.width(), clip.height()) * 0.34
-        if extent <= 1:
-            return
-        glow = QRadialGradient(self._pointer, extent)
-        # On a near-white surface a white light is invisible (a few levels at
-        # most), so the light theme lights with the accent colour the way a
-        # coloured spotlight reads on paper; the dark theme glows white.
-        if theme.dark:
-            light = QColor("#FFFFFF")
-            peak = 0.26 * self._reveal * strength
-        else:
-            light = QColor(theme.palette.accent)
-            peak = 0.32 * self._reveal * strength
-        glow.setColorAt(0.0, rgba(light, peak))
-        glow.setColorAt(0.30, rgba(light, peak * 0.55))
-        glow.setColorAt(0.65, rgba(light, peak * 0.14))
-        glow.setColorAt(1.0, rgba(light, 0.0))
-        painter.save()
-        if radius > 0:
-            path = QPainterPath()
-            path.addRoundedRect(clip, radius, radius)
-            painter.setClipPath(path)
-        else:
-            painter.setClipRect(clip)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.fillRect(clip, glow)
-        painter.restore()
+        self._reveal_overlay.update()
 
     def hideEvent(self, event) -> None:  # noqa: N802
         self._stop_reveal_tracking()
@@ -556,7 +655,6 @@ class FluentButton(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bg)
             painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
-        paint_reveal_on(self, painter, float(control_radius(self)))
         if border is not None:
             pen = painter.pen()
             pen.setWidthF(1.0)
@@ -675,7 +773,9 @@ class IconButton(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bg)
             painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
-        paint_reveal_on(self, painter, float(control_radius(self)))
+
+        if self._hover and enabled:
+            paint_reveal_border(self, painter, float(control_radius(self)))
 
         color = self._custom_color or QColor(
             palette.icon_primary if enabled else palette.text_disabled
@@ -1373,7 +1473,6 @@ class ClickableWidget(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
         painter.drawRoundedRect(QRectF(self.rect()), control_radius(self), control_radius(self))
-        paint_reveal_on(self, painter, float(control_radius(self)))
         painter.end()
 
 

@@ -191,6 +191,8 @@ def main() -> int:
     check("win11 Mica 是平滑渐层（噪点明显更少）", grain_win11 < grain_win10,
           f"win11 {grain_win11} vs win10 {grain_win10}")
 
+    from winsnip.ui.settings_dialog import SettingsWindow
+
     # ---- Reveal：光随指针移动 ----
     # 这个测试套件为了像素确定性把动画关了，而 Reveal 属于动效，测之前先打开。
     settings.animations = True
@@ -198,17 +200,14 @@ def main() -> int:
 
     def reveal_probe(window, logical_x: float, logical_y: float) -> tuple[QImage, QImage]:
         window._stop_reveal_tracking()          # 用固定指针做确定性测量
-        window._pointer = QPointF(-1.0, -1.0)
-        window._reveal = 0.0
-        window.update()
+        # 走正式接口：光斑现在画在独立浮层上，直接改内部字段不会触发重绘
+        window.set_reveal(QPointF(-1.0, -1.0), 0.0)
         window.repaint()
-        pump(app, 0.15)
+        pump(app, 0.2)
         before = window.grab().toImage()
-        window._pointer = QPointF(logical_x, logical_y)
-        window._reveal = 1.0
-        window.update()
+        window.set_reveal(QPointF(logical_x, logical_y), 1.0)
         window.repaint()
-        pump(app, 0.15)
+        pump(app, 0.25)
         after = window.grab().toImage()
         return before, after
 
@@ -262,6 +261,130 @@ def main() -> int:
           delta_at(before4, after4, window11, window11.width() * 0.3,
                    window11.height() * 0.4) <= 3,
           "win11 无变化")
+
+    # ---- 流畅度回归：移动光斑时窗口和控件都不应该重绘 ----
+    # 这是"设置窗口里光效不流畅"的根因：以前每帧都让整窗 + 所有控件重绘
+    # （实测 54.5 ms/帧，18 fps），现在只有浮层重绘（~17 ms/帧，58 fps）。
+    from PySide6.QtCore import QEvent, QObject
+
+    class PaintCounter(QObject):
+        """Counts repaints and remembers the largest area asked for."""
+
+        def __init__(self, widget) -> None:
+            super().__init__()
+            self.count = 0
+            self.max_area = 0
+            self.widget = widget
+            widget.installEventFilter(self)
+
+        def eventFilter(self, obj, event):  # noqa: N802
+            if event.type() == QEvent.Type.Paint:
+                self.count += 1
+                rect = event.rect()
+                self.max_area = max(self.max_area, rect.width() * rect.height())
+            return False
+
+    theme.style = "win10"
+    theme.refresh()
+    probe_window = windows["win10"]
+    probe_window.set_reveal(QPointF(-1.0, -1.0), 0.0)
+    pump(app, 0.2)
+
+    window_counter = PaintCounter(probe_window)
+    overlay_counter = PaintCounter(probe_window._reveal_overlay)
+    button = probe_window.title_bar.caption_buttons["close"]
+    button_counter = PaintCounter(button)
+    pump(app, 0.1)
+    window_counter.count = overlay_counter.count = button_counter.count = 0
+
+    for step in range(6):
+        probe_window.set_reveal(
+            QPointF(probe_window.width() * (0.25 + 0.05 * step),
+                    probe_window.height() * 0.4), 1.0)
+        pump(app, 0.08)
+
+    # 浮层是半透明的，父窗口要为它补底，所以窗口仍会重绘——但只重绘光斑所在
+    # 的那一块（约 27 万像素），而不是整窗（约 43 万像素）；控件则完全不重绘。
+    window_area = probe_window.width() * probe_window.height()
+    check("移动光斑时窗口只重绘光斑那一小块，不重绘整窗",
+          window_counter.max_area < window_area * 0.55,
+          f"最大重绘区 {window_counter.max_area} / 整窗 {window_area} "
+          f"({window_counter.max_area / window_area:.0%})")
+    check("移动光斑时子控件不重绘", button_counter.count == 0,
+          f"标题栏按钮重绘 {button_counter.count} 次")
+    check("光斑确实在重绘（浮层更新了）", overlay_counter.count > 0,
+          f"浮层重绘 {overlay_counter.count} 次")
+    check("光斑绘制预算够用（不超过 1 帧的脏区）",
+          probe_window.reveal_band().width() < probe_window.width(),
+          f"脏区 {probe_window.reveal_band().width()}px / 窗口 {probe_window.width()}px")
+
+    # ---- 光效强度 ----
+    strengths = {}
+    for name in ("weak", "normal", "strong"):
+        settings.reveal_strength = name
+        theme.refresh()
+        probe_window.set_reveal(QPointF(-1.0, -1.0), 0.0)
+        probe_window.repaint()
+        pump(app, 0.2)
+        plain = probe_window.grab().toImage()
+        probe_window.set_reveal(QPointF(probe_window.width() * 0.3,
+                                        probe_window.height() * 0.4), 1.0)
+        probe_window.repaint()
+        pump(app, 0.25)
+        lit = probe_window.grab().toImage()
+        strengths[name] = delta_at(plain, lit, probe_window,
+                                   probe_window.width() * 0.3,
+                                   probe_window.height() * 0.4)
+    settings.reveal_strength = "normal"
+    theme.refresh()
+    check("光效强度可调（弱 < 标准 < 强）",
+          strengths["weak"] < strengths["normal"] < strengths["strong"],
+          f"弱 {strengths['weak']} / 标准 {strengths['normal']} / 强 {strengths['strong']}")
+
+    # ---- 按钮悬停的 Reveal 边框 ----
+    def hover_border_edge(style: str) -> float:
+        theme.style = style
+        theme.refresh()
+        button = probe_window.title_bar.caption_buttons["close"]
+        button._hover = False
+        button.repaint()
+        pump(app, 0.15)
+        plain = button.grab().toImage()
+        button._hover = True
+        button.repaint()
+        pump(app, 0.15)
+        hovered = button.grab().toImage()
+        # 按钮下边缘：悬停时应该出现一条更亮的描边
+        samples = [
+            abs(hovered.pixelColor(x, hovered.height() - 2).lightness()
+                - plain.pixelColor(x, plain.height() - 2).lightness())
+            for x in range(8, hovered.width() - 8, 2)
+        ]
+        button._hover = False
+        button.repaint()
+        return sum(samples) / max(1, len(samples))
+
+    win10_edge = hover_border_edge("win10")
+    win11_edge = hover_border_edge("win11")
+    check("win10 按钮悬停有 Reveal 描边", win10_edge >= 2.0,
+          f"win10 边缘亮度变化 {win10_edge:.1f}")
+    check("win11 按钮悬停没有这条描边", win11_edge < win10_edge,
+          f"win11 {win11_edge:.1f} vs win10 {win10_edge:.1f}")
+
+    # ---- 设置项 ----
+    settings_window_probe = SettingsWindow()
+    settings_window_probe.show()
+    pump(app, 0.5)
+    combo = settings_window_probe.reveal_combo
+    check("设置里有「光效强度」下拉", combo.count() == 3,
+          f"{combo.count()} 项，当前 index={combo.currentIndex()}")
+    combo.setCurrentIndex(2)
+    pump(app, 0.3)
+    check("光效强度会写进设置", settings.reveal_strength == "strong",
+          f"settings.reveal_strength={settings.reveal_strength}")
+    combo.setCurrentIndex(1)
+    settings_window_probe.close()
+    pump(app, 0.2)
 
     settings.animations = False
     theme.refresh()
