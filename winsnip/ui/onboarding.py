@@ -44,10 +44,15 @@ def _language_options() -> list[tuple[str, str]]:
 
 def _button(text: str, parent: QWidget, *, variant: str = "standard",
             on_click=None) -> FluentButton:
-    """FluentButton has no `command` argument, so wire the click here."""
+    """FluentButton has no `command` argument, so wire the click here.
+
+    clicked() carries a `checked: bool`, and PySide hands it to any slot that
+    accepts one argument. Connecting the callback directly meant every click
+    arrived as False - i.e. index 0 - so the first option was always chosen.
+    """
     button = FluentButton(text, parent, variant=variant)
     if on_click is not None:
-        button.clicked.connect(on_click)
+        button.clicked.connect(lambda _checked=False: on_click())
     return button
 
 

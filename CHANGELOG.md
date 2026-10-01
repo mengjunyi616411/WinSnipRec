@@ -6,6 +6,12 @@
 
 ### 修复
 
+- **引导里除语言外其它按钮点了没反应**：`QPushButton.clicked` 带一个 `checked: bool`，
+  PySide 会把它交给任何接受一个参数的槽函数，于是
+  `clicked.connect(lambda i=index: self.select(i))` 收到的 `i` 是 `False`（即索引 0）——
+  点任何按钮都只选中第一项。语言那步因为会重建窗口才看起来"能用"。
+  同时用 AST 扫过全仓库，另外 5 处 `toggled.connect(lambda v: ...)` 是故意接收 bool 的。
+
 - **在引导里设置语言后，其余界面仍是旧语言**：选项其实已保存、引导本身也切换了，但
   主窗口与托盘菜单没跟着变，看起来就像设置没生效。现在任何窗口只要实现
   `retranslate()`，切换语言时就会被 `retranslate_windows()` 统一重译。

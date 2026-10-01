@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("WINSNIPREC_HOME", str(ROOT / "_selftest_onboarding" / "_config"))
 
+from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtGui import QMouseEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from winsnip import i18n, winapi  # noqa: E402
@@ -27,6 +29,20 @@ checks: list[tuple[str, bool, str]] = []
 def check(name: str, ok: bool, detail: str = "") -> None:
     checks.append((name, bool(ok), detail))
     print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" :: {detail}" if detail else ""))
+
+
+def real_click(app: QApplication, widget) -> None:
+    """Deliver a genuine press+release, the way a mouse would.
+
+    Calling select() directly bypasses QPushButton.clicked - and that is exactly
+    where the index was being lost.
+    """
+    centre = widget.rect().center()
+    for kind in (QMouseEvent.Type.MouseButtonPress, QMouseEvent.Type.MouseButtonRelease):
+        event = QMouseEvent(kind, centre, widget.mapToGlobal(centre),
+                            Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton,
+                            Qt.KeyboardModifier.NoModifier)
+        app.sendEvent(widget, event)
 
 
 def pump(app: QApplication, seconds: float) -> None:
@@ -125,6 +141,47 @@ def main() -> int:
           settings.backdrop == "classic"
           and i18n.t("切换背景材质后，新打开的窗口会使用它") in window._pages[3].body.text(),
           f"backdrop={settings.backdrop}")
+
+    # ---------------- 2b. 真实鼠标点击必须选中「被点的那个」 ----------------
+    # 曾经这里全错：clicked(bool) 的 bool 被当成索引，点任何按钮都选中第 0 个。
+    # 语言那步因为会重建窗口，看起来"能用"，掩盖了其它四步。
+    clicks = []
+    for step, name, setting_key, values in (
+            (1, "界面风格", "style", ["win11", "win10"]),
+            (2, "主题", "theme", ["system", "light", "dark"]),
+            (3, "背景材质", "backdrop", ["auto", "classic", "native"]),
+            (4, "光效强度", "reveal_strength", ["weak", "normal", "strong"])):
+        window._go_to(step)
+        pump(app, 0.25)
+        row = (window.style_choice, window.theme_choice,
+               window.backdrop_choice, window.reveal_choice)[step - 1]
+        real_click(app, row._buttons[1])
+        pump(app, 0.35)
+        clicks.append((name, row.current(), getattr(settings, setting_key), values[1]))
+    bad = [f"{n}: 选中={s} 设置={a} 期望={w}" for n, s, a, w in clicks
+           if s != 1 or a != w]
+    check("真实点击每一步都选中被点的那个（不再总是第 0 个）", not bad,
+          "; ".join(bad) or "; ".join(f"{n}→{a}" for n, _s, a, _w in clicks))
+
+    # 语言那一步同样要用真实点击验证
+    original_language = settings.language
+    window._go_to(5)
+    pump(app, 0.25)
+    real_click(app, window.language_choice._buttons[3])   # English
+    pump(app, 1.2)
+    check("真实点击语言按钮会切到所选语言",
+          settings.language == "en",
+          f"settings.language={settings.language!r}")
+    i18n.set_language("zh-Hans")
+    settings.language = original_language
+    rebuilt_after_click = onboarding.current_onboarding()
+    if rebuilt_after_click is not None and rebuilt_after_click is not window:
+        rebuilt_after_click.close()
+        rebuilt_after_click.deleteLater()
+    pump(app, 0.4)
+    if not window.isVisible():
+        window.show()
+    pump(app, 0.5)
 
     # ---------------- 3. 切换语言会重建 ----------------
     before_window = onboarding.current_onboarding()
