@@ -391,6 +391,12 @@ class FluentWindow(QWidget):
         if self._native_backdrop:
             QTimer.singleShot(200, self._verify_native_backdrop)
 
+    def minimize_animated(self) -> None:
+        """Minimize with the Windows-style shrink-toward-the-taskbar motion."""
+        if self.isMinimized():
+            return
+        anim.minimize_window_animated(self)
+
     def _start_open_animation(self) -> None:
         """Every window fades (and usually slides) in when it is opened."""
         if self._open_animation == "none" or self._open_animation_running:

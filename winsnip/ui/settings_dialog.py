@@ -77,7 +77,7 @@ class SettingsWindow(FluentWindow):
 
         self.title_bar = TitleBar(_t("设置"), self)
         self.title_bar.icon_label.setPixmap(icons.app_icon().pixmap(16, 16))
-        self.title_bar.caption_buttons["min"].clicked.connect(self.showMinimized)
+        self.title_bar.caption_buttons["min"].clicked.connect(self.minimize_animated)
         self.title_bar.caption_buttons["max"].clicked.connect(self._toggle_max)
         self.title_bar.caption_buttons["close"].clicked.connect(self.close)
         root.addWidget(self.title_bar)
@@ -506,7 +506,7 @@ class AboutWindow(FluentWindow):
         self.title_bar = TitleBar(_t("关于"), self)
         self.title_bar.icon_label.setPixmap(icons.app_icon().pixmap(16, 16))
         self.title_bar.caption_buttons["max"].setVisible(False)
-        self.title_bar.caption_buttons["min"].clicked.connect(self.showMinimized)
+        self.title_bar.caption_buttons["min"].clicked.connect(self.minimize_animated)
         self.title_bar.caption_buttons["close"].clicked.connect(self.close)
         root.addWidget(self.title_bar)
 

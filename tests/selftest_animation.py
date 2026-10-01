@@ -140,6 +140,59 @@ def main() -> int:
     check("隐藏后停止计时器（不空转 CPU）", not ring._timer.isActive())
     ring.deleteLater()
 
+    # ---------------- 最小化动画 ---------------- #
+    # 用快照浮层做动画：直接缩放真窗口会让 Qt 每帧重排内容（文字重新折行、
+    # 按钮被压扁），完全不像系统的效果。所以真窗口立刻最小化，动的是那张快照。
+    from winsnip.ui.main_window import MainWindow as _MainWindow
+
+    window = _MainWindow()
+    window.show()
+    pump(app, 1.0)
+
+    settings.animations = True
+    origin = window.geometry()
+    target = anim.minimize_target(window)
+    check("最小化终点在屏幕底部（朝向任务栏）且更小",
+          target.height() < origin.height() and target.width() < origin.width()
+          and target.bottom() > origin.bottom(),
+          f"{origin.width()}x{origin.height()} @y{origin.y()} -> "
+          f"{target.width()}x{target.height()} @y{target.y()}")
+
+    before_text = window.hint._lines if hasattr(window, "hint") else None
+    window.minimize_animated()
+    pump(app, 0.15)
+    check("动画期间出现快照浮层", anim._minimize_ghost_count() > 0,
+          f"浮层数 {anim._minimize_ghost_count()}")
+    check("真窗口立刻最小化（不等动画跑完）", window.isMinimized())
+    pump(app, 1.2)
+    check("动画结束后快照浮层已清理", anim._minimize_ghost_count() == 0,
+          f"浮层数 {anim._minimize_ghost_count()}")
+    check("真窗口几何从未被改动（因此内容不会重排）",
+          window.geometry() == origin,
+          f"{window.geometry()} vs {origin}")
+    if before_text is not None:
+        check("提示文字在动画前后完全一致（没有重新折行）",
+              window.hint._lines == before_text,
+              f"{len(window.hint._lines)} 行")
+
+    # 关闭动画时应立即最小化，不留浮层
+    settings.animations = False
+    window2 = _MainWindow()
+    window2.show()
+    pump(app, 0.8)
+    window2.minimize_animated()
+    pump(app, 0.15)
+    check("关闭界面动画后立即最小化，且不产生浮层",
+          window2.isMinimized() and anim._minimize_ghost_count() == 0,
+          f"isMinimized={window2.isMinimized()} 浮层={anim._minimize_ghost_count()}")
+    settings.animations = True
+
+    for win in (window, window2):
+        win._quitting = True
+        win.close()
+        win.deleteLater()
+    pump(app, 0.4)
+
     # ---------------- splash handover ---------------- #
     # 首次解析自定义字族在这台机器上要 3~4 秒，而 Qt 是在窗口首次 polish 时
     # （show() 内部、showEvent 之前）做的。如果构造时就设好字体，启动画面会在这

@@ -72,7 +72,7 @@ class ImagePreviewWindow(FluentWindow):
 
         self.title_bar = TitleBar(_t("截图工具"), self)
         self.title_bar.icon_label.setPixmap(icons.app_icon().pixmap(16, 16))
-        self.title_bar.caption_buttons["min"].clicked.connect(self.showMinimized)
+        self.title_bar.caption_buttons["min"].clicked.connect(self.minimize_animated)
         self.title_bar.caption_buttons["max"].clicked.connect(self._toggle_max)
         self.title_bar.caption_buttons["close"].clicked.connect(self.close)
         root.addWidget(self.title_bar)

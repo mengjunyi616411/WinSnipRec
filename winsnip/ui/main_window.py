@@ -247,7 +247,7 @@ class MainWindow(FluentWindow):
         self.title_bar = TitleBar(_t("截图工具"), self)
         self.title_bar.icon_label.setPixmap(icons.app_icon().pixmap(16, 16))
         caption = self.title_bar.caption_buttons
-        caption["min"].clicked.connect(self.showMinimized)
+        caption["min"].clicked.connect(self.minimize_animated)
         caption["max"].clicked.connect(self._toggle_max)
         caption["close"].clicked.connect(self.close)
         root.addWidget(self.title_bar)
