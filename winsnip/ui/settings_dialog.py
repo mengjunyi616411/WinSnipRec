@@ -18,6 +18,9 @@ from .widgets import (
     FluentButton, FluentComboBox, FluentWindow, Separator, TitleBar, ToggleSwitch, show_toast,
 )
 
+REVEAL_LEVELS = ["低", "中", "高"]
+REVEAL_VALUES = ["weak", "normal", "strong"]
+
 QUALITY_PRESETS = [("高质量 (CRF 18)", 18), ("较高 (CRF 20)", 20), ("标准 (CRF 23)", 23),
                    ("较小体积 (CRF 26)", 26)]
 FPS_PRESETS = [15, 24, 30, 60]
@@ -142,12 +145,13 @@ class SettingsWindow(FluentWindow):
         self._add_row("界面风格", "窗口圆角、材质与标题栏按钮的样式", self.style_combo)
 
         self.reveal_combo = FluentComboBox(self)
-        self.reveal_combo.addItems(["弱", "标准", "强"])
+        self.reveal_combo.addItems(REVEAL_LEVELS)
+        # 默认最低档：浅色底色离纯白只剩 12 级余量，光越淡越不像染色。
         self.reveal_combo.setCurrentIndex(
             {"weak": 0, "normal": 1, "strong": 2}.get(
-                getattr(settings, "reveal_strength", "normal"), 1))
+                getattr(settings, "reveal_strength", "weak"), 0))
         self.reveal_combo.currentIndexChanged.connect(
-            lambda index: self._set("reveal_strength", ["weak", "normal", "strong"][index]))
+            lambda index: self._set("reveal_strength", REVEAL_VALUES[index]))
         self._add_row("光效强度", "Windows 10 风格下跟随鼠标的高光强度，"
                                 "也用于按钮悬停边框", self.reveal_combo)
 

@@ -96,6 +96,24 @@ def main() -> int:
     check("win11：不用 Acrylic（那是 Win10 的材质）", not theme.uses_acrylic)
     check("win11：没有 Reveal 光效（Win10 才有）", not theme.uses_reveal)
 
+    # 浅色底色离纯白只剩 12 级余量，光越淡越不像染色，所以默认给最低档。
+    from winsnip.settings import Settings as _Settings
+
+    check("光效强度默认是最低档（低）",
+          _Settings().reveal_strength == "weak",
+          f"Settings().reveal_strength={_Settings().reveal_strength!r}")
+    _default_level = _Settings().reveal_strength
+    settings.reveal_strength = _default_level
+    theme.refresh()
+    lowest = theme.reveal_strength
+    settings.reveal_strength = "strong"
+    theme.refresh()
+    highest = theme.reveal_strength
+    settings.reveal_strength = _default_level
+    theme.refresh()
+    check("默认档位的倍率是三者中最低的", lowest < highest,
+          f"默认({_default_level}) 倍率 {lowest} < 高 倍率 {highest}")
+
     theme.style = "win10"
     check("win10：使用 Acrylic 亚克力材质", theme.uses_acrylic and not theme.uses_mica)
     # 本套件为了像素确定性默认关掉动画，而 Reveal 属于动效，先打开再断言。
@@ -335,11 +353,11 @@ def main() -> int:
         strengths[name] = delta_at(plain, lit, probe_window,
                                    probe_window.width() * 0.3,
                                    probe_window.height() * 0.4)
-    settings.reveal_strength = "normal"
+    settings.reveal_strength = "weak"
     theme.refresh()
-    check("光效强度可调（弱 < 标准 < 强）",
+    check("光效强度可调（低 < 中 < 高）",
           strengths["weak"] < strengths["normal"] < strengths["strong"],
-          f"弱 {strengths['weak']} / 标准 {strengths['normal']} / 强 {strengths['strong']}")
+          f"低 {strengths['weak']} / 中 {strengths['normal']} / 高 {strengths['strong']}")
 
     # ---- 按钮悬停的 Reveal 边框 ----
     def hover_border_edge(style: str) -> float:
@@ -405,6 +423,9 @@ def main() -> int:
         pump(app, 0.12)
         return plain, lit, rect
 
+    # 用出厂默认档位测浅色模式 —— 这是用户实际看到的强度
+    settings.reveal_strength = _Settings().reveal_strength
+    theme.refresh()
     probe = QPointF(300.0, 180.0)
     plain_light, lit_light, card_light = bare_card("light", probe)
     ratio_light = lit_light.width() / (card_light.width() + card_light.x() * 2)
@@ -415,12 +436,29 @@ def main() -> int:
 
     light_at = sample(lit_light, card_light, probe.x(), probe.y())
     light_before = sample(plain_light, card_light, probe.x(), probe.y())
-    check("浅色模式的光是中性白，不是蓝色块",
-          abs(light_at.blue() - light_at.red()) <= 6,
-          f"光斑 R={light_at.red()} G={light_at.green()} B={light_at.blue()}，"
-          f"蓝红差 {abs(light_at.blue() - light_at.red())}")
-    check("光斑比无光时亮（是光不是污渍）", light_at.red() - light_before.red() >= 2,
-          f"亮了 {light_at.red() - light_before.red()} 级")
+    # 不能只看绝对色：浅色卡片的底是 Acrylic 透出的偏蓝壁纸，光越弱底色越明显。
+    # 要判断"光是不是中性"，看的是光**带来的变化量**三通道是否一致。
+    d_red = light_at.red() - light_before.red()
+    d_green = light_at.green() - light_before.green()
+    d_blue = light_at.blue() - light_before.blue()
+    # 白光叠加在偏蓝底色上：result = bg*(1-a) + 255*a，所以 Δ = a*(255-bg)。
+    # 底色偏蓝时 ΔR 本来就应该大于 ΔB —— 这不是偏色，恰恰是纯白的特征。
+    # 判据是三通道反推出的 a 一致；蓝色块则会表现为 ΔB 明显大于 ΔR。
+    alphas = []
+    for delta, base in ((d_red, light_before.red()),
+                        (d_green, light_before.green()),
+                        (d_blue, light_before.blue())):
+        alphas.append(delta / max(1.0, 255.0 - base))
+    alpha_spread = max(alphas) - min(alphas)
+    check("浅色模式的光是纯白（三通道反推的不透明度一致）",
+          alpha_spread <= 0.05,
+          f"ΔR={d_red} ΔG={d_green} ΔB={d_blue} → "
+          f"α={['%.3f' % a for a in alphas]}，差 {alpha_spread:.3f}")
+    plain_spread = light_before.blue() - light_before.red()
+    lit_spread = light_at.blue() - light_at.red()
+    check("光不会让画面更蓝（不是蓝色块）", lit_spread <= plain_spread + 1,
+          f"无光时蓝红差 {plain_spread} → 有光时 {lit_spread}")
+    check("光斑比无光时亮（是光不是污渍）", d_red >= 2, f"亮了 {d_red} 级")
 
     ray_steps = []
     previous = None
@@ -500,13 +538,17 @@ def main() -> int:
     settings_window_probe.show()
     pump(app, 0.5)
     combo = settings_window_probe.reveal_combo
-    check("设置里有「光效强度」下拉", combo.count() == 3,
-          f"{combo.count()} 项，当前 index={combo.currentIndex()}")
+    labels = [combo.itemText(i) for i in range(combo.count())]
+    check("设置里有「光效强度」下拉，档位为 低/中/高",
+          labels == ["低", "中", "高"], f"{labels}")
     combo.setCurrentIndex(2)
     pump(app, 0.3)
     check("光效强度会写进设置", settings.reveal_strength == "strong",
           f"settings.reveal_strength={settings.reveal_strength}")
-    combo.setCurrentIndex(1)
+    combo.setCurrentIndex(0)
+    pump(app, 0.2)
+    check("选「低」写回 weak", settings.reveal_strength == "weak",
+          f"settings.reveal_strength={settings.reveal_strength}")
     settings_window_probe.close()
     pump(app, 0.2)
 

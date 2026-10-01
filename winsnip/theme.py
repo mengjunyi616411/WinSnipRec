@@ -251,7 +251,7 @@ class ThemeState:
             from .settings import settings
 
             return {"weak": 0.55, "normal": 1.0, "strong": 1.65}.get(
-                getattr(settings, "reveal_strength", "normal"), 1.0)
+                getattr(settings, "reveal_strength", "weak"), 0.55)
         except Exception:
             return 1.0
 
