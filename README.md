@@ -490,8 +490,15 @@ powershell -ExecutionPolicy Bypass -File promo\video\混入音乐.ps1 ^
     -Music "D:\music\Watch Me Work.mp3" -Offset 32 -Volume 0.35
 ```
 
-`-Offset` 用来跳过前奏直接进主歌/副歌；切点已经落在 120 BPM 的拍上，
-如果你的版本速度不同，渲染时用 `--bpm` 指定即可（`tools\make_update_video.py --bpm 140`）。
+`-Offset` 用来跳过前奏直接进主歌/副歌。
+
+**切点对齐**：所有切点量化到 **300 ms 的脉冲**（`tools\make_update_video.py --quantum 0.3`）。
+这样做的原因是实测数据：对配乐做自相关，900 ms（66.7 BPM）与 600 ms（100 BPM）
+两个周期都很强，重拍间隔集中在 305 ms —— 三者都是 300 ms 的整数倍，所以量化到
+300 ms 后，无论真实速度取哪一个，剪辑都踩在拍上，不用赌一个 BPM。
+
+> 配好的成品（`*_配乐.mp4`）已在 `.gitignore` 里：仓库不附带、也不提交任何
+> 商业音乐的混音产物，请自行保留。
 
 ```bat
 .venv\Scripts\python.exe tools\make_promo_video.py            :: 渲染成片（约 76 秒）

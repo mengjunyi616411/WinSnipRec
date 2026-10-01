@@ -45,27 +45,50 @@ ACCENT_SOFT = "#8FD8FF"
 TEXT = "#F2F7FC"
 MUTED = "#93A4B8"
 
-# The cut grid. Watch Me Work is a 4/4 track; 120 BPM keeps every cut on a beat
-# and can be re-timed with --bpm if the version you use is slower or faster.
-DEFAULT_BPM = 120.0
+# Every cut sits on a multiple of QUANTUM. Measured on the supplied track: the
+# autocorrelation peaks at 900 ms (66.7 BPM) and 600 ms (100 BPM), and the
+# dominant inter-onset interval is 305 ms — all multiples of 300 ms, so a 300 ms
+# grid lands on the pulse whichever of those is the "real" tempo.
+QUANTUM = 0.3
 
-SCENES = [
-    ("intro", 0.0, 4.0),
-    ("switch", 4.0, 6.0),
-    ("acrylic", 10.0, 5.5),
-    ("reveal", 15.5, 6.5),
-    ("strength", 22.0, 3.5),
-    ("outro", 25.5, 4.5),
+# Scene lengths in pulses (30 s / 0.3 s = 100 pulses total).
+SCENE_PULSES = [
+    ("intro", 16),      #  4.8 s
+    ("switch", 22),     #  6.6 s
+    ("acrylic", 20),    #  6.0 s
+    ("reveal", 24),     #  7.2 s
+    ("strength", 8),    #  2.4 s
+    ("outro", 10),      #  3.0 s
 ]
+TOTAL_PULSES = sum(length for _name, length in SCENE_PULSES)
 
+
+def build_scenes() -> list[tuple[str, float, float]]:
+    scenes: list[tuple[str, float, float]] = []
+    at = 0.0
+    for name, pulses in SCENE_PULSES:
+        length = pulses * QUANTUM
+        scenes.append((name, round(at, 4), round(length, 4)))
+        at += length
+    return scenes
+
+
+SCENES = build_scenes()
+
+# Captions start a hair after their scene so the cut reads first.
 SUBTITLES = [
-    (0.6, 4.0, "截图工具 1.1.0"),
-    (4.2, 5.8, "全新 Windows 10 界面风格"),
-    (10.2, 5.3, "Acrylic 亚克力材质"),
-    (15.7, 6.3, "Reveal 鼠标光效"),
-    (22.2, 3.3, "光效强度可调"),
-    (25.7, 4.3, "免费开源 · Windows 10 / 11"),
+    (1.0, 4.0, "截图工具 1.1.0"),
+    (5.4, 6.0, "全新 Windows 10 界面风格"),
+    (12.0, 5.4, "Acrylic 亚克力材质"),
+    (18.6, 6.6, "Reveal 鼠标光效"),
+    (25.2, 2.0, "光效强度可调"),
+    (27.6, 2.4, "免费开源 · Windows 10 / 11"),
 ]
+
+
+def pulses(length: float) -> list[float]:
+    """Times of every pulse inside a scene."""
+    return [round(i * QUANTUM, 4) for i in range(int(round(length / QUANTUM)))]
 
 SFX_BEATS: list[tuple[float, str]] = []
 
@@ -437,24 +460,27 @@ def render_frame(painter: QPainter, assets: UpdateAssets, t: float) -> None:
 # --------------------------------------------------------------------------- #
 # Side outputs
 # --------------------------------------------------------------------------- #
-def beat_markers(bpm: float) -> list[float]:
-    step = 60.0 / bpm
-    return [round(i * step, 4) for i in range(int(DURATION / step) + 1)]
+def build_sfx() -> list[tuple[float, str]]:
+    """Sparse UI sounds on the pulse grid, so they sit under the music.
 
-
-def build_sfx(bpm: float) -> list[tuple[float, str]]:
+    Only every 4th pulse gets a tick and every 8th a click: the track is mixed
+    underneath and a busy effect layer would fight it.
+    """
     beats: list[tuple[float, str]] = []
-    step = 60.0 / bpm
-    for index, at in enumerate(beat_markers(bpm)):
+    count = int(round(DURATION / QUANTUM))
+    for index in range(count + 1):
+        at = round(index * QUANTUM, 4)
         if at >= DURATION:
             break
-        # Kick-ish tick on every beat, lighter ping on the off beats.
-        beats.append((at, "tick" if index % 2 else "click"))
-    for name, start, length in SCENES:
-        beats.append((start, "whoosh"))
-        beats.append((start + 0.06, "chime"))
-    for at, _kind in ((0.0, ""), (DURATION - 0.5, "")):
-        beats.append((at, "pop"))
+        if index % 8 == 0:
+            beats.append((at, "click"))
+        elif index % 4 == 0:
+            beats.append((at, "tick"))
+    for _name, start, _length in SCENES:
+        beats.append((round(start, 4), "whoosh"))
+        beats.append((round(start + 0.06, 4), "chime"))
+    beats.append((0.0, "pop"))
+    beats.append((round(DURATION - 0.6, 4), "pop"))
     return sorted(beats)
 
 
@@ -469,11 +495,13 @@ def write_srt(path: Path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_storyboard(path: Path, bpm: float) -> None:
-    step = 60.0 / bpm
+def write_storyboard(path: Path) -> None:
     rows = ["# 1.1.0 更新宣传片分镜（1920×1080 · 30fps · 30s）", "",
-            f"剪辑网格：{bpm:.0f} BPM（每拍 {step * 1000:.0f} ms），所有切点都落在拍上。",
-            "音乐：Watch Me Work —— 用 `promo\\video\\混入音乐.ps1` 混入。", "",
+            f"剪辑网格：每 {QUANTUM * 1000:.0f} ms 一个脉冲，所有切点都落在脉冲上。",
+            "  所配音乐实测自相关在 900 ms(66.7 BPM) 与 600 ms(100 BPM) 都强，",
+            "  重拍间隔 305 ms —— 三者都是 300 ms 的整数倍，所以切点量化到 300 ms",
+            "  后无论真实速度是哪个，剪辑都踩在拍上。",
+            "音乐：用 `promo\\video\\混入音乐.ps1 -Music <文件> -Offset <秒>` 混入。", "",
             "| 时间 | 时长 | 画面 | 文案 |", "|---|---|---|---|"]
     for name, start, length in SCENES:
         title = {
@@ -495,8 +523,8 @@ def main() -> int:
                         help="render 1 frame per second into a contact sheet")
     parser.add_argument("--keep-silent", action="store_true",
                         help="skip the built-in UI sound effects")
-    parser.add_argument("--bpm", type=float, default=DEFAULT_BPM,
-                        help="beat grid used for cuts and sound effects")
+    parser.add_argument("--quantum", type=float, default=QUANTUM,
+                        help="cut grid in seconds; all cuts land on a multiple")
     args = parser.parse_args()
 
     from winsnip import winapi
@@ -519,7 +547,7 @@ def main() -> int:
     print(f"    完成，用时 {time.perf_counter() - started:.1f}s")
 
     write_srt(OUT_DIR / "update_1920x1080_30s.srt")
-    write_storyboard(OUT_DIR / "update_storyboard.md", args.bpm)
+    write_storyboard(OUT_DIR / "update_storyboard.md")
     print("==> 已写分镜表与字幕")
 
     if args.preview:
@@ -581,7 +609,7 @@ def main() -> int:
         silent.replace(final)
     else:
         print("==> 合成 UI 音效轨")
-        sfx = P.build_sfx_track(OUT_DIR / "update_sfx_track.wav", build_sfx(args.bpm))
+        sfx = P.build_sfx_track(OUT_DIR / "update_sfx_track.wav", build_sfx())
         subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
                         "-i", str(silent), "-i", str(sfx),
                         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest",
