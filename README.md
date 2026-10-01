@@ -373,7 +373,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **255 项断言**，当前全部通过：
+全部自测均可离线运行，共 **259 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核

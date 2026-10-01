@@ -118,14 +118,16 @@ class SplashWindow(FluentWindow):
         self.icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignHCenter)
 
+        # NOTE: no ui_font() here on purpose. The first custom font family costs
+        # 3-4 s to resolve on a software-rendered desktop, and Qt pays it inside
+        # show(), before showEvent — which would keep the splash unseen for that
+        # whole time. showEvent applies the fonts once the window is on screen.
         self.title = QLabel("截图工具", self)
-        self.title.setFont(ui_font(21, 600))
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self.title)
 
         self.subtitle = QLabel(f"WinSnipRec {__version__}", self)
-        self.subtitle.setFont(ui_font(12))
         self.subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.subtitle.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self.subtitle)
@@ -157,6 +159,25 @@ class SplashWindow(FluentWindow):
 
     def paintEvent(self, event) -> None:  # noqa: N802
         super().paintEvent(event)
+
+    def _apply_fonts(self) -> None:
+        """Resolve the real fonts now that the splash is already visible.
+
+        Qt resolves the first custom font family during the window's first
+        polish, i.e. inside show() and before showEvent, which costs 3-4 s on a
+        software-rendered desktop. Setting the fonts in __init__ therefore kept
+        the splash invisible for that whole time, so they are applied here
+        instead, queued one event-loop turn after the window is on screen.
+        """
+        if getattr(self, "_fonts_applied", False):
+            return
+        self._fonts_applied = True
+        self.title.setFont(ui_font(21, 600))
+        self.subtitle.setFont(ui_font(12))
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        QTimer.singleShot(0, self._apply_fonts)
 
     # ------------------------------------------------------------------ #
     def start(self) -> None:

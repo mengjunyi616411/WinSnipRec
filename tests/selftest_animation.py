@@ -141,10 +141,25 @@ def main() -> int:
     ring.deleteLater()
 
     # ---------------- splash handover ---------------- #
+    # 首次解析自定义字族在这台机器上要 3~4 秒，而 Qt 是在窗口首次 polish 时
+    # （show() 内部、showEvent 之前）做的。如果构造时就设好字体，启动画面会在这
+    # 几秒里完全不可见——用户先看到几秒空白，然后启动画面一闪而过。所以字体必须
+    # 等窗口显示出来之后再套上。
     splash = SplashWindow()
+    check("启动画面构造时不预设字体（避免 show() 期间解析字族）",
+          splash.title.font().family() != "Segoe UI Variable Text"
+          and not getattr(splash, "_fonts_applied", False),
+          f"title family = {splash.title.font().family()!r}")
+    show_started = time.perf_counter()
     splash.start()
+    show_elapsed = time.perf_counter() - show_started
+    check("启动画面 show() 不被字体解析阻塞（< 1.5 秒）", show_elapsed < 1.5,
+          f"{show_elapsed * 1000:.0f} ms（首次解析字族要 3000+ ms）")
     pump(app, 0.15)
     check("启动画面能显示", splash.isVisible())
+    check("显示之后字体已套用", getattr(splash, "_fonts_applied", False),
+          "字体在 showEvent 之后补齐")
+    check("套用字体后标题仍然是「截图工具」", splash.title.text() == "截图工具")
     check("启动画面带应用图标与标题",
           not splash.icon.pixmap().isNull() and splash.title.text() == "截图工具",
           f"{splash.title.text()} / {splash.subtitle.text()}")
