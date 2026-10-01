@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("WINSNIPREC_HOME", str(ROOT / "_selftest_style" / "_config"))
 
-from PySide6.QtCore import QPoint, QRectF  # noqa: E402
+from PySide6.QtCore import QPoint, QPointF, QRectF  # noqa: E402
 from PySide6.QtGui import QColor, QImage, QPainter  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -92,6 +92,20 @@ def main() -> int:
           theme.shadow_opacity > 0.3 and theme.shadow_spread < 22,
           f"opacity={theme.shadow_opacity} spread={theme.shadow_spread}")
 
+    theme.style = "win11"
+    check("win11：不用 Acrylic（那是 Win10 的材质）", not theme.uses_acrylic)
+    check("win11：没有 Reveal 光效（Win10 才有）", not theme.uses_reveal)
+
+    theme.style = "win10"
+    check("win10：使用 Acrylic 亚克力材质", theme.uses_acrylic and not theme.uses_mica)
+    # 本套件为了像素确定性默认关掉动画，而 Reveal 属于动效，先打开再断言。
+    settings_backup = settings.animations
+    settings.animations = True
+    check("win10：启用 Reveal 跟随鼠标光效", theme.uses_reveal)
+    settings.animations = False
+    check("关闭界面动画后 Reveal 也停用", not theme.uses_reveal)
+    settings.animations = settings_backup
+
     theme.style = "system"
     check("跟随系统可解析为具体风格", theme.resolved_style in ("win11", "win10"),
           f"resolved={theme.resolved_style}  (本机 win11={winapi.is_windows_11()})")
@@ -144,10 +158,116 @@ def main() -> int:
     backdrop_win11 = windows["win11"]._backdrop is not None
     backdrop_win10 = windows["win10"]._backdrop is not None
     check("win11 背景用 Mica 材质（有壁纸层）", backdrop_win11)
-    check("win10 背景不用 Mica（走纯色分支）", not backdrop_win10,
+    check("win10 背景用 Acrylic 材质（同样有壁纸层，但模糊更重）", backdrop_win10,
           f"win10 backdrop={'有' if backdrop_win10 else '无'}")
 
     # 标题栏分隔线：win10 有，win11 没有
+    # ---- Acrylic：重模糊 + 噪点，与 Mica 的平滑渐层可区分 ----
+    def grain_count(window) -> int:
+        """Distinct colours in a flat strip — Acrylic's noise shows up here."""
+        image = grab_image(window)
+        ratio = dpr_of(image, window)
+        card = window.card_rect()
+        seen = set()
+        # 命令栏下方一段没有控件的空白区
+        for y in range(int((card.y() + 200) * ratio), int((card.y() + 250) * ratio), 2):
+            for x in range(int((card.x() + 60) * ratio), int((card.right() - 60) * ratio), 2):
+                if 0 <= x < image.width() and 0 <= y < image.height():
+                    colour = image.pixelColor(x, y)
+                    seen.add((colour.red(), colour.green(), colour.blue()))
+        return len(seen)
+
+    for style, window in windows.items():
+        theme.style = style
+        theme.refresh()
+        window.invalidate_backdrop()
+        window.repaint()
+        pump(app, 0.3)
+
+    grain_win10 = grain_count(windows["win10"])
+    grain_win11 = grain_count(windows["win11"])
+    check("win10 Acrylic 带噪点颗粒（平坦区域也有色彩抖动）", grain_win10 >= 8,
+          f"win10 平坦区出现 {grain_win10} 种颜色")
+    check("win11 Mica 是平滑渐层（噪点明显更少）", grain_win11 < grain_win10,
+          f"win11 {grain_win11} vs win10 {grain_win10}")
+
+    # ---- Reveal：光随指针移动 ----
+    # 这个测试套件为了像素确定性把动画关了，而 Reveal 属于动效，测之前先打开。
+    settings.animations = True
+    theme.refresh()
+
+    def reveal_probe(window, logical_x: float, logical_y: float) -> tuple[QImage, QImage]:
+        window._stop_reveal_tracking()          # 用固定指针做确定性测量
+        window._pointer = QPointF(-1.0, -1.0)
+        window._reveal = 0.0
+        window.update()
+        window.repaint()
+        pump(app, 0.15)
+        before = window.grab().toImage()
+        window._pointer = QPointF(logical_x, logical_y)
+        window._reveal = 1.0
+        window.update()
+        window.repaint()
+        pump(app, 0.15)
+        after = window.grab().toImage()
+        return before, after
+
+    def delta_at(before: QImage, after: QImage, window, lx: float, ly: float) -> int:
+        ratio = dpr_of(before, window)
+        x = min(before.width() - 1, int(lx * ratio))
+        y = min(before.height() - 1, int(ly * ratio))
+        a = before.pixelColor(x, y)
+        b = after.pixelColor(x, y)
+        return (abs(a.red() - b.red()) + abs(a.green() - b.green())
+                + abs(a.blue() - b.blue()))
+
+    window10 = windows["win10"]
+    spot_x, spot_y = window10.width() * 0.30, window10.height() * 0.40
+    before, after = reveal_probe(window10, spot_x, spot_y)
+    near = delta_at(before, after, window10, spot_x, spot_y)
+    far = delta_at(before, after, window10, window10.width() * 0.95,
+                   window10.height() * 0.92)
+    check("win10 指针处出现光效", near >= 12, f"指针处色差 {near}")
+    check("光效是局部的（远处不受影响）", far <= 3, f"远处色差 {far}")
+
+    # 把指针移到别处，光斑应该跟着走
+    before2, after2 = reveal_probe(window10, window10.width() * 0.72,
+                                   window10.height() * 0.72)
+    moved_there = delta_at(before2, after2, window10, window10.width() * 0.72,
+                           window10.height() * 0.72)
+    moved_old = delta_at(before2, after2, window10, spot_x, spot_y)
+    check("光斑会跟着指针移动",
+          moved_there >= 12 and moved_old < near,
+          f"新位置色差 {moved_there}，旧位置 {moved_old}（原为 {near}）")
+
+    # 按钮也要被光照到（子控件画在窗口之上）
+    before3, after3 = reveal_probe(window10, window10.width() * 0.24,
+                                   window10.height() * 0.30)
+    bar_delta = 0
+    samples = 0
+    for lx in range(50, 600, 6):
+        bar_delta += delta_at(before3, after3, window10, lx, window10.height() * 0.30)
+        samples += 1
+    bar_average = bar_delta / max(1, samples)
+    check("光会扫过命令栏上的按钮（不只是窗口背景）", bar_average >= 3.0,
+          f"命令栏平均色差 {bar_average:.2f}")
+
+    # win11 不应该有光效（先把主题切回 win11，否则窗口仍按 win10 规则绘制）
+    theme.style = "win11"
+    theme.refresh()
+    window11 = windows["win11"]
+    before4, after4 = reveal_probe(window11, window11.width() * 0.3,
+                                   window11.height() * 0.4)
+    check("win11 下不出现 Reveal 光效",
+          delta_at(before4, after4, window11, window11.width() * 0.3,
+                   window11.height() * 0.4) <= 3,
+          "win11 无变化")
+
+    settings.animations = False
+    theme.refresh()
+    for window in windows.values():
+        window._stop_reveal_tracking()
+
     # 分隔线：在干净背景下单独测 TitleBar。
     # 整窗里量不出来——命令栏本身在两种风格下都会形成一条同样明显的边界。
     from PySide6.QtWidgets import QVBoxLayout, QWidget

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import (
-    QColor, QFont, QImage, QLinearGradient, QPainter, QPalette, QPixmap,
+    QBrush, QColor, QFont, QImage, QLinearGradient, QPainter, QPalette, QPixmap,
 )
 
 from . import winapi
@@ -37,6 +37,13 @@ RADIUS_FLYOUT = 8
 CAPTION_BUTTON_SIZE = QSize(46, 32)
 COMMAND_BAR_HEIGHT = 56
 CAPTION_BAR_HEIGHT = 40
+
+# Windows 10 'Acrylic': a much stronger blur than Mica, plus the noise grain
+# Microsoft overlays to stop large flat gradients from banding.
+ACRYLIC_TINT = 0.62          # how much of the window colour sits on top
+ACRYLIC_NOISE_ALPHA = 8      # per-pixel alpha of the grain tile (0-255)
+ACRYLIC_NOISE_TILE = 96
+ACRYLIC_DARKEN = 84          # extra darkening in the dark theme
 
 # Windows 10 caption buttons are the same size but hover fills the whole button
 # and the close button uses the older, more saturated red.
@@ -229,8 +236,29 @@ class ThemeState:
 
     @property
     def uses_mica(self) -> bool:
-        """Windows 10 has no Mica, so the window paints an opaque colour."""
+        """Windows 11 composites Mica; Windows 10 uses Acrylic instead."""
         return not self.is_win10
+
+    @property
+    def uses_acrylic(self) -> bool:
+        """Windows 10's material: heavy Gaussian blur + grain + a stronger tint."""
+        return self.is_win10
+
+    @property
+    def uses_reveal(self) -> bool:
+        """Windows 10's 'Reveal' highlight: a soft light that follows the pointer.
+
+        Reveal shipped with the Windows 10 Fall Creators Update, so it belongs to
+        the win10 style only. It is disabled along with the other animations.
+        """
+        if not self.is_win10:
+            return False
+        try:
+            from .settings import settings
+
+            return bool(settings.animations)
+        except Exception:
+            return True
 
     @property
     def palette(self) -> Palette:
@@ -249,6 +277,7 @@ class ThemeState:
 
 
 theme = ThemeState()
+_ACRYLIC_NOISE: QPixmap | None = None
 
 
 def rgba(color: QColor | str, alpha: float) -> QColor:
@@ -385,6 +414,49 @@ class MicaProvider:
         except Exception:
             return None
 
+    # -- acrylic ------------------------------------------------------------ #
+    @staticmethod
+    def _gaussian_blur(image: QImage, width: int, height: int) -> QImage:
+        """Approximate a Gaussian blur with chained smooth down/up scales.
+
+        A real Gaussian over a 1920x1080 crop costs tens of milliseconds per
+        window; three smooth resamples produce a visually equivalent soft blur
+        and stay in the low single digits.
+        """
+        small = image.scaled(max(1, width // 10), max(1, height // 10),
+                             Qt.AspectRatioMode.IgnoreAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+        medium = small.scaled(max(2, width // 4), max(2, height // 4),
+                              Qt.AspectRatioMode.IgnoreAspectRatio,
+                              Qt.TransformationMode.SmoothTransformation)
+        return medium.scaled(width, height, Qt.AspectRatioMode.IgnoreAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+
+    @staticmethod
+    def noise_tile() -> QPixmap:
+        """The subtle grain Windows 10 overlays on Acrylic surfaces."""
+        global _ACRYLIC_NOISE
+        if _ACRYLIC_NOISE is not None:
+            return _ACRYLIC_NOISE
+        size = ACRYLIC_NOISE_TILE
+        image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
+        # Built as raw bytes: per-pixel setPixelColor() in Python is ~50x slower.
+        data = bytearray(size * size * 4)
+        seed = 0x5F3A1C7
+        for index in range(size * size):
+            seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+            alpha = (seed >> 16) % (ACRYLIC_NOISE_ALPHA + 1)
+            offset = index * 4
+            # Premultiplied BGRA of white with the given alpha.
+            data[offset] = alpha
+            data[offset + 1] = alpha
+            data[offset + 2] = alpha
+            data[offset + 3] = alpha
+        image = QImage(bytes(data), size, size, size * 4,
+                       QImage.Format.Format_ARGB32_Premultiplied).copy()
+        _ACRYLIC_NOISE = QPixmap.fromImage(image)
+        return _ACRYLIC_NOISE
+
     def invalidate(self) -> None:
         self._source = None
         self._loaded_path = None
@@ -394,8 +466,13 @@ class MicaProvider:
 
     def backdrop(self, physical_rect: QRect, radius: int = RADIUS_WINDOW,
                  dpr: float = 1.0, tint_strength: float = 0.86,
-                 extra_lightening: float = 0.0) -> QPixmap:
-        """Return a rounded, blurred, tinted backdrop sized to ``physical_rect``."""
+                 extra_lightening: float = 0.0, acrylic: bool = False) -> QPixmap:
+        """Return a rounded, blurred, tinted backdrop sized to ``physical_rect``.
+
+        ``acrylic=True`` produces the Windows 10 material: a much heavier
+        Gaussian-style blur, the grain overlay, and a stronger tint so the
+        desktop behind is felt rather than seen.
+        """
         width = max(1, physical_rect.width())
         height = max(1, physical_rect.height())
         base = self._base_image()
@@ -414,6 +491,8 @@ class MicaProvider:
             crop = QRect(0, 0, base.width(), base.height())
         blurred = base.copy(crop).scaled(width, height, Qt.AspectRatioMode.IgnoreAspectRatio,
                                          Qt.TransformationMode.SmoothTransformation)
+        if acrylic:
+            blurred = self._gaussian_blur(blurred, width, height)
 
         pixmap = QPixmap.fromImage(blurred)
         # NOTE: the device pixel ratio is intentionally *not* set on the backdrop.
@@ -426,17 +505,23 @@ class MicaProvider:
         if palette.dark:
             # Windows darkens and desaturates the wallpaper before tinting it, which
             # is what keeps dark Mica neutral instead of showing a coloured wash.
-            painter.fillRect(QRect(0, 0, width, height), QColor(0, 0, 0, 96))
+            painter.fillRect(QRect(0, 0, width, height),
+                             QColor(0, 0, 0, ACRYLIC_DARKEN if acrylic else 96))
         tint = QColor(palette.window_bg)
-        tint.setAlphaF(tint_strength)
+        tint.setAlphaF(ACRYLIC_TINT if acrylic else tint_strength)
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         painter.fillRect(QRect(0, 0, width, height), tint)
         if not palette.dark:
-            painter.fillRect(QRect(0, 0, width, height), QColor(255, 255, 255, 46))
+            painter.fillRect(QRect(0, 0, width, height),
+                             QColor(255, 255, 255, 30 if acrylic else 46))
         if extra_lightening > 0:
             layer = QColor("#FFFFFF" if not palette.dark else "#FFFFFF")
             layer.setAlphaF(extra_lightening)
             painter.fillRect(QRect(0, 0, width, height), layer)
+        if acrylic:
+            # Acrylic's grain: without it a heavy blur bands badly on gradients.
+            painter.fillRect(QRect(0, 0, width, height),
+                             QBrush(self.noise_tile()))
         # Fluent windows carry a very subtle vertical light gradient.
         sheen = QLinearGradient(0, 0, 0, height)
         if palette.dark:

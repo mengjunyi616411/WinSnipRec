@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import (
-    QEvent, QPoint, QRect, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
+    QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
 )
 from PySide6.QtGui import (
-    QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QIcon, QPainter, QPixmap,
+    QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QIcon, QPainter,
+    QPainterPath, QPixmap, QRadialGradient,
 )
 from PySide6.QtWidgets import (
     QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
@@ -21,6 +22,47 @@ from ..theme import (
 )
 
 SHADOW_MARGIN = 20
+
+
+def paint_reveal_on(widget, painter: QPainter, radius: float = 0.0,
+                    strength: float = 0.55) -> None:
+    """Paint the window's Reveal light clipped to ``widget``.
+
+    Drawn in the widget's own coordinates so the light continues smoothly
+    across buttons instead of stopping at their edges.
+    """
+    window = widget.window()
+    getter = getattr(window, "reveal_centre_for", None)
+    if getter is None:
+        return
+    found = getter(widget)
+    if found is None:
+        return
+    centre, reveal = found
+    clip = QRectF(widget.rect())
+    extent = max(clip.width(), clip.height()) * 1.35
+    if extent <= 1:
+        return
+    glow = QRadialGradient(centre, extent)
+    if theme.dark:
+        light = QColor("#FFFFFF")
+        peak = 0.20 * reveal * strength
+    else:
+        light = QColor(theme.palette.accent)
+        peak = 0.24 * reveal * strength
+    glow.setColorAt(0.0, rgba(light, peak))
+    glow.setColorAt(0.45, rgba(light, peak * 0.5))
+    glow.setColorAt(1.0, rgba(light, 0.0))
+    painter.save()
+    if radius > 0:
+        path = QPainterPath()
+        path.addRoundedRect(clip, radius, radius)
+        painter.setClipPath(path)
+    else:
+        painter.setClipRect(clip)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.fillRect(clip, glow)
+    painter.restore()
 
 
 def control_radius(widget) -> int:
@@ -77,6 +119,11 @@ class FluentWindow(QWidget):
         self._resize_edges: Qt.Edge | None = None
         self._normal_geometry: QRect | None = None
         self._maximized = False
+        # Windows 10 'Reveal': a soft light that follows the pointer.
+        self._pointer = QPointF(-1.0, -1.0)
+        self._reveal = 0.0
+        self._reveal_timer: QTimer | None = None
+        self._reveal_anim: QVariantAnimation | None = None
         # While a show/hide animation is moving the window the Mica backdrop is
         # left alone: recomputing it every frame would stutter.
         self._freeze_backdrop = False
@@ -113,11 +160,6 @@ class FluentWindow(QWidget):
     def _ensure_backdrop(self) -> None:
         if self._backdrop is not None or self._freeze_backdrop:
             return
-        if not theme.uses_mica:
-            # Windows 10 has no Mica: the window is an opaque colour instead of
-            # a blurred crop of the wallpaper.
-            self._backdrop = None
-            return
         card = self.card_rect()
         handle = self.windowHandle()
         dpr = handle.devicePixelRatio() if handle else 1.0
@@ -126,7 +168,8 @@ class FluentWindow(QWidget):
             max(1, int(card.width() * dpr)), max(1, int(card.height() * dpr)),
         )
         try:
-            self._backdrop = mica.backdrop(physical, 0, dpr, self._tint_strength)
+            self._backdrop = mica.backdrop(physical, 0, dpr, self._tint_strength,
+                                           acrylic=theme.uses_acrylic)
         except Exception:
             self._backdrop = None
 
@@ -175,6 +218,8 @@ class FluentWindow(QWidget):
             painter.setBrush(QColor(theme.palette.window_bg))
             painter.drawRoundedRect(path_rect, self.radius, self.radius)
 
+        self.paint_reveal(painter, QRectF(card), float(self.radius))
+
         border = rgba("#000000" if not theme.dark else "#FFFFFF", 0.10 if not theme.dark else 0.09)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         pen = painter.pen()
@@ -189,6 +234,7 @@ class FluentWindow(QWidget):
         self.invalidate_backdrop()
         self._apply_native_rounding()
         self._start_open_animation()
+        self._start_reveal_tracking()
 
     def _start_open_animation(self) -> None:
         """Every window fades (and usually slides) in when it is opened."""
@@ -215,6 +261,102 @@ class FluentWindow(QWidget):
             slide=self._open_slide,
             fade_only=self._open_animation == "fade",
         )
+
+    # -- Reveal (Windows 10 pointer light) ---------------------------------- #
+    def _start_reveal_tracking(self) -> None:
+        if not theme.uses_reveal:
+            return
+        if self._reveal_timer is None:
+            timer = QTimer(self)
+            timer.setInterval(33)          # ~30 Hz is plenty for a soft light
+            timer.timeout.connect(self._track_pointer)
+            self._reveal_timer = timer
+        self._reveal_timer.start()
+
+    def _stop_reveal_tracking(self) -> None:
+        if self._reveal_timer is not None:
+            self._reveal_timer.stop()
+
+    def _track_pointer(self) -> None:
+        """Poll the cursor: child widgets swallow mouseMoveEvent."""
+        if not theme.uses_reveal:
+            return
+        local = self.mapFromGlobal(QCursor.pos())
+        inside = self.rect().contains(local)
+        moved = (QPointF(local) - self._pointer).manhattanLength() >= 3.0
+        if inside:
+            self._pointer = QPointF(local)
+        target = 1.0 if inside else 0.0
+        if abs(self._reveal - target) > 0.02:
+            self._animate_reveal(target)
+        if inside and moved:
+            self.update()
+
+    def _animate_reveal(self, target: float) -> None:
+        if self._reveal_anim is not None:
+            self._reveal_anim.stop()
+        animation = QVariantAnimation(self)
+        animation.setDuration(anim.DURATION_NORMAL)
+        animation.setStartValue(self._reveal)
+        animation.setEndValue(target)
+        animation.setEasingCurve(anim.curve("out"))
+        animation.valueChanged.connect(self._on_reveal_tick)
+        self._reveal_anim = animation
+        animation.start(QVariantAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def _on_reveal_tick(self, value) -> None:
+        self._reveal = float(value)
+        self.update()
+
+    def reveal_centre_for(self, widget) -> tuple[QPointF, float] | None:
+        """Pointer position in ``widget``'s coordinates, or None when off.
+
+        Child controls paint after the window, so they have to draw the
+        Reveal light themselves or it would stop at their edges.
+        """
+        if not theme.uses_reveal or self._reveal <= 0.02 or self._pointer.x() < 0:
+            return None
+        local = widget.mapFrom(self, QPoint(int(self._pointer.x()),
+                                            int(self._pointer.y())))
+        return QPointF(local), self._reveal
+
+    def paint_reveal(self, painter: QPainter, clip: QRectF, radius: float = 0.0,
+                     strength: float = 1.0) -> None:
+        """Paint the Reveal light into ``clip`` (window or a single control)."""
+        if not theme.uses_reveal or self._reveal <= 0.02 or self._pointer.x() < 0:
+            return
+        # Tight enough to read as a light rather than a wash over the surface.
+        extent = max(clip.width(), clip.height()) * 0.34
+        if extent <= 1:
+            return
+        glow = QRadialGradient(self._pointer, extent)
+        # On a near-white surface a white light is invisible (a few levels at
+        # most), so the light theme lights with the accent colour the way a
+        # coloured spotlight reads on paper; the dark theme glows white.
+        if theme.dark:
+            light = QColor("#FFFFFF")
+            peak = 0.26 * self._reveal * strength
+        else:
+            light = QColor(theme.palette.accent)
+            peak = 0.32 * self._reveal * strength
+        glow.setColorAt(0.0, rgba(light, peak))
+        glow.setColorAt(0.30, rgba(light, peak * 0.55))
+        glow.setColorAt(0.65, rgba(light, peak * 0.14))
+        glow.setColorAt(1.0, rgba(light, 0.0))
+        painter.save()
+        if radius > 0:
+            path = QPainterPath()
+            path.addRoundedRect(clip, radius, radius)
+            painter.setClipPath(path)
+        else:
+            painter.setClipRect(clip)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.fillRect(clip, glow)
+        painter.restore()
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        self._stop_reveal_tracking()
+        super().hideEvent(event)
 
     def _apply_native_rounding(self) -> None:
         try:
@@ -414,6 +556,7 @@ class FluentButton(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bg)
             painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
+        paint_reveal_on(self, painter, float(control_radius(self)))
         if border is not None:
             pen = painter.pen()
             pen.setWidthF(1.0)
@@ -532,6 +675,7 @@ class IconButton(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(bg)
             painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
+        paint_reveal_on(self, painter, float(control_radius(self)))
 
         color = self._custom_color or QColor(
             palette.icon_primary if enabled else palette.text_disabled
@@ -1229,6 +1373,7 @@ class ClickableWidget(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
         painter.drawRoundedRect(QRectF(self.rect()), control_radius(self), control_radius(self))
+        paint_reveal_on(self, painter, float(control_radius(self)))
         painter.end()
 
 
