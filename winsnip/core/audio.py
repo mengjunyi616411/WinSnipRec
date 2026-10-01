@@ -11,6 +11,7 @@ import ctypes
 import os
 import re
 import subprocess
+import threading
 import uuid
 from dataclasses import dataclass
 
@@ -52,8 +53,85 @@ def _decode(data: bytes) -> str:
     return decode_output(data)
 
 
+_DEVICE_CACHE: list[AudioDevice] | None = None
+_DEVICE_LOCK = threading.Lock()
+_DEVICE_THREAD: threading.Thread | None = None
+_DEVICE_WAITERS: list = []
+
+# ffmpeg's device listing has no timeout of its own; 25 s left the settings
+# dialog frozen far past the point where Windows reports "not responding".
+DEVICE_SCAN_TIMEOUT = 8
+
+
+def cached_microphones() -> list[AudioDevice]:
+    """Devices from the background scan. Never blocks; [] until it finishes."""
+    with _DEVICE_LOCK:
+        return list(_DEVICE_CACHE) if _DEVICE_CACHE is not None else []
+
+
+def microphones_scanned() -> bool:
+    with _DEVICE_LOCK:
+        return _DEVICE_CACHE is not None
+
+
+def scan_microphones_async(done=None, force: bool = False) -> threading.Thread | None:
+    """Enumerate devices once, off the GUI thread.
+
+    Calling this while a scan is already running *registers* ``done`` instead of
+    silently dropping it, so a caller that arrives late still gets the result.
+
+    ``done`` is called from the worker thread with the device list, so a Qt
+    caller must marshal it back to its own thread (a signal does that). Returns
+    the running thread, or None when a scan was already in flight.
+    """
+    global _DEVICE_THREAD
+    with _DEVICE_LOCK:
+        if _DEVICE_CACHE is not None and not force:
+            # Already have an answer: hand it over right away so no caller can
+            # subscribe after the fact and wait forever.
+            devices = list(_DEVICE_CACHE)
+            thread = None
+        else:
+            devices = None
+            if done is not None:
+                _DEVICE_WAITERS.append(done)
+            if _DEVICE_THREAD is not None and _DEVICE_THREAD.is_alive():
+                return None
+            thread = threading.Thread(target=_device_scan_work,
+                                      name="audio-device-scan", daemon=True)
+            _DEVICE_THREAD = thread
+            thread.start()
+    if devices is not None and done is not None:
+        try:
+            done(devices)
+        except Exception:
+            pass
+    return thread
+
+
+def _device_scan_work() -> None:
+    global _DEVICE_CACHE
+    devices = list_microphones()
+    with _DEVICE_LOCK:
+        # Only remember a real result: an empty list usually means ffmpeg timed
+        # out, and caching that would hide the devices for the whole session.
+        if devices or _DEVICE_CACHE is None:
+            _DEVICE_CACHE = devices
+        waiters = list(_DEVICE_WAITERS)
+        _DEVICE_WAITERS.clear()
+    for callback in waiters:
+        try:
+            callback(devices)
+        except Exception:
+            pass
+
+
 def list_microphones(ffmpeg: str | None = None) -> list[AudioDevice]:
-    """Enumerate DirectShow audio capture devices.  Never raises."""
+    """Enumerate DirectShow audio capture devices.  Never raises.
+
+    Blocks for several seconds: call it from a worker thread (see
+    :func:`scan_microphones_async`) or read :func:`cached_microphones`.
+    """
     exe = ffmpeg or encoder.ffmpeg_path()
     if not exe:
         return []
@@ -76,7 +154,7 @@ def list_microphones(ffmpeg: str | None = None) -> list[AudioDevice]:
     if hasattr(subprocess, "CREATE_NO_WINDOW"):
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     try:
-        proc = subprocess.run(args, timeout=25, **kwargs)
+        proc = subprocess.run(args, timeout=DEVICE_SCAN_TIMEOUT, **kwargs)
     except Exception:
         return []
 

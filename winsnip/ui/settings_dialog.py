@@ -54,6 +54,7 @@ class _Row(QWidget):
 
 class SettingsWindow(FluentWindow):
     applied = Signal()
+    devices_ready = Signal(object)   # 后台扫描完成后回主线程
     closed = Signal()
 
     def __init__(self) -> None:
@@ -87,6 +88,10 @@ class SettingsWindow(FluentWindow):
         self.body_layout.setSpacing(0)
         scroll.setWidget(body)
         root.addWidget(scroll, 1)
+
+        # 设备下拉的状态与后台扫描回调连接，必须早于 _build_rows()
+        self._device_rows: list[tuple[QComboBox, str, bool]] = []
+        self.devices_ready.connect(self._on_devices_ready)
 
         self._build_rows()
 
@@ -263,22 +268,41 @@ class SettingsWindow(FluentWindow):
         self._add_row("录屏快捷键", "截图工具 (Windows 11) 会占用 Win+Shift+R", self.hotkey_record_combo)
 
     def _populate_devices(self, combo: QComboBox, current: str, loopback: bool) -> None:
-        from ..core.audio import list_microphones
+        """Fill a device list without blocking the UI thread.
 
+        Reading the cache is instant; the first scan runs on a worker thread and
+        the combos are re-filled when it reports back.
+        """
+        from ..core.audio import cached_microphones, scan_microphones_async
+
+        self._device_rows.append((combo, current, loopback))
+        self._fill_devices(combo, current, loopback, cached_microphones())
+        scan_microphones_async(done=self._devices_scanned)
+
+    def _devices_scanned(self, devices) -> None:
+        """Runs on the worker thread; the signal hops back to the GUI thread."""
+        self.devices_ready.emit(list(devices))
+
+    def _on_devices_ready(self, devices) -> None:
+        for combo, current, loopback in self._device_rows:
+            # Prefer whatever the user has selected by now.
+            picked = combo.currentData() or current
+            self._fill_devices(combo, picked, loopback, devices)
+
+    def _fill_devices(self, combo: QComboBox, current: str, loopback: bool,
+                      devices) -> None:
         from .main_window import _is_loopback
 
+        combo.blockSignals(True)
         combo.clear()
         combo.addItem("（未选择）", "")
-        try:
-            devices = list_microphones()
-        except Exception:
-            devices = []
         for device in devices:
             if _is_loopback(device.name) != loopback:
                 continue
             combo.addItem(device.name, device.id)
         index = combo.findData(current)
         combo.setCurrentIndex(index if index >= 0 else 0)
+        combo.blockSignals(False)
 
     # ------------------------------------------------------------------ #
     def _set(self, attribute: str, value) -> None:

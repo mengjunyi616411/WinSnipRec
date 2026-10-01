@@ -222,6 +222,10 @@ def main() -> int:
 
 
 def _after_startup(app: QApplication, window: MainWindow) -> None:
+    # 音频设备枚举要 4~5 秒，放后台线程跑，别让界面等它。
+    from winsnip.core.audio import scan_microphones_async
+
+    QTimer.singleShot(50, scan_microphones_async)
     QTimer.singleShot(400, lambda: _register_hotkeys(window))
     QTimer.singleShot(1500, lambda: _check_autostart(window))
     _watch_system_theme(app, window)

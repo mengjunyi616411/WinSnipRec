@@ -108,6 +108,16 @@ def main() -> int:
     devices = list_microphones()
     check("audio device enumeration does not crash", isinstance(devices, list),
           f"{len(devices)} devices")
+    # 真实程序在启动时就用后台线程预加载设备列表（app.py 的 _after_startup），
+    # 所以这里也先等它落地，否则测的是"第一次开机立刻点录制"的边角情况。
+    from winsnip.core.audio import cached_microphones, scan_microphones_async
+
+    deadline = time.perf_counter() + 30
+    scan_microphones_async()
+    while time.perf_counter() < deadline and not cached_microphones():
+        pump(app, 0.1)
+    check("设备列表预热完成（启动时后台预加载）", bool(cached_microphones()),
+          f"{len(cached_microphones())} devices")
     settings.mic_enabled = True
     selected = window._resolve_audio_devices()
     check("mic selection resolves to a device or empty list",

@@ -92,7 +92,7 @@ so WinSnipRec logs the conflict and switches to the fallback automatically.
 
 ## Tests
 
-Everything runs offline. 249 assertions across nine suites:
+Everything runs offline. 255 assertions across ten suites:
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py        :: 51  recording core
@@ -105,6 +105,7 @@ Everything runs offline. 249 assertions across nine suites:
 .venv\Scripts\python.exe tests\selftest_hotkeys.py     ::  7  global hotkeys
 .venv\Scripts\python.exe tests\selftest_mic_switch.py  ::  9  microphone switching
 .venv\Scripts\python.exe tests\selftest_style.py      :: 44  styles, Acrylic, Reveal, repaint budget
+.venv\Scripts\python.exe tests\selftest_devices.py    :: 15  device scan never blocks the UI
 ```
 
 `selftest_duration.py` deliberately slows the screen grab down to reproduce the

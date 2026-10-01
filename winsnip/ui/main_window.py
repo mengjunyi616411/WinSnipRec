@@ -182,6 +182,31 @@ class HotkeyHint(QWidget):
         return QSize(400, 60)
 
 
+def _cached_mics(wait: float = 0.0):
+    """Microphone list from the background scan; starts one if needed.
+
+    ``wait`` blocks until the scan lands (bounded). Starting a recording without
+    the user's microphone is silent data loss, so the record path waits briefly
+    for a scan that is already in flight; nothing else should.
+    """
+    from ..core.audio import cached_microphones, scan_microphones_async
+
+    devices = cached_microphones()
+    if devices:
+        return devices
+    thread = scan_microphones_async()
+    if wait > 0:
+        import time
+
+        # The scan is already running on a worker thread, so this only waits for
+        # work that has started; it is bounded so the UI cannot hang on ffmpeg.
+        deadline = time.perf_counter() + wait
+        while time.perf_counter() < deadline and thread is not None and thread.is_alive():
+            time.sleep(0.02)
+        devices = cached_microphones()
+    return devices
+
+
 class MainWindow(FluentWindow):
     """Command bar + hint area, mirroring 截图工具 on Windows 11."""
 
@@ -388,9 +413,20 @@ class MainWindow(FluentWindow):
                       on_activate=lambda: self._set_system_audio(not settings.system_audio))
         menu.add_separator()
 
-        devices = list_microphones()
+        # Never enumerate synchronously here: ffmpeg takes ~4.7 s and the menu
+        # would freeze the window. Kick a scan and use whatever is cached.
+        from ..core.audio import cached_microphones, microphones_scanned
+        from ..core.audio import scan_microphones_async
+
+        scan_microphones_async()
+        devices = cached_microphones()
         microphones = [d for d in devices if not _is_loopback(d.name)]
         loopbacks = [d for d in devices if _is_loopback(d.name)]
+        if not devices:
+            menu.add_header("音频设备")
+            menu.add_item("未找到音频设备" if microphones_scanned() else "正在检测音频设备…",
+                          checked=False, on_activate=lambda: None)
+            menu.add_separator()
         if microphones:
             menu.add_header("麦克风设备")
             for device in microphones[:12]:
@@ -425,9 +461,10 @@ class MainWindow(FluentWindow):
         settings.save()
         self._update_audio_icon()
         if enabled and not settings.system_audio_device:
-            from ..core.audio import list_microphones
+            from ..core.audio import cached_microphones, scan_microphones_async
 
-            loopback = next((d for d in list_microphones() if _is_loopback(d.name)), None)
+            scan_microphones_async()
+            loopback = next((d for d in cached_microphones() if _is_loopback(d.name)), None)
             if loopback:
                 settings.system_audio_device = loopback.id
                 settings.save()
@@ -635,7 +672,14 @@ class MainWindow(FluentWindow):
         if selected:
             return selected
         if settings.mic_enabled:
-            device = next((d for d in list_microphones() if not _is_loopback(d.name)), None)
+            device = next((d for d in _cached_mics(wait=1.5)
+                           if not _is_loopback(d.name)), None)
+            if device is None:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "no microphone found; recording without audio (device scan "
+                    "may still be running)")
             if device:
                 return [device]
         return []
