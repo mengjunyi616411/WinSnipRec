@@ -371,6 +371,44 @@ def main() -> int:
     check("win11 按钮悬停没有这条描边", win11_edge < win10_edge,
           f"win11 {win11_edge:.1f} vs win10 {win10_edge:.1f}")
 
+    # ---- 动画生命周期：反复淡入淡出 + 关窗都不能崩 ----
+    # 回归 "RuntimeError: libshiboken: Internal C++ object
+    # (PySide6.QtCore.QVariantAnimation) already deleted."。
+    # 成因：动画用 DeleteWhenStopped 启动，Qt 在动画一停就销毁 C++ 对象，而
+    # self._reveal_anim 还留着失效引用，下一次淡入/淡出或关窗时 .stop() 就抛错。
+    lifecycle_errors: list[str] = []
+    probe_window = windows["win10"]
+    probe_window._stop_reveal_tracking()
+    pump(app, 0.2)
+    for step in range(6):
+        target = 1.0 if step % 2 == 0 else 0.0
+        try:
+            probe_window.set_reveal(QPointF(probe_window.width() * 0.3,
+                                            probe_window.height() * 0.4),
+                                    probe_window._reveal)
+            probe_window._animate_reveal(target)
+        except Exception as error:  # noqa: BLE001
+            lifecycle_errors.append(f"第 {step} 次切换: {type(error).__name__}: {error}")
+        # 等这次动画彻底结束（finished + deleteLater 都要跑完）
+        end = time.perf_counter() + 0.45
+        while time.perf_counter() < end:
+            app.processEvents()
+            time.sleep(0.005)
+    check("Reveal 反复淡入淡出 6 次不再抛异常", not lifecycle_errors,
+          lifecycle_errors[0] if lifecycle_errors else "6 次都干净")
+
+    # 动画跑完后关窗（hideEvent 里会停动画，原崩溃也出现在这条路径上）
+    try:
+        probe_window._animate_reveal(1.0)
+        pump(app, 0.5)
+        probe_window.hide()
+        probe_window.show()
+        pump(app, 0.3)
+        close_error = ""
+    except Exception as error:  # noqa: BLE001
+        close_error = f"{type(error).__name__}: {error}"
+    check("动画结束后隐藏/再显示窗口不再抛异常", not close_error, close_error or "干净")
+
     # ---- 设置项 ----
     settings_window_probe = SettingsWindow()
     settings_window_probe.show()

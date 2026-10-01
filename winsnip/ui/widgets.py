@@ -367,6 +367,7 @@ class FluentWindow(QWidget):
     def _stop_reveal_tracking(self) -> None:
         if self._reveal_timer is not None:
             self._reveal_timer.stop()
+        self._stop_reveal_animation()
 
     def sync_reveal_overlay(self) -> None:
         """Keep the light's layer aligned with the card and on top."""
@@ -438,16 +439,36 @@ class FluentWindow(QWidget):
             self._reveal_timer.setInterval(wanted)
 
     def _animate_reveal(self, target: float) -> None:
-        if self._reveal_anim is not None:
-            self._reveal_anim.stop()
+        self._stop_reveal_animation()
         animation = QVariantAnimation(self)
         animation.setDuration(anim.DURATION_NORMAL)
         animation.setStartValue(self._reveal)
         animation.setEndValue(target)
         animation.setEasingCurve(anim.curve("out"))
         animation.valueChanged.connect(self._on_reveal_tick)
+        animation.finished.connect(lambda: self._on_reveal_finished(animation))
         self._reveal_anim = animation
-        animation.start(QVariantAnimation.DeletionPolicy.DeleteWhenStopped)
+        # KeepWhenStopped: with DeleteWhenStopped Qt frees the C++ object the
+        # moment the fade ends, and the stale Python reference then raised
+        # "Internal C++ object already deleted" on the next fade.
+        animation.start()
+
+    def _on_reveal_finished(self, animation) -> None:
+        if self._reveal_anim is animation:
+            self._reveal_anim = None
+        animation.deleteLater()
+
+    def _stop_reveal_animation(self) -> None:
+        animation = self._reveal_anim
+        self._reveal_anim = None
+        if animation is None:
+            return
+        try:
+            animation.stop()
+        except RuntimeError:
+            # The C++ side is already gone; nothing to stop.
+            return
+        animation.deleteLater()
 
     def _on_reveal_tick(self, value) -> None:
         self._reveal = float(value)

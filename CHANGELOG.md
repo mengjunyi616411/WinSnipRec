@@ -40,6 +40,11 @@
   成片只有 1.2 秒」且没有任何报错。现在跨分段保留最后一帧，并对缺口作文本提示。
   同时修正了暂停瞬间的时钟结算与补帧耗时被计入录制时长的问题。
   （`tests/selftest_duration.py`，8 项；内核自测由约 1/4 概率失败变为稳定全绿）
+- **程序反复弹出「程序遇到问题」报错框**（严重）：`RuntimeError: libshiboken:
+  Internal C++ object (PySide6.QtCore.QVariantAnimation) already deleted.`
+  Reveal 的淡入淡出动画用 `DeleteWhenStopped` 启动，Qt 在动画停止时就销毁了 C++
+  对象，而代码仍持有失效引用；下一次光标进入/离开窗口或关窗口调用 `.stop()` 即崩溃。
+  现在改为自己管理动画生命周期。触发方式：Windows 10 风格下把鼠标移入再移出窗口。
 - **启动变慢：启动画面要等 4 秒才出现**：Qt 在窗口首次 polish 时（show() 内部、
   showEvent 之前）解析第一个自定义字族，这台机器上要 3~4 秒。启动画面的字号原本在
   构造时就设好，于是 show() 被阻塞，那几秒里用户完全看不到东西。现在字体改为窗口
