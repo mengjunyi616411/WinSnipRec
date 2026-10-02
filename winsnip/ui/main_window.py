@@ -39,7 +39,8 @@ SHAPE_ICONS = {key: icon for key, _, icon in SHAPES}
 
 #: 主窗口的卡片尺寸。高度按 Windows 11 截图工具的主界面对齐：只留一行提示，
 #: 不再显示保存位置，也没有底部的「打开保存文件夹」。
-CARD_WIDTH, CARD_HEIGHT = 620, 287
+#: 主窗口的卡片尺寸。高度只留提示文字加一点呼吸空间：原来 287 时上下各有 54px 空白。
+CARD_WIDTH, CARD_HEIGHT = 620, 212
 
 LOOPBACK_HINTS = ("stereo mix", _t("立体声混音"), "what u hear", "voicemeeter", "cable output",
                   "loopback", _t("监视器"), _t("混音"))
@@ -69,7 +70,9 @@ class HotkeyHint(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
     def set_hint(self, primary: str, secondary: str = "", *, animate: bool = True) -> None:
-        lines = [(primary, "primary"), (secondary, "secondary")]
+        # 空字符串不再占一行：主界面只显示一行提示，第二行留空时不该还占高度。
+        lines = [(text, kind) for text, kind in
+                 ((primary, "primary"), (secondary, "secondary")) if text]
         if lines == self._lines and self._pending is None:
             return
         self.setToolTip(primary)
@@ -184,7 +187,9 @@ class HotkeyHint(QWidget):
         painter.drawRect(QRectF(rect.left() + pane + gap, rect.top() + pane + gap, pane, pane))
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(400, 60)
+        # 按实际行数给高度，不再写死 60（那是两行的高度）
+        rows = len([line for line in (self._pending or self._lines) if line[0]])
+        return QSize(400, 40 if rows <= 1 else 60)
 
 
 def _cached_mics(wait: float = 0.0):

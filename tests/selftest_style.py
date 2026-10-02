@@ -241,7 +241,9 @@ def main() -> int:
                 + abs(a.blue() - b.blue()))
 
     window10 = windows["win10"]
-    spot_x, spot_y = window10.width() * 0.30, window10.height() * 0.40
+    # 窗口变矮后 0.40 会落进命令栏，而光画在控件下面，在那里量不到。
+    # 移到命令栏下方的空白区。
+    spot_x, spot_y = window10.width() * 0.30, window10.height() * 0.72
     before, after = reveal_probe(window10, spot_x, spot_y)
     near = delta_at(before, after, window10, spot_x, spot_y)
     far = delta_at(before, after, window10, window10.width() * 0.95,
@@ -354,13 +356,13 @@ def main() -> int:
         pump(app, 0.2)
         plain = probe_window.grab().toImage()
         probe_window.set_reveal(QPointF(probe_window.width() * 0.3,
-                                        probe_window.height() * 0.4), 1.0)
+                                        probe_window.height() * 0.72), 1.0)
         probe_window.repaint()
         pump(app, 0.25)
         lit = probe_window.grab().toImage()
         strengths[name] = delta_at(plain, lit, probe_window,
                                    probe_window.width() * 0.3,
-                                   probe_window.height() * 0.4)
+                                   probe_window.height() * 0.72)
     settings.reveal_strength = "weak"
     theme.refresh()
     check("光效强度可调（低 < 中 < 高）",
