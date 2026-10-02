@@ -37,6 +37,10 @@ SHAPES = [
 ]
 SHAPE_ICONS = {key: icon for key, _, icon in SHAPES}
 
+#: 主窗口的卡片尺寸。高度按 Windows 11 截图工具的主界面对齐：只留一行提示，
+#: 不再显示保存位置，也没有底部的「打开保存文件夹」。
+CARD_WIDTH, CARD_HEIGHT = 620, 287
+
 LOOPBACK_HINTS = ("stereo mix", _t("立体声混音"), "what u hear", "voicemeeter", "cable output",
                   "loopback", _t("监视器"), _t("混音"))
 
@@ -218,8 +222,10 @@ class MainWindow(FluentWindow):
         super().__init__(None, resizable=True)
         self.setWindowTitle(_t("截图工具"))
         self.setWindowIcon(icons.app_icon())
-        self.set_card_size(620, 300)
-        self.setMinimumSize(620 + 40, 300 + 40)
+        self.set_card_size(CARD_WIDTH, CARD_HEIGHT)
+        # 最小尺寸就是卡片尺寸：这里的 +40 是阴影边距时代的遗留，边距归零后
+        # 它把窗口锁死在 660x340，多出来的 40px 变成了空白。
+        self.setMinimumSize(CARD_WIDTH, CARD_HEIGHT)
 
         self._mode = settings.last_mode
         self._shape = settings.last_shape
@@ -304,15 +310,12 @@ class MainWindow(FluentWindow):
         content_layout.addWidget(self.hint, 0, Qt.AlignmentFlag.AlignHCenter)
         content_layout.addStretch(1)
 
-        footer = QHBoxLayout()
-        footer.setContentsMargins(0, 0, 0, 0)
-        footer.addStretch(1)
+        # 仍然创建它（其他地方会引用），但不放进布局：主界面与 Windows 11 截图
+        # 工具一致，不显示这一行。功能保留在托盘右键菜单里。
         self.folder_button = FluentButton(_t("打开保存文件夹"), self.content, variant="hyperlink",
                                           icon_name="folder", height=28, font_size=12)
         self.folder_button.clicked.connect(self.open_output_folder)
-        footer.addWidget(self.folder_button)
-        footer.addStretch(1)
-        content_layout.addLayout(footer)
+        self.folder_button.setVisible(False)
         root.addWidget(self.content, 1)
 
         self._build_tray()
@@ -398,13 +401,12 @@ class MainWindow(FluentWindow):
             primary = _t("按 {0} 开始截图").format(self._hotkey_display(spec))
         else:
             spec = settings.hotkey_record
-            primary = _t("按 {0} 开始录屏").format(self._hotkey_display(spec))
+            primary = _t("按 {0} 开始录制").format(self._hotkey_display(spec))
         if self._hint_mode == "capture":
             primary = _t("拖动以选择区域 · Esc 取消")
-        folder = settings.video_dir if self._mode == "video" else settings.image_dir
-        secondary = _t("{0}将保存到 {1}").format(
-                _t("视频") if self._mode == "video" else _t("图片"), folder)
-        self.hint.set_hint(primary, secondary)
+        # 只留一行：Windows 11 截图工具的主界面就是这样，不再显示保存位置，
+        # 底部的「打开保存文件夹」也一并去掉（托盘菜单里仍有同一功能）。
+        self.hint.set_hint(primary, "")
 
     @staticmethod
     def _hotkey_display(spec: str) -> str:

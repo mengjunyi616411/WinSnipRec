@@ -61,7 +61,7 @@ class ImagePreviewWindow(FluentWindow):
         self.setWindowTitle(_t("截图工具"))
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(720, 520)
-        self.setMinimumSize(480 + 40, 360 + 40)
+        self.setMinimumSize(480, 360)   # +40 是阴影边距时代的遗留
         self._path = path
         self._image = image
         self._pixmap = QPixmap.fromImage(image)

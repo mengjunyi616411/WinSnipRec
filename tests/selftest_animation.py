@@ -308,8 +308,9 @@ def main() -> int:
     pump(app, 0.5)
     check("切换后指示器停在录屏档", segment.indicator_position() == 1.0,
           f"{segment.indicator_position()}")
-    check("切换后模式与提示文字都是录屏",
-          main._mode == "video" and "录屏" in main.hint._lines[0][0],
+    # 用词已改为「录制」，与 Windows 11 截图工具一致
+    check("切换后模式与提示文字都是录制",
+          main._mode == "video" and "录制" in main.hint._lines[0][0],
           main.hint._lines[0][0])
 
     segment.itemClicked.emit(0)

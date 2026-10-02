@@ -68,7 +68,7 @@ class SettingsWindow(FluentWindow):
         self.setWindowTitle(_t("设置"))
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(600, 640)
-        self.setMinimumSize(520 + 40, 480 + 40)
+        self.setMinimumSize(520, 480)   # +40 是阴影边距时代的遗留
         self._rows: list[_Row] = []
         self._row_separators: list[QWidget] = []
 
