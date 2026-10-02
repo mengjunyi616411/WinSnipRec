@@ -50,8 +50,11 @@ jobs:
       - name: 多语言自测（12 项，覆盖检查）
         run: python tests/selftest_i18n.py
 
-      - name: 首次运行引导自测（17 项）
+      - name: 首次运行引导自测（22 项）
         run: python tests/selftest_onboarding.py
+
+      - name: 设置搜索与彩蛋自测（14 项）
+        run: python tests/selftest_easter_egg.py
 
       # 时长回归：人为把抓屏拖慢，验证"分段不会被静默丢弃"。
       # 这条专门覆盖慢机器场景，是硬性门槛。

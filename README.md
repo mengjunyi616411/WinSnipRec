@@ -68,6 +68,13 @@
 > ③ 中间提示文字先淡出并上移，换文案后从下方淡入（共 300ms）。
 > 全部走同一套 `winsnip/anim.py` 时长令牌，并受「界面动画」开关与系统设置约束。
 
+### 设置搜索与彩蛋
+
+设置窗口顶部有一个**搜索框**，输入关键词即可筛选设置项（搜不到时会提示"没有匹配的设置项"）。
+
+在这个搜索框里输入 **廉丰榕**，会弹出一张图片并问你一个问题：选「是」窗口关闭，
+选「否」它只会换个问法再问一次 —— 这是一个彩蛋。
+
 ### 首次运行引导
 
 第一次打开会在主窗口之上弹出一个 7 步的引导：欢迎 → 界面风格 → 主题 → 背景材质 →
@@ -435,7 +442,8 @@ WinSnipRec/
     ├── selftest_devices.py      设备枚举自测（15 项：绝不阻塞 GUI 线程）
     ├── selftest_backdrop.py     背景材质自测（18 项：像素探测、回退几何与裁剪区域）
     ├── selftest_i18n.py         多语言自测（21 项：覆盖检查、整应用重译、路径不改写）
-    ├── selftest_onboarding.py   引导自测（20 项：真实点击、四语言几何、写入设置）
+    ├── selftest_onboarding.py   引导自测（22 项：真实点击、选项过渡、四语言几何）
+    ├── selftest_easter_egg.py   彩蛋与设置搜索自测（14 项）
     └── selftest_mic_switch.py   录制中切换麦克风自测（9 项：时长不变、音画同步）
 ```
 
@@ -443,7 +451,7 @@ WinSnipRec/
 
 ## 9. 验证
 
-全部自测均可离线运行，共 **343 项断言**，当前全部通过：
+全部自测均可离线运行，共 **359 项断言**，当前全部通过：
 
 ```bat
 .venv\Scripts\python.exe tests\selftest_core.py            :: 51/51  内核
@@ -458,7 +466,8 @@ WinSnipRec/
 .venv\Scripts\python.exe tests\selftest_devices.py         :: 15/15  音频设备枚举不阻塞界面
 .venv\Scripts\python.exe tests\selftest_backdrop.py        :: 18/18  实时背景材质的探测、回退几何与裁剪区域
 .venv\Scripts\python.exe tests\selftest_i18n.py            :: 21/21  四种语言、整应用重译与覆盖检查
-.venv\Scripts\python.exe tests\selftest_onboarding.py      :: 20/20  首次运行引导（真实点击 + 四语言几何）
+.venv\Scripts\python.exe tests\selftest_onboarding.py      :: 22/22  首次运行引导（真实点击 + 四语言几何）
+.venv\Scripts\python.exe tests\selftest_easter_egg.py      :: 14/14  设置搜索与彩蛋
 .venv\Scripts\python.exe tests\selftest_settings_live.py   :: 10/10  真实桌面上的设置下拉框
 .venv\Scripts\python.exe app.py --selftest-ui              :: 生成 16 张界面截图
 ```

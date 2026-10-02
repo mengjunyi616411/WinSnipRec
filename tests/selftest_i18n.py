@@ -38,6 +38,8 @@ UNTRANSLATED = {
     ("winapi.py", "windows 输入体验"), ("winapi.py", "窗口"),
     ("__init__.py", "截图工具"),
     ("main_window.py", "截图 "), ("main_window.py", "屏幕录制 "),
+    # 彩蛋的触发词：是个暗号，翻译了就不叫暗号了
+    ("easter_egg.py", "廉丰榕"),
 }
 
 #: Stored as source strings and translated later, so the AST walk sees the raw

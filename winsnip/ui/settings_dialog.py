@@ -70,6 +70,7 @@ class SettingsWindow(FluentWindow):
         self.set_card_size(600, 640)
         self.setMinimumSize(520 + 40, 480 + 40)
         self._rows: list[_Row] = []
+        self._row_separators: list[QWidget] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 20)
@@ -100,6 +101,7 @@ class SettingsWindow(FluentWindow):
         self.devices_ready.connect(self._on_devices_ready)
 
         self._build_rows()
+        self._add_search_box()
 
         footer = QWidget(self)
         footer_layout = QHBoxLayout(footer)
@@ -133,7 +135,10 @@ class SettingsWindow(FluentWindow):
         row = _Row(title, subtitle, control, self)
         self._rows.append(row)
         self.body_layout.addWidget(row)
-        self.body_layout.addWidget(Separator(self, vertical=False))
+        separator = Separator(self, vertical=False)
+        # Kept so the search filter can hide the divider with its row.
+        self._row_separators.append(separator)
+        self.body_layout.addWidget(separator)
         return row
 
     def _build_rows(self) -> None:
@@ -381,6 +386,58 @@ class SettingsWindow(FluentWindow):
 
         self.close()
         show_onboarding()
+
+    # ------------------------------------------------------------------ #
+    # Search + easter egg
+    # ------------------------------------------------------------------ #
+    def _add_search_box(self) -> None:
+        from PySide6.QtWidgets import QLineEdit
+
+        holder = QWidget(self)
+        layout = QHBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 6)
+        layout.setSpacing(0)
+        self.search_box = QLineEdit(holder)
+        self.search_box.setPlaceholderText(_t("搜索设置"))
+        self.search_box.setClearButtonEnabled(True)
+        self.search_box.textChanged.connect(self._on_search)
+        layout.addWidget(self.search_box)
+        self.body_layout.insertWidget(0, holder)
+        self._search_holder = holder
+
+        # Shown when the filter hides everything, so the body is not just blank.
+        self._empty_hint = QLabel(_t("没有匹配的设置项"), self)
+        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setVisible(False)
+        self.body_layout.insertWidget(1, self._empty_hint)
+
+    def _on_search(self, text: str) -> None:
+        from .easter_egg import show_easter_egg, triggers
+
+        self._filter_rows(text)
+        if triggers(text):
+            show_easter_egg(self)
+
+    def _filter_rows(self, text: str) -> None:
+        """Hide rows whose title and subtitle do not contain the query."""
+        needle = (text or "").strip().lower()
+        visible = 0
+        for index, row in enumerate(self._rows):
+            haystack = f"{row.title.text()} {row.subtitle.text()}".lower()
+            match = not needle or needle in haystack
+            row.setVisible(match)
+            separator = (self._row_separators[index]
+                         if index < len(self._row_separators) else None)
+            if separator is not None:
+                separator.setVisible(match)
+            visible += int(match)
+        for label in getattr(self, "_section_labels", []):
+            if needle:
+                label.setVisible(False)
+            else:
+                label.setVisible(True)
+        if hasattr(self, "_empty_hint"):
+            self._empty_hint.setVisible(bool(needle) and visible == 0)
 
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])

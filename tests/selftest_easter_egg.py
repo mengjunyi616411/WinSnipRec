@@ -1,0 +1,153 @@
+"""Easter-egg tests.
+
+The egg hangs off the settings search box, so this also covers the search
+filter it needed (the settings window had no place to type before).
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+os.environ.setdefault("WINSNIPREC_HOME", str(ROOT / "_selftest_egg" / "_config"))
+
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+from winsnip import i18n, winapi  # noqa: E402
+from winsnip.settings import settings  # noqa: E402
+
+checks: list[tuple[str, bool, str]] = []
+
+
+def check(name: str, ok: bool, detail: str = "") -> None:
+    checks.append((name, bool(ok), detail))
+    print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" :: {detail}" if detail else ""))
+
+
+def pump(app: QApplication, seconds: float) -> None:
+    end = time.perf_counter() + seconds
+    while time.perf_counter() < end:
+        app.processEvents()
+        time.sleep(0.005)
+
+
+def main() -> int:
+    winapi.enable_per_monitor_dpi_awareness()
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+
+    from winsnip.theme import apply_app_theme, theme
+    from winsnip.ui import easter_egg
+    from winsnip.ui.easter_egg import EasterEggWindow, asset_path, show_easter_egg, triggers
+    from winsnip.ui.settings_dialog import SettingsWindow
+
+    theme.style = "win11"
+    theme.mode = "dark"
+    theme.refresh()
+    apply_app_theme(app)
+    settings.animations = False
+    settings.minimize_to_tray = False
+    i18n.set_language("zh-Hans")
+
+    # ---------------- 1. 素材 ----------------
+    path = asset_path(easter_egg.ASSET_NAME)
+    check("彩蛋图片在 assets/ 里能找到", path is not None and path.is_file(),
+          str(path))
+
+    window = EasterEggWindow()
+    window.show()
+    pump(app, 0.8)
+    pixmap = window.image_label.pixmap()
+    check("图片能加载并缩放显示",
+          pixmap is not None and not pixmap.isNull() and pixmap.width() > 100,
+          f"{pixmap.width()}x{pixmap.height()}" if pixmap else "无")
+
+    # ---------------- 2. 触发词 ----------------
+    check("只有输入廉丰榕才会触发",
+          triggers("廉丰榕") and triggers("xx廉丰榕xx")
+          and not triggers("廉丰") and not triggers("") and not triggers("榕丰廉"),
+          "廉丰榕 命中，其它不命中")
+    check("问题文案正确", window.question.text() == i18n.t("你是萝莉控吗？"),
+          window.question.text())
+
+    # ---------------- 3. 选「否」会重新问 ----------------
+    first_question = window.question.text()
+    window._on_no()
+    pump(app, 0.4)
+    check("选「否」窗口不关闭，换成「再选一次？」",
+          window.isVisible() and window.question.text() != first_question
+          and window.question.text() == i18n.t("再选一次？"),
+          f"{first_question!r} -> {window.question.text()!r}")
+
+    # ---------------- 4. 选「是」才消失 ----------------
+    window._on_yes()
+    pump(app, 0.4)
+    check("选「是」窗口消失", not window.isVisible() and window.answer_is_yes())
+
+    # ---------------- 5. 设置里的搜索框触发 ----------------
+    settings_window = SettingsWindow()
+    settings_window.show()
+    pump(app, 1.0)
+    check("设置里有搜索框（否则中文输入法无处可输）",
+          hasattr(settings_window, "search_box"), "search_box 存在")
+
+    total_rows = len(settings_window._rows)
+    settings_window.search_box.setText(i18n.t("语言"))
+    pump(app, 0.4)
+    visible = sum(1 for row in settings_window._rows if row.isVisible())
+    check("搜索会过滤设置项", 0 < visible < total_rows,
+          f"「语言」命中 {visible}/{total_rows}")
+
+    settings_window.search_box.setText("")
+    pump(app, 0.3)
+    check("清空搜索恢复全部设置项",
+          sum(1 for row in settings_window._rows if row.isVisible()) == total_rows,
+          f"{total_rows} 行全部可见")
+
+    settings_window.search_box.setText(easter_egg.TRIGGER)
+    pump(app, 1.2)
+    check("在搜索框输入廉丰榕会弹出彩蛋", easter_egg.open_count() == 1,
+          f"彩蛋窗口数={easter_egg.open_count()}")
+    check("已经弹出时不会重复弹",
+          show_easter_egg() is None and easter_egg.open_count() == 1,
+          f"彩蛋窗口数={easter_egg.open_count()}")
+
+    for egg in list(easter_egg._OPEN):
+        egg._on_yes()
+    pump(app, 0.5)
+    check("关闭后不再占用窗口", easter_egg.open_count() == 0,
+          f"彩蛋窗口数={easter_egg.open_count()}")
+
+    # ---------------- 6. 四种语言 ----------------
+    missing = [code for code in ("zh-Hant", "en", "ja")
+               if not i18n.TABLE.get("你是萝莉控吗？")
+               or not i18n.TABLE.get("搜索设置")]
+    check("彩蛋与搜索文案四种语言齐全", not missing, ", ".join(missing) or "齐全")
+
+    translations = {}
+    for code in ("zh-Hant", "en", "ja"):
+        i18n.set_language(code)
+        translations[code] = i18n.t("你是萝莉控吗？")
+    check("三种译文的问句各不相同",
+          len(set(translations.values())) == 3, str(translations))
+    i18n.set_language("zh-Hans")
+
+    settings_window.close()
+    settings_window.deleteLater()
+    pump(app, 0.3)
+
+    failures = [name for name, ok, _ in checks if not ok]
+    print("\n--- EASTER EGG SELFTEST SUMMARY ---")
+    for name, ok, detail in checks:
+        print(f"  {'PASS' if ok else 'FAIL'}  {name}" + (f"  ({detail})" if detail else ""))
+    print(f"{len(checks) - len(failures)}/{len(checks)} checks passed")
+    print("EASTER EGG SELFTEST: " + ("PASS" if not failures else "FAIL: " + ", ".join(failures)))
+    return 0 if not failures else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
