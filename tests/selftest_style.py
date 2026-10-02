@@ -255,8 +255,11 @@ def main() -> int:
     moved_there = delta_at(before2, after2, window10, window10.width() * 0.72,
                            window10.height() * 0.72)
     moved_old = delta_at(before2, after2, window10, spot_x, spot_y)
+    # 阈值跟随光效亮度：用户反馈"太亮"后峰值被调低（深色 0.26->0.15、浅色 0.85->0.50），
+    # 加上窗口几何变更，采样点色差从 ~14 降到 ~11。这里要保证的是"光斑确实跟着走"
+    # （新位置有、旧位置没有），而不是具体幅度。
     check("光斑会跟着指针移动",
-          moved_there >= 12 and moved_old < near,
+          moved_there >= 8 and moved_old < near,
           f"新位置色差 {moved_there}，旧位置 {moved_old}（原为 {near}）")
 
     # 按钮也要被光照到（子控件画在窗口之上）
