@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QPainterPath, QPixmap, QRadialGradient,
 )
 from PySide6.QtWidgets import (
+    QGraphicsOpacityEffect,
     QApplication,
     QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
@@ -785,6 +786,16 @@ class FluentWindow(QWidget):
 # --------------------------------------------------------------------------- #
 # Buttons
 # --------------------------------------------------------------------------- #
+def _mix_colour(first: QColor, second: QColor, amount: float) -> QColor:
+    """Linear blend between two colours, alpha included."""
+    amount = max(0.0, min(1.0, amount))
+    return QColor(
+        int(first.red() + (second.red() - first.red()) * amount),
+        int(first.green() + (second.green() - first.green()) * amount),
+        int(first.blue() + (second.blue() - first.blue()) * amount),
+        int(first.alpha() + (second.alpha() - first.alpha()) * amount))
+
+
 class FluentButton(QPushButton):
     """Standard / accent / subtle / hyperlink button in the Fluent style."""
 
@@ -804,6 +815,11 @@ class FluentButton(QPushButton):
     ) -> None:
         super().__init__(text, parent)
         self.variant = variant
+        # Choice rows drive the look through _selection so that picking an option
+        # can fade; elsewhere the variant alone decides and nothing changes.
+        self._choice = False
+        self._selection = 0.0
+        self._selection_anim: QVariantAnimation | None = None
         self.icon_name = icon_name
         self.icon_size = icon_size
         self._radius_override = radius
@@ -846,6 +862,41 @@ class FluentButton(QPushButton):
         self._pressed = False
         self.update()
         super().mouseReleaseEvent(event)
+
+    # -- animated selection (used by the first-run guide's choice rows) ----- #
+    def set_choice_mode(self, on: bool) -> None:
+        """Let _selection drive the appearance instead of the variant."""
+        self._choice = bool(on)
+        self.update()
+
+    def selection(self) -> float:
+        """0 = standard appearance, 1 = accent (exposed for the tests)."""
+        return self._selection
+
+    def set_selection(self, value: float) -> None:
+        self._selection = max(0.0, min(1.0, float(value)))
+        self.update()
+
+    def animate_selection(self, target: float, *, animate: bool = True,
+                          duration: int | None = None) -> None:
+        """Fade between the standard and accent appearances."""
+        target = max(0.0, min(1.0, float(target)))
+        if self._selection_anim is not None:
+            self._selection_anim.stop()
+            self._selection_anim = None
+        if not animate or not anim.animations_enabled() \
+                or abs(self._selection - target) < 0.001:
+            self.set_selection(target)
+            return
+        timeline = QVariantAnimation(self)
+        timeline.setDuration(duration or anim.DURATION_FAST)
+        timeline.setStartValue(self._selection)
+        timeline.setEndValue(target)
+        timeline.setEasingCurve(anim.curve("out"))
+        timeline.valueChanged.connect(self.set_selection)
+        timeline.finished.connect(lambda: setattr(self, "_selection_anim", None))
+        self._selection_anim = timeline
+        timeline.start(QVariantAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -904,6 +955,22 @@ class FluentButton(QPushButton):
         else:
             text_color = QColor(palette.text_primary) if enabled else QColor(palette.text_disabled)
             icon_color = QColor(palette.accent) if (self.accent_icon and enabled) else text_color
+
+        # Blend standard -> accent by the animated selection, so picking an
+        # option in a choice row fades instead of snapping.
+        if self._choice and self._selection > 0.0:
+            amount = self._selection
+            accent = QColor(palette.accent)
+            bg = accent if bg is None else _mix_colour(bg, accent, amount)
+            if border is not None:
+                border = QColor(border)
+                border.setAlpha(int(border.alpha() * (1.0 - amount)))
+            text_color = _mix_colour(text_color, QColor("#FFFFFF"), amount)
+            icon_color = _mix_colour(icon_color, QColor("#FFFFFF"), amount)
+            if bg is not None:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(bg)
+                painter.drawRoundedRect(rect, control_radius(self), control_radius(self))
 
         metrics = QFontMetrics(self.font())
         text_width = metrics.horizontalAdvance(self.text())

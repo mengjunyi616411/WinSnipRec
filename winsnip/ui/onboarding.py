@@ -156,12 +156,13 @@ class _ChoiceRow(QWidget):
         for index, label in enumerate(labels):
             button = _button(label, self, on_click=lambda i=index: self.select(i))
             button.setMinimumHeight(36)
+            button.set_choice_mode(True)
             self._buttons.append(button)
             layout.addWidget(button)
         self._available = CARD_WIDTH - CHROME - RAIL_MIN
         self.fit(self._available)
         layout.addStretch(1)
-        self.select(current, emit=False)
+        self.select(current, emit=False, animate=False)
 
     def fit(self, available: int) -> None:
         """Share the width this row may use between its buttons.
@@ -178,14 +179,16 @@ class _ChoiceRow(QWidget):
         for button in self._buttons:
             button.setMinimumWidth(min_width)
 
-    def select(self, index: int, *, emit: bool = True) -> None:
+    def select(self, index: int, *, emit: bool = True, animate: bool = True) -> None:
         for position, button in enumerate(self._buttons):
-            new_variant = "accent" if position == index else "standard"
+            selected = position == index
+            new_variant = "accent" if selected else "standard"
             if button.variant != new_variant:
                 button.variant = new_variant
-                # FluentButton draws everything in paintEvent; there is no
-                # refresh() method, just repaint with the new variant.
-                button.update()
+            # The look comes from the animated _selection, so picking an option
+            # fades instead of snapping. `variant` stays the logical marker that
+            # current() reads.
+            button.animate_selection(1.0 if selected else 0.0, animate=animate)
         if emit:
             self.changed.emit(index)
 

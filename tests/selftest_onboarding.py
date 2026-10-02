@@ -234,6 +234,39 @@ def main() -> int:
     window.show()
     pump(app, 0.4)
 
+    # ---------------- 2d. 切换选项要有过渡，不能瞬间跳 ----------------
+    # 引导里的选项按钮走 FluentButton 的 _selection 混合：0 是标准外观、
+    # 1 是强调外观。这里要确认它是"渐变过去的"，而不是一步到位。
+    window._go_to(2)
+    pump(app, 0.3)
+    # 这个套件默认关掉了界面动画（避免拖慢其它断言），但这条断言测的就是动画本身
+    settings.animations = True
+    button = window.theme_choice._buttons[1]
+    real_click(app, button)
+    samples = []
+    for _ in range(14):
+        app.processEvents()
+        samples.append(round(button.selection(), 3))
+        time.sleep(0.012)
+    pump(app, 0.4)
+    from winsnip import anim as _anim
+
+    # 时序断言依赖机器速度，这里同时给出一个确定性的机制断言：
+    # 打开动画时 animate_selection 应当真的启动一条动画，而不是直接赋值。
+    button.set_selection(0.0)
+    button.animate_selection(1.0, animate=True)
+    started = button._selection_anim is not None
+    check("切换选项会启动过渡动画（不是直接赋值）",
+          started or not _anim.animations_enabled(),
+          f"动画可用={_anim.animations_enabled()} 已启动动画={started} "
+          f"采样={samples[:6]}")
+    pump(app, 0.5)          # 等上面那条机制断言启动的动画跑完
+    settings.animations = False
+    check("过渡结束后稳定在选中态，旧选项回到未选中",
+          abs(button.selection() - 1.0) < 0.01
+          and window.theme_choice._buttons[0].selection() < 0.01,
+          f"新={button.selection():.2f} 旧={window.theme_choice._buttons[0].selection():.2f}")
+
     # ---------------- 3. 切换语言会重建 ----------------
     before_window = onboarding.current_onboarding()
     window._go_to(5)
