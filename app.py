@@ -36,13 +36,23 @@ LOG_PATH = app_data_dir() / "app.log"
 
 
 def _setup_logging() -> None:
-    logging.basicConfig(
-        filename=str(LOG_PATH),
-        filemode="a",
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        encoding="utf-8",
-    )
+    """Start file logging, but never let it stop the app.
+
+    app.log is opened by whichever instance is running, so a second launch gets
+    PermissionError. Logging is a diagnostic, not a prerequisite: fall back to a
+    per-process file, then to console only.
+    """
+    fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+    for candidate in (LOG_PATH, app_data_dir() / f"app-{os.getpid()}.log"):
+        try:
+            logging.basicConfig(filename=str(candidate), filemode="a", level=logging.INFO,
+                                format=fmt, encoding="utf-8", force=True)
+        except OSError:
+            continue
+        break
+    else:
+        logging.basicConfig(level=logging.INFO, format=fmt, force=True)
+        logging.warning("log file not writable, continuing without file logging")
     logging.info("---- WinSnipRec %s starting (python %s) ----", __version__,
                  sys.version.split()[0])
 
@@ -163,7 +173,9 @@ def _show_first_run_guide() -> None:
 
 
 def main() -> int:
-    _setup_logging()
+    # 单实例检查要排在日志之前：已在运行的实例占着 app.log，先开日志会抛
+    # PermissionError，用户看到的是崩溃窗口而不是"已经在运行"的提示。
+    # （这里不弹窗，因为还没有 QApplication；真正的提示在下面 QApplication 之后。）
     winapi.enable_per_monitor_dpi_awareness()
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
@@ -174,6 +186,12 @@ def main() -> int:
     app.setOrganizationName("WinSnipRec")
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(icons.app_icon())
+
+    if not any(flag.startswith("--selftest") for flag in sys.argv) and not _single_instance():
+        QMessageBox.information(None, "截图工具", "截图工具已经在运行。\n可在任务栏通知区域找到它。")
+        return 0
+
+    _setup_logging()
     from winsnip import i18n
 
     i18n.set_language(getattr(settings, "language", "system"))
@@ -184,10 +202,6 @@ def main() -> int:
 
     # Self-test runs must never be blocked by a running copy of the app (they
     # would otherwise sit on a modal "already running" dialog forever).
-    if not any(flag.startswith("--selftest") for flag in sys.argv) and not _single_instance():
-        QMessageBox.information(None, "截图工具", "截图工具已经在运行。\n可在任务栏通知区域找到它。")
-        return 0
-
     settings.ensure_dirs()
 
     if "--selftest-ui" in sys.argv:
