@@ -512,7 +512,7 @@ class AboutWindow(FluentWindow):
         super().__init__(None)
         self.setWindowTitle(_t("关于"))
         self.setWindowIcon(icons.app_icon())
-        self.set_card_size(430, 300)
+        self.set_card_size(430, 322)
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(0)
@@ -549,6 +549,14 @@ class AboutWindow(FluentWindow):
         description.setWordWrap(True)
         description.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(description)
+
+        layout.addSpacing(2)
+        self.producer = QLabel(_t("制作人：天童 アリス"), body)
+        self.producer.setObjectName("aboutProducer")
+        self.producer.setFont(ui_font(12, 600))
+        self.producer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.producer)
+
         layout.addStretch(1)
         close_button = FluentButton(_t("确定"), body, variant="accent", height=36)
         close_button.clicked.connect(self.close)
@@ -563,3 +571,8 @@ class AboutWindow(FluentWindow):
             if label.pixmap() is not None and not label.pixmap().isNull():
                 continue
             label.setStyleSheet(f"color: {palette.text_primary};")
+        # After the loop: it paints every label primary, and the credit should
+        # stand out.
+        producer = getattr(self, "producer", None)
+        if producer is not None:
+            producer.setStyleSheet(f"color: {palette.accent};")
