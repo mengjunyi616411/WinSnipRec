@@ -255,6 +255,12 @@ def main() -> int:
     main.show()
     pump(app, 0.6)
     segment = main.segmented
+    # 用户要求「截图与录屏切换按钮动画慢一点」：这里钉住时长，防止以后被改回
+    # 通用值（DURATION_NORMAL 240ms）。
+    check("截图/录屏切换的动画比通用动效慢",
+          segment.animation_duration() == anim.DURATION_MODE_SWITCH
+          and segment.animation_duration() > anim.DURATION_NORMAL,
+          f"{segment.animation_duration()} ms（通用动效 {anim.DURATION_NORMAL} ms）")
 
     def icon_luma(index: int) -> float:
         """Darkest pixel inside one segment's icon cell."""

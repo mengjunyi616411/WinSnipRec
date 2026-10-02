@@ -1219,7 +1219,8 @@ class SegmentedControl(QWidget):
     itemClicked = Signal(int)
 
     def __init__(self, items: list[tuple[str, str]], parent: QWidget | None = None,
-                 *, item_width: int = 54, height: int = 36) -> None:
+                 *, item_width: int = 54, height: int = 36,
+                 duration: int | None = None) -> None:
         super().__init__(parent)
         self._items = items
         self._item_width = item_width
@@ -1230,7 +1231,8 @@ class SegmentedControl(QWidget):
         self._to_index = 0
         self._progress = 1.0
         self._anim = QVariantAnimation(self)
-        self._anim.setDuration(anim.DURATION_NORMAL)
+        # 专用时长：这是命令栏上的模式切换，比通用动效慢一点。
+        self._anim.setDuration(duration or anim.DURATION_MODE_SWITCH)
         self._anim.setEasingCurve(anim.curve("decelerate"))
         self._anim.valueChanged.connect(self._on_progress)
         self.setFixedSize(item_width * len(items), height)
@@ -1246,6 +1248,10 @@ class SegmentedControl(QWidget):
             if index < len(self._items):
                 self._items[index] = (self._items[index][0], label)
         self.update()
+
+    def animation_duration(self) -> int:
+        """The mode-switch animation length in ms (exposed for the tests)."""
+        return self._anim.duration()
 
     def current(self) -> int:
         return self._current

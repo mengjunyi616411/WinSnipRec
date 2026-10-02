@@ -21,6 +21,9 @@ from . import winapi
 DURATION_FAST = 150
 DURATION_NORMAL = 240
 DURATION_SLOW = 320
+#: 截图/录屏 切换（命令栏的分段控件）。比通用动效慢，让滑动指示条读起来像一次
+#: 明确的模式切换，而不是一闪而过。
+DURATION_MODE_SWITCH = 400
 
 
 def _settings_enabled() -> bool:
