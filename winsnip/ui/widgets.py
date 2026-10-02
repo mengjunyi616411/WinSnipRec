@@ -28,7 +28,11 @@ from ..theme import (
 )
 from ..i18n import t as _t
 
-SHADOW_MARGIN = 20
+#: Transparent band around the card, kept for a drop shadow. Zero: the shadow
+#: rendered at ~8 % alpha, while the band turned into a black frame in every
+#: window capture (transparent pixels composite onto black). Each window's root
+#: layout still insets its content by 20px, so nothing else changes.
+SHADOW_MARGIN = 0
 
 
 def paint_reveal_border(widget, painter: QPainter, radius: float) -> None:
@@ -198,7 +202,7 @@ class FluentWindow(QWidget):
         *,
         resizable: bool = False,
         radius: int | None = None,        # None = follow the active style
-        shadow: bool = True,
+        shadow: bool = False,      # no margin left to draw one in
         tint_strength: float = 0.90,
         margin: int = SHADOW_MARGIN,
         open_animation: str = "slide",        # slide | fade | none
@@ -349,7 +353,7 @@ class FluentWindow(QWidget):
             self._paint_native_border(painter)
             return
         card = self.card_rect()
-        if self._shadow:
+        if self._shadow and self._margin > 0:
             if self._shadow_pixmap is None or self._shadow_pixmap.size() != self.size():
                 self._shadow_pixmap = render_shadow(self.size(), max(1, self.radius * 2),
                                                     spread=self._margin,
@@ -625,7 +629,7 @@ class FluentWindow(QWidget):
         self._native_backdrop = False
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._margin = SHADOW_MARGIN
-        self._shadow = True
+        self._shadow = False
         try:
             handle = self.windowHandle()
             if handle is not None:

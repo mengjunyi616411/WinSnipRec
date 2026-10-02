@@ -221,9 +221,10 @@ def main() -> int:
     probe2.deleteLater()
     pump(app, 0.4)
 
-    check("回退后窗口向外扩出阴影边距",
-          probe_window._margin > margin_before
-          and probe_window.width() == card_after.width() + 2 * probe_window._margin
+    # 边距已归零（原本那圈透明边距在窗口截图里会变成黑边），所以回退时窗口不再
+    # 需要向外扩；要保证的是卡片仍然铺满窗口。
+    check("回退后卡片仍然铺满窗口",
+          probe_window.width() == card_after.width() + 2 * probe_window._margin
           and probe_window.height() == card_after.height() + 2 * probe_window._margin,
           f"窗口 {probe_window.width()}x{probe_window.height()} "
           f"= 卡片 {card_after.width()}x{card_after.height()} + 2x{probe_window._margin}")
