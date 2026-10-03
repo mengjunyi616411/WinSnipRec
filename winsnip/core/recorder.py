@@ -664,7 +664,8 @@ class Recorder(QObject):
         if writer.error is not None:
             raise RuntimeError(writer.error)
         self._writer = writer
-        segment: dict = {"video": video_path, "wav": None, "frames": 0, "seconds": 0.0}
+        segment: dict = {"video": video_path, "wav": None, "frames": 0, "seconds": 0.0,
+                         "mic_requested": False}
 
         if self._mic is not None and not self._mic_disabled:
             wav_path = os.path.join(self._tmp_dir, f"seg{index:03d}.wav")
@@ -672,6 +673,9 @@ class Recorder(QObject):
             if proc is not None:
                 self._mic_proc = proc
                 segment["wav"] = wav_path
+                # 记下"这段本来要录麦克风"：即使它一个字节都没送来（收尾时会把 wav
+                # 清成 None），成片也应当带一条静音音轨，而不是完全没有音轨。
+                segment["mic_requested"] = True
             else:
                 self._mic_disabled = True
         self._segment = segment
@@ -1288,7 +1292,6 @@ class Recorder(QObject):
         # length) or an equal length of silence.  That keeps the concatenated
         # audio aligned with the video instead of dropping it entirely.
         audio_parts: list[str] = []
-        any_audio = False
         for index, segment in enumerate(segments):
             seconds = float(segment.get("seconds") or 0.0)
             needed = int(seconds * _MIC_RATE * _MIC_CHANNELS * _MIC_SAMPLE_BYTES)
@@ -1297,14 +1300,18 @@ class Recorder(QObject):
             if usable:
                 _patch_wav(wav, pad_to_bytes=needed)
                 audio_parts.append(wav)
-                any_audio = True
             elif needed > 0:
                 silent = os.path.join(tmp, f"silence{index:03d}.wav")
                 if _write_silence_wav(silent, needed):
                     audio_parts.append(silent)
 
         audio_src: Optional[str] = None
-        if any_audio and audio_parts:
+        # 判据是"这段本来要不要录麦克风"，而不是"有没有真的收到音频"：
+        #   - 请求过麦克风但没送来数据 -> 上面已用等长静音补齐，应当保留音轨
+        #     （否则成片完全没有音轨，测试里表现为间歇性的 audio=None）；
+        #   - 完全没开麦克风 -> 不该凭空造一条静音轨。
+        wants_audio = any(segment.get("mic_requested") for segment in segments)
+        if audio_parts and wants_audio:
             if len(audio_parts) == 1:
                 audio_src = audio_parts[0]
             else:
