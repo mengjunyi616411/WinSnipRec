@@ -882,6 +882,60 @@ def main() -> int:
     theme.style = "win11"
     theme.refresh()
 
+    # ---------------- 明暗切换：交叉淡变 + 背景真的会变 ---------------- #
+    from winsnip.anim import _ThemeFadeOverlay
+
+    def _overlays() -> int:
+        return sum(len(w.findChildren(_ThemeFadeOverlay))
+                   for w in app.topLevelWidgets())
+
+    # 淡变只在动画开启时才播（套件其余部分把动画关了），这里先打开再恢复。
+    animations_before = settings.animations
+    settings.animations = True
+    settings.theme = "light"
+    theme.style = "win11"
+    theme.mode = "light"
+    theme.refresh()
+    apply_app_theme(app)
+    switch = MainWindow()
+    switch.show()
+    pump(app, 0.8)
+
+    def _card_luma() -> int:
+        image = switch.grab().toImage()
+        c = image.pixelColor(image.width() // 2, int(image.height() * 0.55))
+        return c.red() + c.green() + c.blue()
+
+    light_luma = _card_luma()
+    settings.theme = "dark"
+    switch._on_settings_applied()
+    # 浮层是同步创建的：这里不能再 pump，慢机器上 30ms 就可能已经淡完销毁了。
+    mid_overlays = _overlays()
+    check("切换明暗时出现交叉淡变浮层", mid_overlays >= 1, f"{mid_overlays} 个")
+    pump(app, 1.2)
+    check("淡变结束后浮层被销毁", _overlays() == 0, f"{_overlays()} 个")
+
+    dark_luma = _card_luma()
+    # 背景来自缓存的 static_card()：不清缓存的话实时切换后底色仍是旧的
+    # （实测过：以深色启动是 #303233，但实时切到深色后仍停在 #F0F2F4）
+    check("实时切换到深色后窗口底色真的变暗", dark_luma < light_luma - 300,
+          f"浅色 {light_luma} -> 深色 {dark_luma}")
+
+    # 改一个跟明暗无关的设置项：不应该闪
+    settings.fps = 24
+    switch._on_settings_applied()
+    pump(app, 0.05)
+    check("改非明暗设置项不会出现淡变浮层", _overlays() == 0, f"{_overlays()} 个")
+
+    switch._quitting = True
+    switch.close()
+    pump(app, 0.3)
+    settings.animations = animations_before
+    theme.style = "win11"
+    theme.mode = "light"
+    theme.refresh()
+    apply_app_theme(app)
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

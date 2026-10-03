@@ -904,25 +904,42 @@ class MainWindow(FluentWindow):
     def _on_settings_applied(self) -> None:
         from PySide6.QtWidgets import QApplication
 
+        from .. import anim
         from ..theme import apply_app_theme
 
-        theme.mode = settings.theme
-        theme.refresh()
         app = QApplication.instance()
-        if app is not None:
-            # Palette + stylesheet must be rebuilt, otherwise the Qt-drawn
-            # controls (combo boxes and their popups) keep the old theme.
-            apply_app_theme(app)
-        self.refresh_theme()
-        self._update_hint()
-        for widget in app.topLevelWidgets() if app is not None else []:
-            refresh = getattr(widget, "refresh_theme", None)
-            if callable(refresh):
-                try:
-                    refresh()
-                except Exception:
-                    pass
-            widget.update()
+        was_dark = theme.dark
+        windows = [w for w in (app.topLevelWidgets() if app is not None else []) if w.isVisible()]
+
+        def apply_theme() -> None:
+            theme.mode = settings.theme
+            theme.refresh()
+            if app is not None:
+                # Palette + stylesheet must be rebuilt, otherwise the Qt-drawn
+                # controls (combo boxes and their popups) keep the old theme.
+                apply_app_theme(app)
+            self.refresh_theme()
+            self._update_hint()
+            for widget in app.topLevelWidgets() if app is not None else []:
+                # 背景来自缓存的 static_card()，不清掉的话明暗切换后窗口底色还是旧的
+                # ——实测：以深色启动是 #303233，但实时切到深色后仍是 #F0F2F4。
+                # （_on_style_changed 里本来就调了 invalidate_backdrop，这里漏了。）
+                invalidate = getattr(widget, "invalidate_backdrop", None)
+                if callable(invalidate):
+                    try:
+                        invalidate()
+                    except Exception:
+                        pass
+                refresh = getattr(widget, "refresh_theme", None)
+                if callable(refresh):
+                    try:
+                        refresh()
+                    except Exception:
+                        pass
+                widget.update()
+
+        # 明暗真的翻转时做交叉淡变（旧画面在上层淡出），改其它设置项则完全不闪。
+        anim.fade_theme_change(windows, apply_theme, changed=lambda: theme.dark != was_dark)
         self.settingsChanged.emit()
 
     def _on_settings_closed(self) -> None:

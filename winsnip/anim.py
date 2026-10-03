@@ -117,6 +117,73 @@ def play_window_open(window: QWidget, *, slide: int = 14, fade_only: bool = Fals
     QTimer.singleShot(max(600, duration * 4 + 500), finished)
 
 
+class _ThemeFadeOverlay(QWidget):
+    """Paints a snapshot of how a window looked before the theme switched.
+
+    Shown on top of the freshly re-themed window and faded out, so light <-> dark
+    cross-fades instead of snapping between two very different looks.
+    """
+
+    def __init__(self, parent: QWidget, snapshot: QPixmap) -> None:
+        super().__init__(parent)
+        self._snapshot = snapshot
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setGeometry(parent.rect())
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        from PySide6.QtGui import QPainter
+
+        painter = QPainter(self)
+        painter.drawPixmap(self.rect(), self._snapshot)
+        painter.end()
+
+
+def fade_theme_change(windows, apply, *, changed=lambda: True,
+                      duration: int = DURATION_NORMAL) -> None:
+    """Run ``apply`` (the theme switch) behind a cross-fade of the previous look.
+
+    Snapshots are taken *before* ``apply`` runs. If ``changed()`` reports False
+    afterwards -- the light/dark state did not actually flip -- the overlays are
+    dropped, so changing an unrelated setting never flashes.
+    """
+    if not animations_enabled():
+        apply()
+        return
+
+    snapshots: list[tuple[QWidget, QPixmap]] = []
+    for window in windows:
+        try:
+            if window.isVisible() and window.width() > 1 and window.height() > 1:
+                snapshots.append((window, window.grab()))
+        except Exception:
+            pass
+
+    apply()
+
+    try:
+        if not changed():
+            return
+    except Exception:
+        return
+
+    for window, snapshot in snapshots:
+        try:
+            overlay = _ThemeFadeOverlay(window, snapshot)
+            overlay.show()
+            overlay.raise_()
+            effect = QGraphicsOpacityEffect(overlay)
+            overlay.setGraphicsEffect(effect)
+            animation = QPropertyAnimation(effect, b"opacity", overlay)
+            animation.setDuration(duration)
+            animation.setStartValue(1.0)
+            animation.setEndValue(0.0)
+            animation.setEasingCurve(curve("out"))
+            animation.finished.connect(overlay.deleteLater)
+            animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+        except Exception:
+            pass
+
+
 def show_window_animated(window: QWidget, *, slide: int = 14,
                          duration: int = DURATION_NORMAL) -> None:
     """Show a window with the Fluent enter transition.
