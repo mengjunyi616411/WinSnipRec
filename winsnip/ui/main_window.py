@@ -284,16 +284,6 @@ class MainWindow(FluentWindow):
         self.audio_button.clicked.connect(self._show_audio_menu)
         command_layout.addWidget(self.audio_button)
 
-        # Windows 11 的截图工具在麦克风右侧有一条竖分隔线和一个按钮。
-        # 这里只做外观对齐：按钮复用「窗口截图」（形状菜单里本来就有），不新增功能。
-        self.command_separator = Separator(command, vertical=True, height=28)
-        command_layout.addWidget(self.command_separator)
-
-        self.region_button = IconButton("scan_text", command, width=44, height=36)
-        self.region_button.setToolTip(_t("窗口"))
-        self.region_button.clicked.connect(self._snip_window_shortcut)
-        command_layout.addWidget(self.region_button)
-
         command_layout.addStretch(1)
 
         self.more_button = IconButton("more", command, width=40, height=36)
@@ -357,7 +347,6 @@ class MainWindow(FluentWindow):
         self.new_button.setText(_t("新建"))
         self.segmented.set_labels([_t("截图"), _t("录屏")])
         self.folder_button.setText(_t("打开保存文件夹"))
-        self.region_button.setToolTip(_t("窗口"))
         self.tray.setToolTip(_t("截图工具"))
         for action, source in getattr(self, "_tray_actions", []):
             action.setText(_t(source))
@@ -435,13 +424,6 @@ class MainWindow(FluentWindow):
             menu.add_item(label, icon_name=icon_name, checked=(key == self._shape), enabled=enabled,
                           on_activate=lambda k=key: self._set_shape(k))
         menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() + 6)))
-
-    def _snip_window_shortcut(self) -> None:
-        """Pick the window shape and start a capture - the existing 窗口 flow."""
-        if self._shape != "window":
-            self._set_shape("window")
-            show_toast(_t("选择捕获区域"), _t("窗口"), "info", duration=1600)
-        self.start_capture()
 
     def _set_shape(self, shape: str) -> None:
         self._shape = shape
