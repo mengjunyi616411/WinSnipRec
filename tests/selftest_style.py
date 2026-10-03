@@ -240,6 +240,16 @@ def main() -> int:
         return (abs(a.red() - b.red()) + abs(a.green() - b.green())
                 + abs(a.blue() - b.blue()))
 
+    # 标题栏要贴着窗口边缘：根布局一旦重新加上边距，标题按钮就会被推离右上角。
+    for name, window in windows.items():
+        bar = window.title_bar
+        close = bar.caption_buttons["close"]
+        right_gap = window.width() - bar.x() - bar.width()
+        check(f"{name} 标题栏铺满窗口宽度", bar.x() == 0 and right_gap == 0,
+              f"x={bar.x()} 宽={bar.width()} 右边距={right_gap}")
+        gap = window.width() - close.x() - close.width()
+        check(f"{name} 关闭按钮贴着右上角", gap == 0, f"距右边 {gap}px")
+
     window10 = windows["win10"]
     spot_x, spot_y = window10.width() * 0.30, window10.height() * 0.40
     before, after = reveal_probe(window10, spot_x, spot_y)

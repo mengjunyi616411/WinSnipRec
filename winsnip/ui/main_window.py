@@ -247,7 +247,9 @@ class MainWindow(FluentWindow):
     # ------------------------------------------------------------------ #
     def _build(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
+        # 标题栏要贴着窗口边缘（Win11 的标题按钮就在右上角），所以根布局不留边距；
+        # 命令栏和内容区各自带 16/20px 内边距，视觉上不受影响。
+        root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         self.title_bar = TitleBar(_t("截图工具"), self)

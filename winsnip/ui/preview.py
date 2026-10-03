@@ -67,7 +67,8 @@ class ImagePreviewWindow(FluentWindow):
         self._pixmap = QPixmap.fromImage(image)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
+        # 同主窗口：标题栏铺满，内容区靠自己的内边距
+        root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         self._title_path: str | None = None

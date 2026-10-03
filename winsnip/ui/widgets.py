@@ -1740,7 +1740,8 @@ class TitleBar(QWidget):
                 button = CaptionButton(kind, self)
                 self.caption_buttons[kind] = button
                 layout.addWidget(button)
-            layout.addSpacing(4)
+            # 不再在右侧留 4px：标题按钮贴到窗口右上角
+            layout.addSpacing(0)
         self.refresh()
 
     def paintEvent(self, event) -> None:  # noqa: N802
