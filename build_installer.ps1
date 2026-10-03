@@ -109,3 +109,21 @@ Step '完成'
 Write-Host "安装包: $out" -ForegroundColor Green
 Write-Host "体积  : $size MB"
 Write-Host "SHA256: $hash"
+
+# ---------------------------------------------------------------- 英文路径副本
+# Inno 安装包放在含中文和空格的路径下双击不会启动：没有进程、没有日志、也没有退出码，
+# 看起来就像"双击没反应"。实测复制到 C:\ 下的纯英文路径就能正常安装，而且装好后再跑
+# 原路径的包，应用时间戳完全没变 —— 确认是路径导致，不是偶发。
+# 所以这里自动留一份可直接双击的副本。
+$plainDir = 'C:\WinSnipRec-Setup'
+try {
+    New-Item -ItemType Directory -Force -Path $plainDir | Out-Null
+    $plain = Join-Path $plainDir "WinSnipRec-Setup-$Version.exe"
+    Copy-Item $out $plain -Force
+    Write-Host ''
+    Write-Host "可直接双击: $plain" -ForegroundColor Yellow
+    Write-Host '  （上面那个原始路径含中文和空格，双击可能没反应，用这份）' -ForegroundColor DarkGray
+} catch {
+    Write-Warning "无法创建英文路径副本（$($_.Exception.Message)）"
+    Write-Warning "安装时请手动把 dist\installer 下的安装包复制到 C:\ 再双击"
+}
