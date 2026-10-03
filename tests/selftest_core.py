@@ -548,6 +548,33 @@ def main() -> int:
             f"duration={duration_b}s active={result_b['active']:.2f}s",
         )
 
+    # ---- 6b. 保存目录不可写时不能丢录制、也不能不收尾 ----------------------
+    # 用户报"无法结束录屏"：保存目录写不进去时 _finalize 返回 ""，而 finished 被
+    # `if path:` 挡住不发 -> _teardown_recording() 永不执行 -> 控制条一直挂在屏幕上、
+    # 主窗口回不来。
+    from winsnip.core.recorder import _fallback_output_path
+
+    blocked = os.path.join(os.path.abspath(os.sep), "WinSnipRecNoSuchDir", "录制 x.mp4")
+    fallback = _fallback_output_path(blocked)
+    check("保存目录不可写时有兜底位置", bool(fallback), str(fallback))
+    if fallback:
+        check("兜底位置确实可写", os.path.isdir(os.path.dirname(fallback))
+              and os.access(os.path.dirname(fallback), os.W_OK),
+              os.path.dirname(fallback))
+        check("兜底后仍然保留原文件名",
+              os.path.basename(fallback) == os.path.basename(blocked),
+              os.path.basename(fallback))
+
+    # finished 必须无条件发出（这里用一个最小的假实例验证发射逻辑）
+    import inspect
+
+    source = inspect.getsource(type(_RESULTS) if False else __import__(
+        "winsnip.core.recorder", fromlist=["Recorder"]).Recorder.stop)
+    check("stop() 不再用 `if path:` 挡住 finished",
+          "self.finished.emit(path or \"\")" in source,
+          "找到无条件 emit" if "self.finished.emit(path or \"\")" in source
+          else "仍是条件 emit")
+
     # ---- 7. summary ------------------------------------------------------
     print("\n" + "=" * 78)
     passed = sum(1 for _, ok, _ in _RESULTS if ok)

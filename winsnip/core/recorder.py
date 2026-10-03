@@ -279,6 +279,33 @@ class _CursorDrawer:
                             pass
 
 
+def _fallback_output_path(out_path: str) -> str | None:
+    """A location we can really write to, used when the save folder fails."""
+    name = os.path.basename(out_path) or "recording.mp4"
+    candidates: list[str] = []
+    try:
+        from ..settings import app_data_dir
+
+        candidates.append(os.path.join(str(app_data_dir()), "recordings"))
+    except Exception:
+        pass
+    try:
+        candidates.append(os.path.join(tempfile.gettempdir(), "WinSnipRec"))
+    except Exception:
+        pass
+    for folder in candidates:
+        try:
+            os.makedirs(folder, exist_ok=True)
+            probe = os.path.join(folder, ".writable")
+            with open(probe, "w", encoding="utf-8") as handle:
+                handle.write("")
+            os.remove(probe)
+        except OSError:
+            continue
+        return os.path.join(folder, name)
+    return None
+
+
 def _move_file(src: str, dst: str) -> None:
     """Move ``src`` onto ``dst``, replacing an existing destination."""
     if os.path.abspath(src) == os.path.abspath(dst):
@@ -1136,11 +1163,13 @@ class Recorder(QObject):
             path = self._finalize()
             self._cleanup_tmp()
             self._set_state(RecorderState.IDLE)
-            if path:
-                try:
-                    self.finished.emit(path)
-                except Exception:
-                    pass
+            # 即使一个字节都没存下来也要发：_teardown_recording() 挂在
+            # _on_recorder_finished 上，不发就会出现"控制条永远挂在屏幕上、主窗口
+            # 回不来"—— 用户报的"无法结束录屏"正是这个。
+            try:
+                self.finished.emit(path or "")
+            except Exception:
+                pass
             return path
         except Exception as exc:
             self._report_error(f"stop failed: {exc!r}")
@@ -1347,8 +1376,25 @@ class Recorder(QObject):
         try:
             _move_file(video_src, out_path)
         except Exception as exc:
-            self._report_error(f"cannot write the output file: {exc!r}")
-            return ""
+            # 保存目录可能被重定向、被删掉或权限变了。以前这里直接 return ""：整段录制
+            # 被丢掉，而且 finished 不发 -> 界面不收尾 -> 用户看到的就是"录屏结束不了"。
+            # 先退到一个确实能写的位置，宁可换个地方存，也不要丢录制。
+            fallback = _fallback_output_path(out_path)
+            if not fallback:
+                self._report_error(f"cannot write the output file: {exc!r}")
+                return ""
+            try:
+                _move_file(video_src, fallback)
+            except Exception as exc2:
+                self._report_error(f"cannot write the output file: {exc2!r}")
+                return ""
+            # 核心层的错误信息一律用英文（与本文件其它 _report_error 一致），
+            # 中文用户可见的文案由 UI 层负责。
+            self._report_error(
+                f"save folder is not writable ({exc}); saved to "
+                f"{os.path.dirname(fallback)} instead"
+            )
+            out_path = fallback
         if not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
             self._report_error("the output file is empty")
             return ""
