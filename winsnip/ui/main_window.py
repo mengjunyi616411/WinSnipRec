@@ -897,6 +897,21 @@ class MainWindow(FluentWindow):
             self._settings_window = SettingsWindow()
             self._settings_window.applied.connect(self._on_settings_applied)
             self._settings_window.closed.connect(self._on_settings_closed)
+            self._settings_built_language = getattr(settings, "language", "system")
+        elif getattr(self, "_settings_built_language", None) != getattr(settings, "language", "system"):
+            # 语言变了才重建：界面文字是在构造时取的 _t()，不重建就会留着旧语言。
+            self._settings_window = None
+            self.open_settings()
+            return
+        else:
+            # 复用已有实例。实测构造一次要 ~1.3 秒、show 又要 0.7 秒，加上淡入近 3 秒
+            # —— 用户报的"打开设置有明显卡顿"就是因为以前关闭时把它丢掉了，每次
+            # 打开都从头重建。这里只把可能被别处改过的显示值同步一下。
+            self._settings_window.refresh_theme()
+            self._settings_window.sync_volatile_rows()
+            # 复用时不再播打开动画：这台机器合成慢，150ms 的淡入要 0.5 秒才走完，
+            # 反而是复用的意义所在（瞬间出现）被打折。
+            self._settings_window._suppress_open_animation = True
         self._settings_window.show()
         self._settings_window.raise_()
         self._settings_window.activateWindow()
@@ -943,7 +958,10 @@ class MainWindow(FluentWindow):
         self.settingsChanged.emit()
 
     def _on_settings_closed(self) -> None:
-        self._settings_window = None
+        # 不再丢弃实例：SettingsWindow 的构造实测 ~1.3 秒，丢掉就意味着下次打开
+        # 又要重建一次（加上 show 与淡入接近 3 秒），那就是用户感觉到的卡顿。
+        # 实例保留为隐藏的顶层窗口，下次 open_settings 直接复用。
+        pass
 
     def open_output_folder(self) -> None:
         folder = settings.video_dir if self._mode == "video" else settings.image_dir

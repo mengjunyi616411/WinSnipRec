@@ -396,6 +396,36 @@ def main() -> int:
     if window._control_bar is not None:
         check("control bar closed after stop", not window._control_bar.isVisible())
 
+    # ---------------- 设置窗口复用（打开卡顿的修复）---------------- #
+    # 以前关闭设置窗口时把实例丢掉了，下次打开从头重建：构造 ~1.3s + show 0.7s +
+    # 淡入 0.5s ≈ 2.5 秒，就是用户报的"打开设置有明显卡顿"。
+    from winsnip.ui.main_window import MainWindow as _MainWindow
+
+    host = _MainWindow()
+    host.show()
+    pump(app, 0.8)
+    host.open_settings()
+    pump(app, 0.5)
+    first = host._settings_window
+    check("首次打开会创建设置窗口", first is not None and first.isVisible(), str(first))
+
+    first.close()
+    pump(app, 0.4)
+    check("关闭设置后实例被保留（不再丢弃重建）", host._settings_window is first,
+          f"{host._settings_window!r}")
+
+    host.open_settings()
+    pump(app, 0.3)
+    check("再次打开复用同一个实例", host._settings_window is first, f"{host._settings_window!r}")
+    check("复用时窗口直接完全不透明", first.windowOpacity() > 0.99,
+          f"{first.windowOpacity():.2f}")
+
+    first.close()
+    pump(app, 0.3)
+    host._quitting = True
+    host.close()
+    pump(app, 0.3)
+
     return report(app)
 
 

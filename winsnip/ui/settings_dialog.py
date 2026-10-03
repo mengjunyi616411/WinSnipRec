@@ -132,6 +132,36 @@ class SettingsWindow(FluentWindow):
         self._section_labels = getattr(self, "_section_labels", [])
         self._section_labels.append(label)
 
+    def sync_volatile_rows(self) -> None:
+        """Re-read the values that can also be changed outside this dialog.
+
+        The window is reused between openings now (rebuilding it cost ~1.3s), so a
+        few rows could otherwise show stale values: the microphone also has a menu
+        in the command bar, the backdrop note is written by the live probe, and the
+        autostart switch reflects a registry entry that can change elsewhere.
+        """
+        try:
+            index = self.mic_combo.findData(settings.mic_device)
+            if index >= 0 and index != self.mic_combo.currentIndex():
+                blocked = self.mic_combo.blockSignals(True)
+                self.mic_combo.setCurrentIndex(index)
+                self.mic_combo.blockSignals(blocked)
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_autostart_row"):
+                self._autostart_row.subtitle.setText(startup.describe())
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "backdrop_combo"):
+                for row in self._rows:
+                    if getattr(row, "control", None) is self.backdrop_combo:
+                        row.subtitle.setText(self._backdrop_note())
+                        break
+        except Exception:
+            pass
+
     def _add_row(self, title: str, subtitle: str, control: QWidget | None) -> _Row:
         row = _Row(title, subtitle, control, self)
         self._rows.append(row)
