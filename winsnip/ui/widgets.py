@@ -1463,7 +1463,7 @@ class FluentComboBox(QComboBox):
         QListView::item {{
             min-height: 26px;
             padding: 3px 8px;
-            border-radius: 4px;
+            border-radius: {theme.radius_control}px;
             color: {p.text_primary};
         }}
         QListView::item:selected, QListView::item:hover {{
@@ -1473,7 +1473,7 @@ class FluentComboBox(QComboBox):
         QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
         QScrollBar::handle:vertical {{
             background: {rgba(p.text_secondary, 0.4).name(QColor.NameFormat.HexArgb)};
-            border-radius: 2px; min-height: 20px;
+            border-radius: {theme.radius_control}px; min-height: 20px;
         }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -1489,7 +1489,8 @@ class FluentComboBox(QComboBox):
         if container is not None and container is not self:
             container.setStyleSheet(
                 f"QFrame {{ background-color: {palette.flyout_bg};"
-                f" border: 1px solid {palette.flyout_border}; border-radius: 6px; }}"
+                f" border: 1px solid {palette.flyout_border};"
+                f" border-radius: {theme.radius_flyout}px; }}"
             )
             container.setContentsMargins(0, 0, 0, 0)
 

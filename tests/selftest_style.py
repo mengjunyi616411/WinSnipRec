@@ -802,6 +802,41 @@ def main() -> int:
         window.close()
     pump(app, 0.2)
 
+    # ---------------- 控件圆角必须跟着风格走 ---------------- #
+    # 以前全局样式表和下拉弹窗里的圆角是写死的（3/4/5/6/8px），于是"设置"窗口在
+    # Win10 风格下除了背景材质以外和 Win11 一模一样。
+    import re as _re
+
+    from winsnip.theme import application_stylesheet as _css
+
+    radii = {}
+    for _style in ("win11", "win10"):
+        theme.style = _style
+        theme.refresh()
+        radii[_style] = [int(v) for v in _re.findall(r"border-radius:\s*(\d+)px", _css())]
+    check("两种风格的控件圆角确实不同", radii["win11"] != radii["win10"],
+          f"win11={radii['win11']} win10={radii['win10']}")
+
+    theme.style = "win10"
+    theme.refresh()
+    check("Win10 样式表用的就是 Win10 的圆角 token",
+          set(radii["win10"]) <= {theme.radius_control, theme.radius_flyout},
+          f"{sorted(set(radii['win10']))} vs 控件 {theme.radius_control} / 浮出 {theme.radius_flyout}")
+    theme.style = "win11"
+    theme.refresh()
+    check("Win11 样式表用的就是 Win11 的圆角 token",
+          set(radii["win11"]) <= {theme.radius_control, theme.radius_flyout},
+          f"{sorted(set(radii['win11']))} vs 控件 {theme.radius_control} / 浮出 {theme.radius_flyout}")
+
+    # 下拉弹窗（QComboBox 的列表）同样不能写死
+    from winsnip.ui.widgets import FluentComboBox
+
+    popup_css = FluentComboBox._popup_stylesheet(FluentComboBox())
+    popup_radii = [int(v) for v in _re.findall(r"border-radius:\s*(\d+)px", popup_css)]
+    check("下拉弹窗的圆角也来自 token",
+          popup_radii and all(v in (theme.radius_control, theme.radius_flyout) for v in popup_radii),
+          f"{popup_radii} vs 控件 {theme.radius_control} / 浮出 {theme.radius_flyout}")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

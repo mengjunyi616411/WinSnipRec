@@ -671,12 +671,16 @@ def application_stylesheet() -> str:
     scroll = rgba(p.text_secondary, 0.35).name(QColor.NameFormat.HexArgb)
     scroll_hover = rgba(p.text_secondary, 0.55).name(QColor.NameFormat.HexArgb)
     underline = rgba(p.text_secondary, 0.45).name(QColor.NameFormat.HexArgb)
+    # 控件圆角必须跟着界面风格走（Win11: 控件 5 / 浮出 8；Win10: 2 / 4）。
+    # 以前这里写死成 3/5/6/8，导致"设置"窗口在 Win10 风格下和 Win11 长得一模一样。
+    r_control = theme.radius_control
+    r_flyout = theme.radius_flyout
     return f"""
     QToolTip {{
         background-color: {p.flyout_bg};
         color: {p.text_primary};
         border: 1px solid {p.flyout_border};
-        border-radius: 6px;
+        border-radius: {r_flyout}px;
         padding: 6px 10px;
         font-size: 12px;
     }}
@@ -687,14 +691,14 @@ def application_stylesheet() -> str:
         background-color: {p.flyout_bg};
         color: {p.text_primary};
         border: 1px solid {p.flyout_border};
-        border-radius: 8px;
+        border-radius: {r_flyout}px;
         padding: 6px;
     }}
     QMenu::item {{
         background: transparent;
         color: {p.text_primary};
         padding: 7px 30px 7px 16px;
-        border-radius: 5px;
+        border-radius: {r_control}px;
         min-width: 120px;
     }}
     QMenu::item:selected {{
@@ -714,7 +718,7 @@ def application_stylesheet() -> str:
     }}
     QScrollBar::handle:vertical {{
         background: {scroll};
-        border-radius: 3px; min-height: 24px;
+        border-radius: {r_control}px; min-height: 24px;
     }}
     QScrollBar::handle:vertical:hover {{ background: {scroll_hover}; }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -723,7 +727,7 @@ def application_stylesheet() -> str:
         background-color: {p.control_bg};
         border: 1px solid {p.control_border};
         border-bottom: 1px solid {underline};
-        border-radius: 5px;
+        border-radius: {r_control}px;
         padding: 5px 8px;
         color: {p.text_primary};
         selection-background-color: {p.accent};
