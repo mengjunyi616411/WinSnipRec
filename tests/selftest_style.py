@@ -250,6 +250,23 @@ def main() -> int:
         gap = window.width() - close.x() - close.width()
         check(f"{name} 关闭按钮贴着右上角", gap == 0, f"距右边 {gap}px")
 
+    # 设置 / 关于窗口是同一套结构，根布局一旦重新加上边距它们也会被推离边缘。
+    from winsnip.ui.settings_dialog import AboutWindow, SettingsWindow
+
+    for name, factory in (("设置", SettingsWindow), ("关于", AboutWindow)):
+        extra = factory()
+        extra.show()
+        pump(app, 0.6)
+        bar = extra.title_bar
+        close = bar.caption_buttons["close"]
+        gap = extra.width() - close.x() - close.width()
+        check(f"{name}窗口 标题栏铺满窗口宽度",
+              bar.x() == 0 and extra.width() - bar.x() - bar.width() == 0,
+              f"x={bar.x()} 宽={bar.width()} 窗口={extra.width()}")
+        check(f"{name}窗口 关闭按钮贴着右上角", gap == 0, f"距右边 {gap}px")
+        extra.close()
+        pump(app, 0.2)
+
     window10 = windows["win10"]
     spot_x, spot_y = window10.width() * 0.30, window10.height() * 0.40
     before, after = reveal_probe(window10, spot_x, spot_y)

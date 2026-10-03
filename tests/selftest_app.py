@@ -203,9 +203,13 @@ def main() -> int:
     from PySide6.QtCore import QPoint as QtPoint
     from PySide6.QtWidgets import QWidget as QtWidget
 
+    # 标题栏在根边距归零后本来就在 (0,0)，不算游离 —— 判据要看它是否受根布局管理。
+    root_layout = settings_window.layout()
+    managed = {root_layout.itemAt(i).widget() for i in range(root_layout.count())}
     stray = [child for child in settings_window.findChildren(QtWidget)
              if child.parent() is settings_window
              and child.isVisible()
+             and child not in managed
              and child.geometry().topLeft() == QtPoint(0, 0)]
     check("设置窗口没有游离在布局外的控件", not stray,
           ", ".join(type(w).__name__ for w in stray) or "无")

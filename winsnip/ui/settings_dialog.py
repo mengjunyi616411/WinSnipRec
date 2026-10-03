@@ -73,7 +73,8 @@ class SettingsWindow(FluentWindow):
         self._row_separators: list[QWidget] = []
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
+        # 标题栏铺满窗口（与主窗口一致）；body 自带 24px 内边距
+        root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         self.title_bar = TitleBar(_t("设置"), self)
@@ -571,7 +572,8 @@ class AboutWindow(FluentWindow):
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(430, 322)
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
+        # 标题栏铺满窗口（与主窗口一致）；body 自带 24px 内边距
+        root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         self.title_bar = TitleBar(_t("关于"), self)
