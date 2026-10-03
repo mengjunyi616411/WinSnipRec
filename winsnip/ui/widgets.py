@@ -1356,11 +1356,13 @@ class SegmentedControl(QWidget):
                              icon_colour)
 
         # The accent underline slides continuously between segments.
-        bar_w = 20
-        centre = (self.indicator_position() + 0.5) * self._item_width
-        bar = QRectF(centre - bar_w / 2.0, self.height() - 4.0, bar_w, 3.0)
-        painter.setBrush(QColor(palette.accent))
-        painter.drawRoundedRect(bar, 1.5, 1.5)
+        # Windows 10 的截图工具没有这条蓝条，只靠图标变色区分选中；Win11 保持原样。
+        if not theme.is_win10:
+            bar_w = 20
+            centre = (self.indicator_position() + 0.5) * self._item_width
+            bar = QRectF(centre - bar_w / 2.0, self.height() - 4.0, bar_w, 3.0)
+            painter.setBrush(QColor(palette.accent))
+            painter.drawRoundedRect(bar, 1.5, 1.5)
         painter.end()
 
 

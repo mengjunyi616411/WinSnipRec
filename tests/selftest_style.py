@@ -837,6 +837,51 @@ def main() -> int:
           popup_radii and all(v in (theme.radius_control, theme.radius_flyout) for v in popup_radii),
           f"{popup_radii} vs 控件 {theme.radius_control} / 浮出 {theme.radius_flyout}")
 
+    # ---------------- 截图/录屏 切换的蓝条 ---------------- #
+    # Win10 的截图工具没有这条 accent 下划线，只靠图标变色。Win11 必须保留。
+    from PySide6.QtGui import QColor as _QColor
+
+    def _accent_hits(window) -> int:
+        accent = _QColor(theme.palette.accent)
+        segment = window.segmented
+        image = segment.grab().toImage()
+        hits = 0
+        for y in range(max(0, image.height() - 6), image.height()):
+            for x in range(image.width()):
+                c = image.pixelColor(x, y)
+                if (abs(c.red() - accent.red()) + abs(c.green() - accent.green())
+                        + abs(c.blue() - accent.blue())) < 90:
+                    hits += 1
+        return hits
+
+    theme.style = "win11"
+    theme.refresh()
+    window_bar11 = MainWindow()
+    window_bar11.show()
+    pump(app, 0.8)
+    win11_hits = _accent_hits(window_bar11)
+    check("Win11 下 截图/录屏 保留 accent 蓝条", win11_hits > 20, f"accent 像素 {win11_hits}")
+    window_bar11._quitting = True
+    window_bar11.close()
+    pump(app, 0.3)
+
+    theme.style = "win10"
+    theme.refresh()
+    window_bar10 = MainWindow()
+    window_bar10.show()
+    pump(app, 0.8)
+    win10_hits = _accent_hits(window_bar10)
+    check("Win10 下 截图/录屏 没有蓝条", win10_hits == 0, f"accent 像素 {win10_hits}")
+    check("Win10 下仍然靠图标变色表示选中",
+          window_bar10.segmented.current() == 1
+          and window_bar10.segmented.indicator_position() == 1.0,
+          f"current={window_bar10.segmented.current()}")
+    window_bar10._quitting = True
+    window_bar10.close()
+    pump(app, 0.3)
+    theme.style = "win11"
+    theme.refresh()
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
