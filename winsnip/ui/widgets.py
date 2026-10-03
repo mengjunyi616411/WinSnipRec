@@ -429,6 +429,9 @@ class FluentWindow(QWidget):
             self,
             slide=self._open_slide,
             fade_only=self._open_animation == "fade",
+            # 用 FAST：合成慢的机器上 240ms 会被拉长到一秒多，而淡入期间窗口是半透明的，
+            # 拖得越久越像"发灰"。缩短时长，观感上是干净利落的一次落位。
+            duration=anim.DURATION_FAST,
         )
 
     # -- Reveal (Windows 10 pointer light) ---------------------------------- #

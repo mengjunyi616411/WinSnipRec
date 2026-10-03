@@ -452,6 +452,27 @@ def main() -> int:
     broken.close()
     pump(app, 0.2)
 
+    # ---------------- 打开时窗口不能是"半透明玻璃" ---------------- #
+    # 从全透明开始淡入，窗口在整段过渡里都透出桌面 —— 用户报"每次打开都发灰"就是这个。
+    # 注意：QWidget.grab() 不会应用窗口不透明度，用它验证永远看不出问题，必须用屏幕抓取
+    # 或直接读 windowOpacity()。
+    check("打开动画起点足够高（不是全透明）",
+          anim.OPEN_FADE_START >= 0.9,
+          f"OPEN_FADE_START={anim.OPEN_FADE_START}")
+
+    glass = _SettingsWindow()
+    glass.show()
+    pump(app, 0.03)
+    first = glass.windowOpacity()
+    check("刚打开那一帧就不是半透明玻璃", first >= 0.9,
+          f"首帧不透明度 {first:.2f}")
+    pump(app, 2.0)
+    check("打开动画结束后完全不透明", glass.windowOpacity() > 0.99,
+          f"{glass.windowOpacity():.2f}")
+    glass._quitting = True
+    glass.close()
+    pump(app, 0.2)
+
     settings.animations = original
     for widget in (target, window):
         widget._quitting = True

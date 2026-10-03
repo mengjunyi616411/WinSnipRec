@@ -24,6 +24,10 @@ DURATION_SLOW = 320
 #: 截图/录屏 切换（命令栏的分段控件）。比通用动效慢，让滑动指示条读起来像一次
 #: 明确的模式切换，而不是一闪而过。
 DURATION_MODE_SWITCH = 400
+#: 打开动画的起始不透明度。**不能是 0**：从全透明开始，窗口在整段过渡里就是一块玻璃，
+#: 桌面直接透过来 —— 用户报"每次打开都发灰"就是这个。0.65 试过，背景花的时候仍然看得出
+#: 透视，所以提到 0.92：留一点点柔和感，但视觉上已经是实心窗口。
+OPEN_FADE_START = 0.92
 
 
 def _settings_enabled() -> bool:
@@ -62,10 +66,13 @@ def play_window_open(window: QWidget, *, slide: int = 14, fade_only: bool = Fals
                      duration: int = DURATION_NORMAL) -> None:
     """Animate an already-visible window in. Safe to call from ``showEvent``.
 
-    The window is made fully transparent *before* returning, so no frame is ever
-    painted at full opacity (which would show up as a flash).
+    The fade starts at OPEN_FADE_START, not at zero. Starting from fully
+    transparent makes the window a sheet of glass for the whole transition: on a
+    machine with slow compositing the desktop shows straight through it and the
+    window reads as "washed out / greyed out" every single time it opens. 0.65
+    still avoids a full-opacity flash while never looking see-through.
     """
-    window.setWindowOpacity(0.0)
+    window.setWindowOpacity(OPEN_FADE_START)
     if not animations_enabled():
         window.setWindowOpacity(1.0)
         return
@@ -77,7 +84,7 @@ def play_window_open(window: QWidget, *, slide: int = 14, fade_only: bool = Fals
     group = QParallelAnimationGroup(window)
     fade = QPropertyAnimation(window, b"windowOpacity", group)
     fade.setDuration(duration)
-    fade.setStartValue(0.0)
+    fade.setStartValue(OPEN_FADE_START)
     fade.setEndValue(1.0)
     fade.setEasingCurve(curve("out"))
 
@@ -128,7 +135,7 @@ def show_window_animated(window: QWidget, *, slide: int = 14,
     if hasattr(window, "_suppress_open_animation"):
         window._suppress_open_animation = True
     try:
-        window.setWindowOpacity(0.0)
+        window.setWindowOpacity(OPEN_FADE_START)
         window.show()
     finally:
         if hasattr(window, "_suppress_open_animation"):
