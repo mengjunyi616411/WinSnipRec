@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
@@ -92,7 +92,8 @@ class EasterEggWindow(FluentWindow):
         self.title_bar = TitleBar(_t("彩蛋"), self)
         self.title_bar.caption_buttons["max"].setVisible(False)
         self.title_bar.caption_buttons["min"].setVisible(False)
-        self.title_bar.caption_buttons["close"].clicked.connect(self._on_yes)
+        # 用户要求去掉关闭按钮：只能通过「否 / 是」离开。
+        self.title_bar.caption_buttons["close"].setVisible(False)
         root.addWidget(self.title_bar)
 
         body = QWidget(self)
@@ -198,6 +199,7 @@ class EasterEggWindow(FluentWindow):
         self._answered_yes = True
         self.dismissed.emit()
         self.close()
+        show_admission()
 
     def _on_no(self) -> None:
         """There is no no: it just shows the next picture."""
@@ -219,6 +221,80 @@ class EasterEggWindow(FluentWindow):
                 color: {palette.text_secondary};
             }}
         """)
+
+
+class AdmissionWindow(FluentWindow):
+    """选「是」之后弹出来的那个窗口。"""
+
+    CARD_WIDTH = 320
+    CARD_HEIGHT = 180
+
+    def __init__(self) -> None:
+        super().__init__(resizable=False, open_animation="fade")
+        self.setWindowTitle(_t("彩蛋"))
+        self.set_card_size(self.CARD_WIDTH, self.CARD_HEIGHT)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(self._margin, self._margin, self._margin, self._margin)
+        root.setSpacing(0)
+
+        self.title_bar = TitleBar(_t("彩蛋"), self)
+        for key in ("min", "max", "close"):
+            self.title_bar.caption_buttons[key].setVisible(False)
+        root.addWidget(self.title_bar)
+
+        body = QWidget(self)
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(20, 8, 20, 18)
+        layout.setSpacing(16)
+
+        self.message = QLabel(_t("你承认啦！"), body)
+        self.message.setObjectName("admissionText")
+        self.message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.message, 1)
+
+        self.ok_button = FluentButton(_t("好"), body, variant="accent", height=34)
+        self.ok_button.setMinimumWidth(96)
+        self.ok_button.clicked.connect(self.close)
+        layout.addWidget(self.ok_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        root.addWidget(body, 1)
+
+        self.refresh_theme()
+
+    def refresh_theme(self) -> None:
+        palette = theme.palette
+        self.setStyleSheet(f"""
+            QLabel#admissionText {{
+                font-size: 17px; font-weight: 700;
+                color: {palette.text_primary};
+            }}
+        """)
+
+    def retranslate(self) -> None:
+        self.setWindowTitle(_t("彩蛋"))
+        self.title_bar.retranslate()
+        self.message.setText(_t("你承认啦！"))
+        self.ok_button.setText(_t("好"))
+
+
+#: Kept alive while shown, otherwise Python would collect it immediately.
+_ADMISSION: list[AdmissionWindow] = []
+
+
+def show_admission(parent: QWidget | None = None) -> AdmissionWindow:
+    """Pop up 你承认啦！, centred on the parent (or the screen)."""
+    window = AdmissionWindow()
+    if parent is not None:
+        centre = parent.frameGeometry().center()
+    else:
+        screen = window.screen()
+        centre = screen.availableGeometry().center() if screen else QPoint(0, 0)
+    window.move(centre.x() - window.width() // 2,
+                max(0, centre.y() - window.height() // 2))
+    window.destroyed.connect(lambda *_: _ADMISSION.clear())
+    _ADMISSION.append(window)
+    window.show()
+    return window
 
 
 def show_easter_egg(parent: QWidget | None = None) -> EasterEggWindow | None:

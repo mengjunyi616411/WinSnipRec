@@ -85,6 +85,40 @@ def main() -> int:
           and window.question.text() == i18n.t("再选一次？"),
           f"{first_question!r} -> {window.question.text()!r}")
 
+    # ---------------- 3b. 关闭按钮已去掉；选「是」弹出「你承认啦！」 ----------------
+    egg_window = EasterEggWindow()
+    egg_window.show()
+    pump(app, 0.5)
+    captions = {key: button.isVisible()
+                for key, button in egg_window.title_bar.caption_buttons.items()}
+    check("彩蛋窗口没有关闭按钮（只能靠「是」退出）",
+          not any(captions.values()),
+          f"可见的标题栏按钮: {[k for k, v in captions.items() if v]}")
+
+    from winsnip.ui.easter_egg import AdmissionWindow, show_admission
+
+    before = [w for w in app.topLevelWidgets()
+              if isinstance(w, AdmissionWindow) and w.isVisible()]
+    egg_window._on_yes()
+    pump(app, 0.7)
+    after = [w for w in app.topLevelWidgets()
+             if isinstance(w, AdmissionWindow) and w.isVisible()]
+    check("选「是」会弹出「你承认啦！」窗口", len(after) == len(before) + 1,
+          f"弹窗数 {len(before)} -> {len(after)}")
+    check("选「是」之后彩蛋关闭", not egg_window.isVisible(), "已关闭")
+
+    if after:
+        popup = after[0]
+        check("弹窗文案是「你承认啦！」",
+              popup.message.text() == i18n.t("你承认啦！") == "你承认啦！",
+              popup.message.text())
+        check("弹窗有关闭用的「好」按钮",
+              popup.ok_button.text() == i18n.t("好") and not popup.title_bar.caption_buttons["close"].isVisible(),
+              f"{popup.ok_button.text()!r}")
+        popup.ok_button.click()
+        pump(app, 0.5)
+        check("点「好」后弹窗关闭", not popup.isVisible(), "已关闭")
+
     # ---------------- 4. 画廊跑完后重新开一个窗口给后面的搜索测试 ----------------
     window._on_yes()
     pump(app, 0.4)
@@ -177,6 +211,12 @@ def main() -> int:
     missing = [code for code in ("zh-Hant", "en", "ja")
                if not i18n.TABLE.get("你是萝莉控吗？")
                or not i18n.TABLE.get("搜索设置")]
+    rendered = i18n.translate_all("你承认啦！")
+    check("「你承认啦！」四种语言齐全",
+          len(set(rendered.values())) == 4
+          and rendered["zh-Hans"] == "你承认啦！"
+          and all(rendered[code] for code in ("zh-Hant", "en", "ja")),
+          str(rendered))
     check("彩蛋与搜索文案四种语言齐全", not missing, ", ".join(missing) or "齐全")
 
     translations = {}
