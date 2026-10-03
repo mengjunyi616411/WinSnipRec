@@ -88,7 +88,13 @@ def play_window_open(window: QWidget, *, slide: int = 14, fade_only: bool = Fals
         move.setEndValue(QPoint(final.x(), final.y()))
         move.setEasingCurve(curve("decelerate"))
 
+    settled = {"done": False}
+
     def finished() -> None:
+        # 幂等：动画正常结束和下面的兜底定时器都可能调用它。
+        if settled["done"]:
+            return
+        settled["done"] = True
         if not fade_only:
             window.setGeometry(final)
         window.setWindowOpacity(1.0)
@@ -96,6 +102,12 @@ def play_window_open(window: QWidget, *, slide: int = 14, fade_only: bool = Fals
 
     group.finished.connect(finished)
     group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+
+    # 兜底：动画组的删除策略是 DeleteWhenStopped，窗口若在动画途中被隐藏或销毁，
+    # finished 就永远不会发 —— 窗口会永久卡在「半透明 + 冻结」。用户截图里的
+    # "设置窗口整体发灰、只有蓝色按钮还亮"就是这个：淡入没走完，再也没恢复。
+    # QPropertyAnimation 按墙钟推进，慢机器上只是帧数少，所以这个超时足够宽松。
+    QTimer.singleShot(max(600, duration * 4 + 500), finished)
 
 
 def show_window_animated(window: QWidget, *, slide: int = 14,
@@ -140,7 +152,13 @@ def hide_window_animated(window: QWidget, *, on_finished=None,
     fade.setEndValue(0.0)
     fade.setEasingCurve(curve("in"))
 
+    settled = {"done": False}
+
     def finished() -> None:
+        # 幂等：正常结束和兜底定时器都可能调用。
+        if settled["done"]:
+            return
+        settled["done"] = True
         window.hide()
         window.setWindowOpacity(1.0)
         if on_finished is not None:
@@ -148,6 +166,9 @@ def hide_window_animated(window: QWidget, *, on_finished=None,
 
     fade.finished.connect(finished)
     fade.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    # 同样兜底：动画被打断时窗口不能既没隐藏又停在半透明。
+    QTimer.singleShot(max(400, duration * 4 + 400), finished)
 
 
 #: The single reusable ghost, plus whether it is currently animating. Holding the

@@ -421,6 +421,37 @@ def main() -> int:
           and anim.curve("in").type() == anim.QEasingCurve.Type.InCubic,
           f"{anim.curve('out').type()}")
 
+    # ---------------- 打开动画被打断也必须恢复不透明 ---------------- #
+    # 动画组的删除策略是 DeleteWhenStopped：窗口若在动画途中被隐藏/销毁，finished
+    # 永不触发，窗口就永久卡在「半透明 + 冻结」。用户截到的"设置窗口整体发灰、
+    # 只有蓝色按钮还亮"就是这个。anim.play_window_open 现在有兜底定时器。
+    from winsnip.ui.settings_dialog import SettingsWindow as _SettingsWindow
+
+    broken = _SettingsWindow()
+    broken.show()
+    pump(app, 0.05)
+    mid = broken.windowOpacity()
+    pump(app, 2.0)
+    check("打开动画正常结束时窗口完全不透明",
+          mid < 0.99 and broken.windowOpacity() > 0.99,
+          f"中途 {mid:.2f} -> 结束 {broken.windowOpacity():.2f}")
+
+    anim.play_window_open(broken, fade_only=True)
+    pump(app, 0.02)
+    broken.hide()                       # 动画途中隐藏 -> finished 不会发
+    restored = False
+    deadline = time.perf_counter() + 6.0
+    while time.perf_counter() < deadline:
+        pump(app, 0.2)
+        if broken.windowOpacity() > 0.99:
+            restored = True
+            break
+    check("打开动画被打断后仍会恢复不透明（兜底）", restored,
+          f"最终不透明度 {broken.windowOpacity():.2f}")
+    broken._quitting = True
+    broken.close()
+    pump(app, 0.2)
+
     settings.animations = original
     for widget in (target, window):
         widget._quitting = True
