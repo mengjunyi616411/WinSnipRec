@@ -234,6 +234,55 @@ def main() -> int:
           "rect" in instant and instant.get("mode") == "video",
           str(instant.get("rect")))
 
+    # ---------------- window picking filters ---------------- #
+    # 修之前 _is_pickable 只看尺寸和两个样式位，于是 Z 序往下走时会选中
+    # 「不可见的、而且根本不含鼠标点」的窗口（实测选到过 QQ）。
+    import ctypes as _ctypes
+    import ctypes.wintypes as _wt
+
+    from winsnip import winapi as _wapi
+
+    _u = _ctypes.windll.user32
+    hwnd_desktop = int(_u.GetDesktopWindow())
+    rect_desktop = _wapi._window_rect(hwnd_desktop)
+    check("桌面窗口能取到矩形", rect_desktop is not None, str(rect_desktop))
+
+    if rect_desktop:
+        left, top, width, height = rect_desktop
+        far = (left + width + 500, top + height + 500)
+        inside = (left + width // 2, top + height // 2)
+        check("点不在窗口内时不可选",
+              not _wapi._is_pickable(hwnd_desktop, rect_desktop, point=far),
+              f"点在 {far}")
+        check("点在窗口内时可选（尺寸够大）",
+              _wapi._is_pickable(hwnd_desktop, rect_desktop, point=inside),
+              f"点在 {inside}")
+
+    check("太小的窗口不可选",
+          not _wapi._is_pickable(hwnd_desktop, (0, 0, 20, 20), point=(5, 5)),
+          "20x20 被拒绝")
+
+    # 全屏扫描：任何一点都不能选中不可见、或不含该点的窗口
+    screen_w, screen_h = _u.GetSystemMetrics(0), _u.GetSystemMetrics(1)
+    bad = []
+    for fy in (0.06, 0.5, 0.94):
+        for fx in (0.03, 0.5, 0.97):
+            x, y = int(screen_w * fx), int(screen_h * fy)
+            hwnd = _wapi.window_at_point(x, y)
+            if not hwnd:
+                bad.append(f"({x},{y}) 返回 0")
+                continue
+            rect = _wapi._window_rect(hwnd)
+            if not _u.IsWindowVisible(_wt.HWND(hwnd)):
+                bad.append(f"({x},{y}) 选中不可见窗口 {_wapi._window_title(hwnd)!r}")
+                continue
+            if rect:
+                rl, rt, rw, rh = rect
+                if not (rl <= x < rl + rw and rt <= y < rt + rh):
+                    bad.append(f"({x},{y}) 选中的窗口不含该点 rect={rect}")
+    check("9 个采样点选中的都是可见且含该点的窗口", not bad,
+          "; ".join(bad) if bad else "全部正常")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- OVERLAY SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

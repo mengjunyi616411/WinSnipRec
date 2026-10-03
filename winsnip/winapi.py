@@ -302,6 +302,7 @@ def wallpaper_style() -> int:
 GWL_EXSTYLE = -20
 GW_HWNDNEXT = 2
 WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_TRANSPARENT = 0x00000020
 WS_EX_LAYERED = 0x00080000
 WS_EX_NOACTIVATE = 0x08000000
 GW_OWNER = 4
@@ -315,6 +316,12 @@ class _RECT(ctypes.Structure):
 user32.GetWindowRect.argtypes = [wt.HWND, ctypes.POINTER(_RECT)]
 user32.GetWindowLongW.argtypes = [wt.HWND, ctypes.c_int]
 user32.GetWindowLongW.restype = ctypes.c_long
+user32.IsIconic.argtypes = [wt.HWND]
+user32.IsIconic.restype = wt.BOOL
+user32.IsWindowVisible.argtypes = [wt.HWND]
+user32.IsWindowVisible.restype = wt.BOOL
+user32.GetDesktopWindow.argtypes = []
+user32.GetDesktopWindow.restype = wt.HWND
 user32.GetWindowTextLengthW.argtypes = [wt.HWND]
 user32.GetWindowTextW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
 user32.IsWindowVisible.argtypes = [wt.HWND]
@@ -449,15 +456,17 @@ def window_at_point(x: int, y: int, exclude_pid: int | None = None) -> int:
             user32.GetWindowThreadProcessId(wt.HWND(hwnd), ctypes.byref(pid))
             if pid.value != exclude_pid:
                 info = _window_rect(hwnd)
-                if info and not _is_cloaked(hwnd) and _is_pickable(hwnd, info):
+                if info and not _is_cloaked(hwnd) and _is_pickable(hwnd, info, point=(x, y)):
                     return hwnd
             next_hwnd = user32.GetWindow(wt.HWND(hwnd), GW_HWNDNEXT)
             if not next_hwnd:
-                return 0
+                break
             root = user32.GetAncestor(next_hwnd, 2)
             hwnd = int(root or next_hwnd)
             guard += 1
-        return 0
+        # 兜底：桌面。桌面窗口带 WS_EX_TOOLWINDOW，会被上面的过滤排掉，但没有更合适
+        # 的窗口时它正代表"整个屏幕"，比什么都不选（返回 0）好。
+        return int(user32.GetDesktopWindow() or 0)
     except Exception:
         return 0
 
@@ -475,14 +484,30 @@ def _window_title(hwnd: int) -> str:
     return buf.value.strip()
 
 
-def _is_pickable(hwnd: int, rect: tuple[int, int, int, int], min_size: int = 48) -> bool:
-    """Filter out invisible helper windows (IME, tooltips, etc.)."""
+def _is_pickable(hwnd: int, rect: tuple[int, int, int, int], min_size: int = 48,
+                 point: tuple[int, int] | None = None) -> bool:
+    """Whether a window is a sensible thing to pick with the cursor.
+
+    ``point`` (physical) makes it also require the point to be inside the window.
+    Without that the Z-order walk returns whatever happens to be next, which is
+    how an invisible QQ window 1000px away got picked for a point near the
+    bottom-left corner.
+    """
     left, top, width, height = rect
     if width < min_size or height < min_size:
+        return False
+    if not user32.IsWindowVisible(wt.HWND(hwnd)):
+        return False
+    if user32.IsIconic(wt.HWND(hwnd)):
         return False
     ex_style = user32.GetWindowLongW(wt.HWND(hwnd), GWL_EXSTYLE)
     if ex_style & WS_EX_TOOLWINDOW:
         return False
+    if ex_style & WS_EX_TRANSPARENT:
+        return False          # 鼠标穿透的叠层（如 TranslucentTB）不是可选目标
+    if point is not None:
+        if not (left <= point[0] < left + width and top <= point[1] < top + height):
+            return False
     title = _window_title(hwnd).lower()
     if title in _IGNORED_TITLES:
         return False
