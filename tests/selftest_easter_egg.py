@@ -54,9 +54,11 @@ def main() -> int:
     i18n.set_language("zh-Hans")
 
     # ---------------- 1. 素材 ----------------
-    path = asset_path(easter_egg.ASSET_NAME)
-    check("彩蛋图片在 assets/ 里能找到", path is not None and path.is_file(),
-          str(path))
+    folder = easter_egg.asset_dir(easter_egg.ASSET_DIR)
+    check("彩蛋图片目录 assets/egg 能找到", folder is not None and folder.is_dir(),
+          str(folder))
+    check("目录里至少有 8 张图", len(easter_egg.picture_paths()) >= 8,
+          f"{len(easter_egg.picture_paths())} 张")
 
     window = EasterEggWindow()
     window.show()
@@ -83,10 +85,59 @@ def main() -> int:
           and window.question.text() == i18n.t("再选一次？"),
           f"{first_question!r} -> {window.question.text()!r}")
 
-    # ---------------- 4. 选「是」才消失 ----------------
+    # ---------------- 4. 画廊跑完后重新开一个窗口给后面的搜索测试 ----------------
     window._on_yes()
     pump(app, 0.4)
     check("选「是」窗口消失", not window.isVisible() and window.answer_is_yes())
+
+    # ---------------- 2b. 画廊：否切下一张，是退出 ----------------
+    from winsnip.ui.easter_egg import picture_paths
+
+    count = window.picture_count()
+    check("素材目录里的图片全部载入", count == len(picture_paths()) and count >= 8,
+          f"目录 {len(picture_paths())} 张 / 载入 {count} 张")
+    check("图片都缩放到了显示尺寸内",
+          window.image_label.pixmap() is not None
+          and window.image_label.width() <= 300 and window.image_label.height() <= 470,
+          f"{window.image_label.width()}x{window.image_label.height()}")
+
+    start = window.current_index()
+    order = []
+    for _ in range(count + 2):
+        window._on_no()
+        pump(app, 0.12)
+        order.append(window.current_index())
+    expected = [(start + step) % count for step in range(1, count + 3)]
+    check("选「否」逐张切换并循环回第一张", order == expected,
+          f"序号 {[i + 1 for i in order]}")
+
+    check("计数与当前张数一致",
+          window.counter.text() == f"{window.current_index() + 1} / {count}",
+          window.counter.text())
+
+    # 每张图都要能显示出来（不是空白框）
+    blank = []
+    for index in range(count):
+        window._index = index
+        window._show_current()
+        pump(app, 0.08)
+        pixmap = window.image_label.pixmap()
+        if pixmap is None or pixmap.isNull() or pixmap.width() < 50:
+            blank.append(index + 1)
+    check("每张图都能正常显示（没有空白框）", not blank, f"异常: {blank}" if blank else "全部正常")
+
+    # 窗口高度跟着图片走，横图不应留一大片空白
+    window._index = 0
+    window._show_current()
+    pump(app, 0.3)
+    tall = window.height()
+    window._index = 1
+    window._show_current()
+    pump(app, 0.3)
+    wide = window.height()
+    check("窗口高度跟着图片，横图不留大片空白", wide < tall - 100,
+          f"竖构图 {tall}px / 横构图 {wide}px")
+
 
     # ---------------- 5. 设置里的搜索框触发 ----------------
     settings_window = SettingsWindow()
