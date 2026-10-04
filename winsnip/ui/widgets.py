@@ -226,6 +226,7 @@ class FluentWindow(QWidget):
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._radius = radius
         self._shadow = shadow
+        self._wants_shadow = shadow   # 回退路径要尊重这个原始请求
         self._tint_strength = tint_strength
         self._margin = margin
         self._resizable = resizable
@@ -659,7 +660,7 @@ class FluentWindow(QWidget):
         self._native_backdrop = False
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._margin = SHADOW_MARGIN
-        self._shadow = False
+        self._shadow = getattr(self, "_wants_shadow", False)
         try:
             handle = self.windowHandle()
             if handle is not None:
@@ -1859,8 +1860,10 @@ class FluentMenu(FluentWindow):
         return low_centre + (high_centre - low_centre) * frac
 
     def __init__(self, parent: QWidget | None = None, *, min_width: int = 200) -> None:
+        # shadow=True：菜单是浮出层，有投影才有层次感。这里的 14px 边距正是留给阴影的
+        # （native_backdrop=False 才保得住这段边距；原生 DWM 背景会把它吃掉）。
         super().__init__(None, tint_strength=0.93, margin=14, open_slide=8,
-                         native_backdrop=False)
+                         native_backdrop=False, shadow=True)
         self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.NoDropShadowWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)

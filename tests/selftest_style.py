@@ -1149,6 +1149,18 @@ def main() -> int:
     check("下拉弹窗的圆角比设计 token 略大（更接近 Windows 浮出）",
           "theme.radius_flyout + 2" in _popup_src, "圆角为 radius_flyout + 2")
 
+    # 菜单是浮出层，必须有投影。shadow 默认是 False，而全项目此前没有任何窗口传过
+    # shadow=True —— 所以谁都没有阴影，菜单看着是"贴在"背景上而不是浮在上面。
+    import inspect as _inspect3
+
+    from winsnip.ui.widgets import FluentMenu as _ShadowMenu
+
+    _menu_init = _inspect3.getsource(_ShadowMenu.__init__)
+    check("菜单开了投影（shadow=True）", "shadow=True" in _menu_init,
+          "FluentMenu 构造时传了 shadow=True")
+    check("菜单留有阴影边距（margin > 0）",
+          "margin=14" in _menu_init, "margin=14")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
