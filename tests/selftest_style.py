@@ -1063,6 +1063,36 @@ def main() -> int:
     menu.close()
     pump(app, 0.2)
 
+    # 回归：竖条位置必须在**菜单坐标**和**行坐标**之间正确换算。
+    # 踩过的坑：bar_centre_y() 返回菜单坐标，而 PopupMenuItem.paintEvent 的 painter 是
+    # 行坐标，少减一次 self.y() 就变成"每一行左侧都露出一小段蓝条"。
+    # 只断言 bar_centre_y() 的数值发现不了（那个值一直是对的），所以这里两头都验：
+    # 一是换算后的位置确实落在本行内，二是绘制代码里确实做了这次减法。
+    import inspect as _inspect
+
+    from winsnip.ui.widgets import PopupMenuItem as _Item
+
+    probe = _Menu(None, min_width=180)
+    probe.add_item("浅色")
+    probe.add_item("深色", checked=True)      # 当前值 = 第 1 行
+    probe.add_item("跟随系统")
+    probe.resize(220, 120)
+    probe.show()
+    pump(app, 0.5)
+    _items = [i for i in probe._items if isinstance(i, _Item)]
+    _checked = _items[1]
+    _centre_menu = probe.bar_centre_y()
+    _local = None if _centre_menu is None else _centre_menu - _checked.y()
+    check("Win11 菜单竖条的坐标换算正确（菜单坐标 - 本行 y 落在本行内）",
+          _local is not None and 0 <= _local <= _checked.height(),
+          f"菜单坐标 {_centre_menu} - 本行 y {_checked.y()} = {_local}，本行高 {_checked.height()}")
+
+    _src = _inspect.getsource(_Item.paintEvent)
+    check("Win11 竖条绘制做了行坐标换算（centre - self.y()）",
+          "centre - self.y()" in _src, "绘制代码里含 centre - self.y()")
+    probe.close()
+    pump(app, 0.2)
+
     theme.style = "win10"
     theme.refresh()
     win10_anchor, _, _ = _menu_bar()

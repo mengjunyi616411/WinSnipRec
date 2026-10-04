@@ -1742,15 +1742,17 @@ class PopupMenuItem(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
             painter.drawRoundedRect(QRectF(self.rect()).adjusted(4, 1, -4, -1), 5, 5)
-        # Win11 的强调色竖条表示**当前选中的值**（checked）；指针划到别的行时它会滑过去，
-        # 移出后再滑回当前值。位置由 FluentMenu 统一持有 —— 逐项自绘各自为政的话，
-        # 动画中途跨在两行之间就接不上，所以这里只画"落在本行内的那一段"。
+        # 当前选中值（checked）左侧的强调色竖条。位置由 FluentMenu 统一持有 —— 逐项自绘
+        # 各自为政的话，动画中途跨在两行之间就接不上，所以这里只画"落在本行内的那一段"。
         menu = self.parent()
         centre = None
         getter = getattr(menu, "bar_centre_y", None)
         if callable(getter):
             centre = getter()
         if centre is not None:
+            # bar_centre_y() 给的是**菜单坐标**，而这里的 painter 是**行坐标** ——
+            # 不减掉 self.y() 的话竖条会画在错误的高度，表现为每一行左边都露出一小段蓝条。
+            centre = centre - self.y()
             bar_height = min(14.0, self.height() - 8.0)
             if bar_height > 3.0:
                 painter.save()
