@@ -573,6 +573,10 @@ class SettingsWindow(FluentWindow):
         palette = theme.palette
         for row in self._rows:
             row.refresh()
+        # 下拉弹窗是独立的原生窗口，样式只在 showPopup 时套过一次。切主题时它可能正开着
+        # （点选后不再关闭），不重套的话就会出现"窗口已经变浅、弹窗还是深色"。
+        for combo in self.findChildren(FluentComboBox):
+            combo._style_popup()
         for label in getattr(self, "_section_labels", []):
             label.setStyleSheet(f"color: {palette.text_secondary};")
         if hasattr(self, "_video_row"):
