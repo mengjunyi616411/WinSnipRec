@@ -1563,6 +1563,30 @@ class FluentComboBox(QComboBox):
         super().__init__(parent)
         self.setFont(ui_font(13))
         self.setMinimumHeight(32)
+        # 点击某个条目后弹窗**不关闭**：选完立刻关闭的话，蓝条滑向新值的过程根本看不到。
+        # 关键在于把鼠标释放事件吞掉 —— QComboBox 的弹窗容器就是靠这个事件自行关闭的。
+        self._keep_popup_open = True
+        self.view().viewport().installEventFilter(self)
+
+    # ------------------------------------------------------------------ #
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        """Apply the clicked row without letting Qt dismiss the popup."""
+        try:
+            view = self.view()
+            if (self._keep_popup_open and view is not None
+                    and obj is view.viewport()
+                    and event.type() == QEvent.Type.MouseButtonRelease):
+                index = view.indexAt(event.position().toPoint())
+                if index.isValid():
+                    self.setCurrentIndex(index.row())
+                    delegate = view.itemDelegate()
+                    if isinstance(delegate, _SelectionBarDelegate):
+                        # 让蓝条从旧位置滑到新位置（弹窗还开着，所以看得见）
+                        delegate.set_current_row(index.row())
+                    return True
+        except Exception:
+            pass
+        return super().eventFilter(obj, event)
 
     # ------------------------------------------------------------------ #
     def _popup_stylesheet(self) -> str:
