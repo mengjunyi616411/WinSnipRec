@@ -1466,21 +1466,23 @@ class ToggleSwitch(QWidget):
 
 
 class _SelectionBarDelegate(QStyledItemDelegate):
-    """Draws the Win11 short accent bar on a popup row.
+    """Draws the Win11 accent bar on the **current value** of a popup.
 
-    The stylesheet cannot do this: ``border-left`` always spans the full item
-    height, while the real indicator is a short bar centred in the row. FluentMenu
-    paints the same shape by hand; this brings the combo popups in line.
+    The bar marks the checked/current entry, not the hovered one: hovering only
+    shows the rounded background. (Getting this backwards is what the reference
+    screenshot caught — a hovered row had a bar it should not have had.)
+
+    The stylesheet cannot draw it: ``border-left`` always spans the full item
+    height, while the real indicator is a short bar centred in the row.
     """
+
+    def __init__(self, parent=None, *, current_row: int = -1) -> None:
+        super().__init__(parent)
+        self.current_row = current_row
 
     def paint(self, painter, option, index) -> None:  # noqa: N802
         super().paint(painter, option, index)
-        if theme.is_win10:
-            return
-        state = option.state
-        highlighted = bool(state & QStyle.StateFlag.State_Selected
-                           or state & QStyle.StateFlag.State_MouseOver)
-        if not highlighted:
+        if theme.is_win10 or index.row() != self.current_row:
             return
         rect = option.rect
         bar_height = min(14.0, rect.height() - 10.0)
@@ -1554,10 +1556,10 @@ class FluentComboBox(QComboBox):
         if view is None:
             return
         view.setStyleSheet(self._popup_stylesheet())
-        # 竖条交给 delegate 画：样式表的 border-left 只能占满整行，做不出 Win11 那种
-        # "比高亮底更矮、垂直居中"的短竖条（FluentMenu 里是同样的画法）。
+        # 竖条只画在**当前值**那一行（不是悬停行），交给 delegate 自绘 —— 样式表的
+        # border-left 只能占满整行，做不出 Win11 那种"比高亮底更矮"的短竖条。
         try:
-            view.setItemDelegate(_SelectionBarDelegate(view))
+            view.setItemDelegate(_SelectionBarDelegate(view, current_row=self.currentIndex()))
         except Exception:
             pass
         container = view.window()
@@ -1651,21 +1653,27 @@ class PopupMenuItem(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         palette = theme.palette
-        if self._enabled and (self._hover or self._pressed):
+        # 当前值（checked）也有底色，只是比悬停淡一些 —— Win11 里选中项始终是"选中"的样子。
+        highlighted = self._enabled and (self._hover or self._pressed)
+        if self._enabled and self.checked and not highlighted:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", 0.035))
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(4, 1, -4, -1), 5, 5)
+        if highlighted:
             alpha = 0.075 if self._pressed else 0.05
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
             painter.drawRoundedRect(QRectF(self.rect()).adjusted(4, 1, -4, -1), 5, 5)
-            # Win11：选中项左侧一条强调色竖条。这里是自绘，所以能做到竖条比高亮底**更矮**
-            # （样式表的 border-left 只能占满整行 —— 应用自己的菜单是 FluentMenu，
-            # 不走 QMenu 那套样式表，之前改 QMenu::item 对它完全没有效果）。
-            if not theme.is_win10:
-                bar_height = min(14.0, self.height() - 10.0)
-                if bar_height > 3.0:
-                    painter.setBrush(QColor(palette.accent))
-                    painter.drawRoundedRect(
-                        QRectF(6.0, (self.height() - bar_height) / 2.0, 3.0, bar_height),
-                        1.5, 1.5)
+        # Win11 的强调色竖条表示**当前选中的值**（checked），不是鼠标悬停 —— 悬停只有底色。
+        # 这里是自绘，所以能做到竖条比高亮底更矮（样式表的 border-left 只能占满整行）。
+        if self._enabled and self.checked and not theme.is_win10:
+            bar_height = min(14.0, self.height() - 10.0)
+            if bar_height > 3.0:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(palette.accent))
+                painter.drawRoundedRect(
+                    QRectF(6.0, (self.height() - bar_height) / 2.0, 3.0, bar_height),
+                    1.5, 1.5)
 
         x = 12 + self.indent
         color = QColor(palette.text_primary if self._enabled else palette.text_disabled)

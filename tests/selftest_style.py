@@ -1001,10 +1001,14 @@ def main() -> int:
     # 且竖条比整行矮（垂直方向上有留白）。Win10 不该有。
     from winsnip.ui.widgets import PopupMenuItem as _Item
 
-    def _bar_pixels() -> tuple[int, int]:
+    def _bar_pixels(*, checked: bool) -> tuple[int, int]:
+        # 竖条表示**当前值**（checked），不是鼠标悬停 —— 参考截图纠正过一次：
+        # 悬停行不该有竖条，只有当前值那一行才有。
         item = _Item("深色")
         item.resize(200, 34)
-        item._hover = True
+        item.checked = checked
+        if not checked:
+            item._hover = True
         QTest_qapp = app  # noqa: F841
         image = item.grab().toImage()
         accent = _QColor(theme.palette.accent)
@@ -1020,15 +1024,19 @@ def main() -> int:
 
     theme.style = "win11"
     theme.refresh()
-    bar_rows, total_rows = _bar_pixels()
-    check("Win11 FluentMenu 选中项左侧有强调色竖条",
+    bar_rows, total_rows = _bar_pixels(checked=True)
+    check("Win11 FluentMenu 当前值左侧有强调色竖条",
           bar_rows > 4, f"命中 {bar_rows} 行 / 共 {total_rows} 行")
+    theme.style = "win11"
+    theme.refresh()
+    hover_rows, _ = _bar_pixels(checked=False)
+    check("Win11 仅悬停的行没有竖条（竖条只给当前值）", hover_rows == 0, f"{hover_rows} 行")
     check("Win11 竖条比整行矮（上下有留白）",
           0 < bar_rows < total_rows - 6, f"竖条 {bar_rows} 行 / 整行 {total_rows} 行")
 
     theme.style = "win10"
     theme.refresh()
-    win10_bar_rows, _ = _bar_pixels()
+    win10_bar_rows, _ = _bar_pixels(checked=True)
     check("Win10 FluentMenu 选中项没有这条竖条", win10_bar_rows == 0, f"{win10_bar_rows} 行")
     theme.style = "win11"
     theme.refresh()
