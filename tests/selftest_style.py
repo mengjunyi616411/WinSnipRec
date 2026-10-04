@@ -986,6 +986,44 @@ def main() -> int:
     theme.refresh()
     apply_app_theme(app)
 
+    # ---------------- FluentMenu 自绘的选中竖条 ---------------- #
+    # 应用自己的菜单是 FluentMenu（自绘 PopupMenuItem），不走 QMenu 那套样式表 ——
+    # 只改 QMenu::item 对它完全没有效果。这里直接量像素：hover 项左侧应当出现强调色，
+    # 且竖条比整行矮（垂直方向上有留白）。Win10 不该有。
+    from winsnip.ui.widgets import PopupMenuItem as _Item
+
+    def _bar_pixels() -> tuple[int, int]:
+        item = _Item("深色")
+        item.resize(200, 34)
+        item._hover = True
+        QTest_qapp = app  # noqa: F841
+        image = item.grab().toImage()
+        accent = _QColor(theme.palette.accent)
+        rows = set()
+        for y in range(image.height()):
+            for x in range(3, 12):
+                c = image.pixelColor(x, y)
+                if (abs(c.red() - accent.red()) + abs(c.green() - accent.green())
+                        + abs(c.blue() - accent.blue())) < 60:
+                    rows.add(y)
+                    break
+        return (len(rows), image.height())
+
+    theme.style = "win11"
+    theme.refresh()
+    bar_rows, total_rows = _bar_pixels()
+    check("Win11 FluentMenu 选中项左侧有强调色竖条",
+          bar_rows > 4, f"命中 {bar_rows} 行 / 共 {total_rows} 行")
+    check("Win11 竖条比整行矮（上下有留白）",
+          0 < bar_rows < total_rows - 6, f"竖条 {bar_rows} 行 / 整行 {total_rows} 行")
+
+    theme.style = "win10"
+    theme.refresh()
+    win10_bar_rows, _ = _bar_pixels()
+    check("Win10 FluentMenu 选中项没有这条竖条", win10_bar_rows == 0, f"{win10_bar_rows} 行")
+    theme.style = "win11"
+    theme.refresh()
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

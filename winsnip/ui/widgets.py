@@ -1623,6 +1623,16 @@ class PopupMenuItem(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
             painter.drawRoundedRect(QRectF(self.rect()).adjusted(4, 1, -4, -1), 5, 5)
+            # Win11：选中项左侧一条强调色竖条。这里是自绘，所以能做到竖条比高亮底**更矮**
+            # （样式表的 border-left 只能占满整行 —— 应用自己的菜单是 FluentMenu，
+            # 不走 QMenu 那套样式表，之前改 QMenu::item 对它完全没有效果）。
+            if not theme.is_win10:
+                bar_height = min(14.0, self.height() - 10.0)
+                if bar_height > 3.0:
+                    painter.setBrush(QColor(palette.accent))
+                    painter.drawRoundedRect(
+                        QRectF(6.0, (self.height() - bar_height) / 2.0, 3.0, bar_height),
+                        1.5, 1.5)
 
         x = 12 + self.indent
         color = QColor(palette.text_primary if self._enabled else palette.text_disabled)
