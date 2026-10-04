@@ -1642,10 +1642,17 @@ class FluentComboBox(QComboBox):
             pass
         container = view.window()
         if container is not None and container is not self:
+            # 弹窗容器默认是**不透明方窗口** —— 圆角会被背景填满、根本看不出来，边框也是
+            # 实色，整体显得硬。开半透明之后 QFrame 的 border-radius 才真正切出圆角，
+            # 再配一条半透明描边，观感接近 Windows 的浮出菜单。
+            try:
+                container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            except Exception:
+                pass
             container.setStyleSheet(
                 f"QFrame {{ background-color: {palette.flyout_bg};"
-                f" border: 1px solid {palette.flyout_border};"
-                f" border-radius: {theme.radius_flyout}px; }}"
+                f" border: 1px solid {rgba(palette.flyout_border, 0.75).name(QColor.NameFormat.HexArgb)};"
+                f" border-radius: {theme.radius_flyout + 2}px; }}"
             )
             container.setContentsMargins(0, 0, 0, 0)
 

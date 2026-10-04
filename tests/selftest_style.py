@@ -1139,6 +1139,16 @@ def main() -> int:
           "padding: 3px 8px 3px 18px" in _hint,
           "弹窗样式表里 padding-left 为 18")
 
+    # 弹窗容器默认是不透明方窗口，圆角会被背景填满 —— 必须开半透明才切得出圆角。
+    import inspect as _inspect2
+
+    _popup_src = _inspect2.getsource(FluentComboBox._style_popup)
+    check("下拉弹窗开了半透明（否则圆角被方窗口填满，显得硬）",
+          "WA_TranslucentBackground" in _popup_src,
+          "容器设置了 WA_TranslucentBackground")
+    check("下拉弹窗的圆角比设计 token 略大（更接近 Windows 浮出）",
+          "theme.radius_flyout + 2" in _popup_src, "圆角为 radius_flyout + 2")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
