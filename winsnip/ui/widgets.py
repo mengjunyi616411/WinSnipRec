@@ -1483,6 +1483,14 @@ class FluentComboBox(QComboBox):
     def _popup_stylesheet(self) -> str:
         p = theme.palette
         item_hover = "rgba(255,255,255,0.07)" if p.dark else "rgba(0,0,0,0.045)"
+        # Win11 的选中项左侧有一条强调色竖条（配浅色圆角底）；未选中时用同宽的透明
+        # 边框占位，否则选中瞬间文字会向左跳。Win10 的下拉没有这条。
+        if theme.is_win10:
+            bar_idle = ""
+            bar_selected = ""
+        else:
+            bar_idle = "border-left: 3px solid transparent;"
+            bar_selected = f"border-left: 3px solid {p.accent};"
         return f"""
         QListView {{
             background-color: {p.flyout_bg};
@@ -1496,10 +1504,12 @@ class FluentComboBox(QComboBox):
             padding: 3px 8px;
             border-radius: {theme.radius_control}px;
             color: {p.text_primary};
+            {bar_idle}
         }}
         QListView::item:selected, QListView::item:hover {{
             background-color: {item_hover};
             color: {p.text_primary};
+            {bar_selected}
         }}
         QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
         QScrollBar::handle:vertical {{

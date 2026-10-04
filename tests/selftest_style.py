@@ -837,6 +837,49 @@ def main() -> int:
           popup_radii and all(v in (theme.radius_control, theme.radius_flyout) for v in popup_radii),
           f"{popup_radii} vs 控件 {theme.radius_control} / 浮出 {theme.radius_flyout}")
 
+    # ---------------- 菜单/下拉的选中样式（Win11 的左侧强调竖条） ---------------- #
+    # Win11 的菜单在选中项左侧有一条强调色竖条，配浅色圆角底；Win10 没有这条。
+    # 未选中时用同宽的透明边框占位，否则选中瞬间文字会向左跳 3px。
+    from winsnip.theme import application_stylesheet as _menu_css
+
+    menu_rules = {}
+    for _style in ("win11", "win10"):
+        theme.style = _style
+        theme.refresh()
+        _css = _menu_css()
+        _menu = _css[_css.index("QMenu::item {"):_css.index("QMenu::item:disabled")]
+        _popup = FluentComboBox._popup_stylesheet(FluentComboBox())
+        menu_rules[_style] = (
+            _re.findall(r"border-left:\s*([^;]+);", _menu),
+            _re.findall(r"border-left:\s*([^;]+);", _popup),
+        )
+
+    w11_menu, w11_popup = menu_rules["win11"]
+    w10_menu, w10_popup = menu_rules["win10"]
+
+    def _colour(decl: str) -> str:
+        return decl.split()[-1] if decl else ""
+
+    def _width(decl: str) -> str:
+        return decl.split()[0] if decl else ""
+
+    check("Win11 菜单选中项有强调色左竖条",
+          len(w11_menu) == 2 and _colour(w11_menu[0]) == "transparent"
+          and _colour(w11_menu[1]) not in ("", "transparent"),
+          f"{w11_menu}")
+    check("Win11 下拉选中项也有强调色左竖条",
+          len(w11_popup) == 2 and _colour(w11_popup[0]) == "transparent"
+          and _colour(w11_popup[1]) not in ("", "transparent"),
+          f"{w11_popup}")
+    check("Win11 竖条宽度固定（未选中用透明边框占位，文字不会跳）",
+          all(_width(decl) == "3px" for decl in w11_menu + w11_popup),
+          f"菜单 {w11_menu} / 下拉 {w11_popup}")
+    check("Win10 菜单与下拉都没有这条竖条",
+          not w10_menu and not w10_popup,
+          f"菜单 {w10_menu} / 下拉 {w10_popup}")
+    theme.style = "win11"
+    theme.refresh()
+
     # ---------------- 截图/录屏 切换的蓝条 ---------------- #
     # Win10 的截图工具没有这条 accent 下划线，只靠图标变色。Win11 必须保留。
     from PySide6.QtGui import QColor as _QColor
