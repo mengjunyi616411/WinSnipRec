@@ -1000,49 +1000,43 @@ def main() -> int:
     theme.refresh()
     apply_app_theme(app)
 
-    # ---------------- FluentMenu 自绘的选中竖条 ---------------- #
-    # 应用自己的菜单是 FluentMenu（自绘 PopupMenuItem），不走 QMenu 那套样式表 ——
-    # 只改 QMenu::item 对它完全没有效果。这里直接量像素：hover 项左侧应当出现强调色，
-    # 且竖条比整行矮（垂直方向上有留白）。Win10 不该有。
-    from winsnip.ui.widgets import PopupMenuItem as _Item
+    # ---------------- FluentMenu 的竖条（悬停滑动） ---------------- #
+    # 应用自己的菜单是 FluentMenu（自绘 PopupMenuItem），不走 QMenu 那套样式表。
+    # 竖条位置由菜单统一持有：一是一个东西在移动才谈得上"滑"，二是逐项自绘各自为政的话，
+    # 动画中途跨在两行之间就接不上（每行只画落在自己范围内的那一段）。
+    from winsnip.ui.widgets import FluentMenu as _Menu
 
-    def _bar_pixels(*, checked: bool) -> tuple[int, int]:
-        # 竖条表示**当前值**（checked），不是鼠标悬停 —— 参考截图纠正过一次：
-        # 悬停行不该有竖条，只有当前值那一行才有。
-        item = _Item("深色")
-        item.resize(200, 34)
-        item.checked = checked
-        if not checked:
-            item._hover = True
-        QTest_qapp = app  # noqa: F841
-        image = item.grab().toImage()
-        accent = _QColor(theme.palette.accent)
-        rows = set()
-        for y in range(image.height()):
-            for x in range(3, 12):
-                c = image.pixelColor(x, y)
-                if (abs(c.red() - accent.red()) + abs(c.green() - accent.green())
-                        + abs(c.blue() - accent.blue())) < 60:
-                    rows.add(y)
-                    break
-        return (len(rows), image.height())
+    def _menu_bar() -> tuple[float | None, float | None, int]:
+        menu = _Menu(None, min_width=180)
+        menu.add_item("浅色")
+        menu.add_item("深色", checked=True)     # 当前值 = 第 1 行（锚点）
+        menu.add_item("跟随系统")
+        menu.resize(220, 120)
+        menu.show()
+        pump(app, 0.4)
+        anchor_centre = menu.bar_centre_y()
+        menu.set_bar_row(2)                     # 模拟指针划到第 2 行
+        pump(app, 1.0)
+        hover_centre = menu.bar_centre_y()
+        menu.set_bar_row(-1)                    # 移出
+        pump(app, 1.0)
+        back = menu.bar_centre_y()
+        menu.close()
+        pump(app, 0.2)
+        return anchor_centre, hover_centre, 0 if back == anchor_centre else 1
 
     theme.style = "win11"
     theme.refresh()
-    bar_rows, total_rows = _bar_pixels(checked=True)
-    check("Win11 FluentMenu 当前值左侧有强调色竖条",
-          bar_rows > 4, f"命中 {bar_rows} 行 / 共 {total_rows} 行")
-    theme.style = "win11"
-    theme.refresh()
-    hover_rows, _ = _bar_pixels(checked=False)
-    check("Win11 仅悬停的行没有竖条（竖条只给当前值）", hover_rows == 0, f"{hover_rows} 行")
-    check("Win11 竖条比整行矮（上下有留白）",
-          0 < bar_rows < total_rows - 6, f"竖条 {bar_rows} 行 / 整行 {total_rows} 行")
+    anchor_c, hover_c = _menu_bar()[:2]
+    check("Win11 菜单的竖条停在当前值（锚点）上", anchor_c is not None, f"centre={anchor_c}")
+    check("Win11 菜单的竖条会随悬停滑到别的行",
+          anchor_c is not None and hover_c is not None and hover_c > anchor_c,
+          f"锚点 {anchor_c} -> 悬停 {hover_c}")
 
     theme.style = "win10"
     theme.refresh()
-    win10_bar_rows, _ = _bar_pixels(checked=True)
-    check("Win10 FluentMenu 选中项没有这条竖条", win10_bar_rows == 0, f"{win10_bar_rows} 行")
+    win10_anchor, _, _ = _menu_bar()
+    check("Win10 菜单没有竖条", win10_anchor is None, f"centre={win10_anchor}")
     theme.style = "win11"
     theme.refresh()
 

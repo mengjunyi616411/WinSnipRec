@@ -1479,7 +1479,9 @@ class _SelectionBarDelegate(QStyledItemDelegate):
 
     def __init__(self, parent=None, *, current_row: int = -1) -> None:
         super().__init__(parent)
-        self.current_row = current_row
+        self._current_row = current_row      # 锚点：当前值（鼠标不在列表上时回到这里）
+        self._bar_row = current_row
+        self._hovering = False
         self._anim_row = float(current_row)
         self._anim = QVariantAnimation(self)
         self._anim.setDuration(anim.DURATION_NORMAL)
@@ -1488,27 +1490,51 @@ class _SelectionBarDelegate(QStyledItemDelegate):
 
     # ------------------------------------------------------------------ #
     def set_current_row(self, row: int, *, animate: bool = True) -> None:
-        """Move the bar to ``row``, sliding there when it was somewhere else."""
-        if row == self.current_row and float(row) == self._anim_row:
-            return
+        """The value changed: move the anchor, and the bar if nothing is hovered."""
+        self._current_row = row
+        if not self._hovering:
+            self._slide_to(row, animate=animate)
+
+    def set_hover_row(self, row: int, *, animate: bool = True) -> None:
+        """The pointer moved: the bar follows it, and returns to the value on leave."""
+        self._hovering = row >= 0
+        self._slide_to(row if self._hovering else self._current_row, animate=animate)
+
+    def _slide_to(self, row: int, *, animate: bool = True) -> None:
         start = self._anim_row
-        self.current_row = row
+        self._bar_row = row
         self._anim.stop()
-        if not animate or not anim.animations_enabled() or start < 0:
+        if not animate or not anim.animations_enabled() or start < 0 or row < 0:
             self._anim_row = float(row)
+            self._refresh()
         else:
             self._anim.setStartValue(float(start))
             self._anim.setEndValue(float(row))
             self._anim.start()
+
+    def _refresh(self) -> None:
         view = self.parent()
         if view is not None and hasattr(view, "viewport"):
             view.viewport().update()
 
     def _on_anim(self, value) -> None:
         self._anim_row = float(value)
-        view = self.parent()
-        if view is not None and hasattr(view, "viewport"):
-            view.viewport().update()
+        self._refresh()
+
+    # ------------------------------------------------------------------ #
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        """Track the pointer so the bar can follow it."""
+        try:
+            if event.type() == QEvent.Type.MouseMove:
+                view = self.parent()
+                if view is not None:
+                    index = view.indexAt(event.position().toPoint())
+                    self.set_hover_row(index.row() if index.isValid() else -1)
+            elif event.type() == QEvent.Type.Leave:
+                self.set_hover_row(-1)
+        except Exception:
+            pass
+        return False
 
     # ------------------------------------------------------------------ #
     def paint(self, painter, option, index) -> None:  # noqa: N802
@@ -1611,6 +1637,12 @@ class FluentComboBox(QComboBox):
                 delegate = _SelectionBarDelegate(view)
                 view.setItemDelegate(delegate)
             delegate.set_current_row(self.currentIndex())
+            # 让竖条跟随指针：鼠标划到哪一项就滑到哪一项，移出后滑回当前值。
+            viewport = view.viewport()
+            if viewport is not None:
+                viewport.setMouseTracking(True)
+                viewport.removeEventFilter(delegate)
+                viewport.installEventFilter(delegate)
         except Exception:
             pass
         container = view.window()
@@ -1681,11 +1713,21 @@ class PopupMenuItem(QWidget):
 
     def enterEvent(self, event) -> None:  # noqa: N802
         self._hover = True
+        self._notify_bar_hover()
         self.update()
 
     def leaveEvent(self, event) -> None:  # noqa: N802
         self._hover = False
+        self._notify_bar_hover()
         self.update()
+
+    def _notify_bar_hover(self) -> None:
+        """Tell the menu which row the pointer is on, so its bar can slide there."""
+        menu = self.parent()
+        setter = getattr(menu, "set_bar_row", None)
+        if callable(setter):
+            index = getattr(menu, "_items", []).index(self) if self in getattr(menu, "_items", []) else -1
+            setter(index if self._hover else -1)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if self._enabled and event.button() == Qt.MouseButton.LeftButton:
@@ -1715,16 +1757,24 @@ class PopupMenuItem(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", alpha))
             painter.drawRoundedRect(QRectF(self.rect()).adjusted(4, 1, -4, -1), 5, 5)
-        # Win11 的强调色竖条表示**当前选中的值**（checked），不是鼠标悬停 —— 悬停只有底色。
-        # 这里是自绘，所以能做到竖条比高亮底更矮（样式表的 border-left 只能占满整行）。
-        if self._enabled and self.checked and not theme.is_win10:
-            bar_height = min(14.0, self.height() - 10.0)
+        # Win11 的强调色竖条表示**当前选中的值**（checked）；指针划到别的行时它会滑过去，
+        # 移出后再滑回当前值。位置由 FluentMenu 统一持有 —— 逐项自绘各自为政的话，
+        # 动画中途跨在两行之间就接不上，所以这里只画"落在本行内的那一段"。
+        menu = self.parent()
+        centre = None
+        getter = getattr(menu, "bar_centre_y", None)
+        if callable(getter):
+            centre = getter()
+        if centre is not None:
+            bar_height = min(14.0, self.height() - 8.0)
             if bar_height > 3.0:
+                painter.save()
+                painter.setClipRect(QRectF(self.rect()))
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QColor(palette.accent))
                 painter.drawRoundedRect(
-                    QRectF(6.0, (self.height() - bar_height) / 2.0, 3.0, bar_height),
-                    1.5, 1.5)
+                    QRectF(6.0, centre - bar_height / 2.0, 3.0, bar_height), 1.5, 1.5)
+                painter.restore()
 
         x = 12 + self.indent
         color = QColor(palette.text_primary if self._enabled else palette.text_disabled)
@@ -1755,7 +1805,56 @@ class FluentMenu(FluentWindow):
     reference.  ``_open`` keeps a strong reference from the moment the menu is
     shown until it closes -- without it CPython would garbage-collect the menu
     (it has no Qt parent) and it would vanish before the user saw it.
+
+    The selection bar's position lives here rather than in each row: animating it
+    needs one thing that travels, and each row then clips the straddling bar to
+    itself. Per-row state could only ever jump.
     """
+
+    _open: set["FluentMenu"] = set()
+
+    def _init_bar(self) -> None:
+        self._bar_row = -1.0          # 浮点，行单位
+        self._bar_anchor = -1         # 当前值那一行；指针移出后回到这里
+        self._bar_anim = QVariantAnimation(self)
+        self._bar_anim.setDuration(anim.DURATION_NORMAL)
+        self._bar_anim.setEasingCurve(anim.curve("decelerate"))
+        self._bar_anim.valueChanged.connect(self._on_bar_anim)
+
+    def _on_bar_anim(self, value) -> None:
+        self._bar_row = float(value)
+        for item in getattr(self, "_items", []):
+            item.update()
+
+    def set_bar_row(self, row: int) -> None:
+        """Pointer is on ``row`` (or -1 when it left): slide the bar there."""
+        target = row if row >= 0 else self._bar_anchor
+        if target < 0:
+            self._bar_row = -1.0
+            return
+        if abs(target - self._bar_row) < 0.01 and not self._bar_anim.state():
+            return
+        self._bar_anim.stop()
+        if not anim.animations_enabled() or self._bar_row < 0:
+            self._bar_row = float(target)
+            for item in getattr(self, "_items", []):
+                item.update()
+            return
+        self._bar_anim.setStartValue(float(self._bar_row))
+        self._bar_anim.setEndValue(float(target))
+        self._bar_anim.start()
+
+    def bar_centre_y(self) -> float | None:
+        """Where the bar's centre is, in this menu's coordinates (or None)."""
+        items = getattr(self, "_items", [])
+        if theme.is_win10 or self._bar_row < 0 or not items:
+            return None
+        low = max(0, min(len(items) - 1, int(self._bar_row)))
+        high = max(0, min(len(items) - 1, low + 1))
+        frac = self._bar_row - int(self._bar_row)
+        low_centre = items[low].geometry().center().y()
+        high_centre = items[high].geometry().center().y()
+        return low_centre + (high_centre - low_centre) * frac
 
     _open: set["FluentMenu"] = set()
 
@@ -1768,6 +1867,7 @@ class FluentMenu(FluentWindow):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._min_width = min_width
         self._items: list[QWidget] = []
+        self._init_bar()
         self._layout = QVBoxLayout(self)
         margin = self._margin
         self._layout.setContentsMargins(margin + 4, margin + 4, margin + 4, margin + 4)
@@ -1789,6 +1889,10 @@ class FluentMenu(FluentWindow):
                              indent=indent, on_activate=run)
         self._layout.addWidget(item)
         self._items.append(item)
+        if checked and self._bar_anchor < 0:
+            # 锚点 = 当前值那一行；指针移出菜单后竖条回到这里
+            self._bar_anchor = len(self._items) - 1
+            self._bar_row = float(self._bar_anchor)
         return item
 
     def add_header(self, text: str) -> QLabel:
