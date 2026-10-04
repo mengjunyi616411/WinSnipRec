@@ -1534,7 +1534,9 @@ class _SelectionBarDelegate(QStyledItemDelegate):
         if not top_rect.isValid():
             return
         centre = top_rect.center().y() + (bottom_rect.center().y() - top_rect.center().y()) * frac
-        bar_height = min(14.0, top_rect.height() - 10.0)
+        # 高度按行高比例（参考图 20px / 46px 行 = 43%），宽 4px。之前写死 14px、宽 3px，
+        # 比 Windows 矮一截细一截。左边距保持 6 不动。
+        bar_height = min(top_rect.height() * 0.45, top_rect.height() - 10.0)
         if bar_height <= 3.0:
             return
         painter.save()
@@ -1545,8 +1547,8 @@ class _SelectionBarDelegate(QStyledItemDelegate):
         painter.setBrush(QColor(theme.palette.accent))
         rect = option.rect
         painter.drawRoundedRect(
-            QRectF(rect.x() + 6.0, centre - bar_height / 2.0, 3.0, bar_height),
-            1.5, 1.5)
+            QRectF(rect.x() + 6.0, centre - bar_height / 2.0, 4.0, bar_height),
+            2.0, 2.0)
         painter.restore()
 
 
@@ -1761,14 +1763,14 @@ class PopupMenuItem(QWidget):
             # bar_centre_y() 给的是**菜单坐标**，而这里的 painter 是**行坐标** ——
             # 不减掉 self.y() 的话竖条会画在错误的高度，表现为每一行左边都露出一小段蓝条。
             centre = centre - self.y()
-            bar_height = min(14.0, self.height() - 8.0)
+            bar_height = min(self.height() * 0.45, self.height() - 8.0)
             if bar_height > 3.0:
                 painter.save()
                 painter.setClipRect(QRectF(self.rect()))
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QColor(palette.accent))
                 painter.drawRoundedRect(
-                    QRectF(6.0, centre - bar_height / 2.0, 3.0, bar_height), 1.5, 1.5)
+                    QRectF(6.0, centre - bar_height / 2.0, 4.0, bar_height), 2.0, 2.0)
                 painter.restore()
 
         # 竖条占 x 6..9，文字从 18 开始 —— 留出 9px 间隔，之前只有 3px 太挤。
