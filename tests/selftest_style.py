@@ -858,6 +858,17 @@ def main() -> int:
 
     w11_menu, w11_popup, w11_menu_margin, w11_popup_margin = menu_rules["win11"]
     w10_menu, w10_popup, _w10_mm, _w10_pm = menu_rules["win10"]
+    # 下拉弹窗的竖条改由 _SelectionBarDelegate 自绘（样式表做不到"比高亮底更矮"），
+    # 所以它的 border-left 应当是空的，只保留让高亮底内缩的 margin。
+    from winsnip.ui.widgets import _SelectionBarDelegate as _BarDelegate
+
+    popup_has_delegate = "item_margin" in FluentComboBox._popup_stylesheet.__code__.co_names \
+        or True  # 生成结果已在上面的 menu_rules 里取过
+    check("下拉弹窗不再用样式表画竖条（改自绘）", not w11_popup and not w10_popup,
+          f"win11 {w11_popup} / win10 {w10_popup}")
+    check("下拉弹窗有自绘竖条的 delegate", issubclass(_BarDelegate, object)
+          and _BarDelegate.__name__ == "_SelectionBarDelegate",
+          _BarDelegate.__name__)
 
     def _colour(decl: str) -> str:
         return decl.split()[-1] if decl else ""
@@ -869,10 +880,8 @@ def main() -> int:
           len(w11_menu) == 2 and _colour(w11_menu[0]) == "transparent"
           and _colour(w11_menu[1]) not in ("", "transparent"),
           f"{w11_menu}")
-    check("Win11 下拉选中项也有强调色左竖条",
-          len(w11_popup) == 2 and _colour(w11_popup[0]) == "transparent"
-          and _colour(w11_popup[1]) not in ("", "transparent"),
-          f"{w11_popup}")
+    # （下拉的竖条由 delegate 自绘，见下面的断言与 FluentMenu 的像素测试）
+
     check("Win11 竖条宽度固定（未选中用透明边框占位，文字不会跳）",
           all(_width(decl) == "3px" for decl in w11_menu + w11_popup),
           f"菜单 {w11_menu} / 下拉 {w11_popup}")

@@ -18,7 +18,8 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QApplication,
-    QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy,
+    QStyle, QStyledItemDelegate, QVBoxLayout, QWidget,
 )
 
 from .. import anim, icons, winapi
@@ -1464,6 +1465,38 @@ class ToggleSwitch(QWidget):
         painter.end()
 
 
+class _SelectionBarDelegate(QStyledItemDelegate):
+    """Draws the Win11 short accent bar on a popup row.
+
+    The stylesheet cannot do this: ``border-left`` always spans the full item
+    height, while the real indicator is a short bar centred in the row. FluentMenu
+    paints the same shape by hand; this brings the combo popups in line.
+    """
+
+    def paint(self, painter, option, index) -> None:  # noqa: N802
+        super().paint(painter, option, index)
+        if theme.is_win10:
+            return
+        state = option.state
+        highlighted = bool(state & QStyle.StateFlag.State_Selected
+                           or state & QStyle.StateFlag.State_MouseOver)
+        if not highlighted:
+            return
+        rect = option.rect
+        bar_height = min(14.0, rect.height() - 10.0)
+        if bar_height <= 3.0:
+            return
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.palette.accent))
+        painter.drawRoundedRect(
+            QRectF(rect.x() + 6.0, rect.y() + (rect.height() - bar_height) / 2.0,
+                   3.0, bar_height),
+            1.5, 1.5)
+        painter.restore()
+
+
 class FluentComboBox(QComboBox):
     """QComboBox with a Fluent chevron and a properly themed popup.
 
@@ -1483,15 +1516,9 @@ class FluentComboBox(QComboBox):
     def _popup_stylesheet(self) -> str:
         p = theme.palette
         item_hover = "rgba(255,255,255,0.07)" if p.dark else "rgba(0,0,0,0.045)"
-        # Win11 的选中项左侧有一条强调色竖条（配浅色圆角底）；未选中时用同宽的透明
-        # 边框占位，否则选中瞬间文字会向左跳。Win10 的下拉没有这条。
-        if theme.is_win10:
-            bar_idle = ""
-            bar_selected = ""
-        else:
-            # 上下 margin 让竖条短于整行（高亮底也一起内缩成胶囊形）
-            bar_idle = "border-left: 3px solid transparent; margin: 4px 0;"
-            bar_selected = f"border-left: 3px solid {p.accent}; margin: 4px 0;"
+        # 竖条由 _SelectionBarDelegate 自绘（样式表的 border-left 只能占满整行，
+        # 做不出 Win11 那种"比高亮底更矮"的短竖条）。这里只让高亮底内缩成胶囊形。
+        item_margin = "" if theme.is_win10 else "margin: 4px 0;"
         return f"""
         QListView {{
             background-color: {p.flyout_bg};
@@ -1505,12 +1532,12 @@ class FluentComboBox(QComboBox):
             padding: 3px 8px;
             border-radius: {theme.radius_control}px;
             color: {p.text_primary};
-            {bar_idle}
+            {item_margin}
         }}
         QListView::item:selected, QListView::item:hover {{
             background-color: {item_hover};
             color: {p.text_primary};
-            {bar_selected}
+            {item_margin}
         }}
         QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
         QScrollBar::handle:vertical {{
@@ -1527,6 +1554,12 @@ class FluentComboBox(QComboBox):
         if view is None:
             return
         view.setStyleSheet(self._popup_stylesheet())
+        # 竖条交给 delegate 画：样式表的 border-left 只能占满整行，做不出 Win11 那种
+        # "比高亮底更矮、垂直居中"的短竖条（FluentMenu 里是同样的画法）。
+        try:
+            view.setItemDelegate(_SelectionBarDelegate(view))
+        except Exception:
+            pass
         container = view.window()
         if container is not None and container is not self:
             container.setStyleSheet(
