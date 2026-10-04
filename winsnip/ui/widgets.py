@@ -400,9 +400,22 @@ class FluentWindow(QWidget):
             QTimer.singleShot(200, self._verify_native_backdrop)
 
     def minimize_animated(self) -> None:
-        """Minimize with the Windows-style shrink-toward-the-taskbar motion."""
+        """Minimize using the Windows animation itself.
+
+        ShowWindow(SW_MINIMIZE) lets DWM play the real minimize motion, which is
+        always a better match than anything drawn by hand. The self-drawn snapshot
+        animation is only kept for when the system's own "Animate windows when
+        minimizing and maximizing" option is off — in that case Windows plays
+        nothing at all and the window would just vanish.
+        """
         if self.isMinimized():
             return
+        if winapi.native_minimize_animation_enabled():
+            try:
+                if winapi.minimize_window_native(int(self.winId())):
+                    return
+            except Exception:
+                pass
         anim.minimize_window_animated(self)
 
     def _start_open_animation(self) -> None:

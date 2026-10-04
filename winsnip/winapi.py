@@ -256,6 +256,49 @@ def client_area_animations_enabled() -> bool:
         return True
 
 
+SPI_GETANIMATION = 0x0048
+SW_MINIMIZE = 6
+
+
+class _ANIMATIONINFO(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_uint), ("iMinAnimate", ctypes.c_int)]
+
+
+def native_minimize_animation_enabled() -> bool:
+    """Whether Windows itself will animate minimize/maximize.
+
+    This is the system's own "Animate windows when minimizing and maximizing"
+    option (SPI_GETANIMATION), not the general animation setting. When it is off,
+    ShowWindow(SW_MINIMIZE) makes the window vanish instantly and an app that wants
+    the Windows-style shrink has to draw it itself.
+
+    NOTE: SPI_GETANIMATION takes an ANIMATIONINFO struct, whose *first* field is
+    cbSize — reading it as a bare UINT reports cbSize, and if the call fails you
+    silently get whatever you initialised the buffer with. That mistake is how this
+    machine first looked like it had the animation disabled when it does not.
+    """
+    try:
+        info = _ANIMATIONINFO()
+        info.cbSize = ctypes.sizeof(info)
+        ok = user32.SystemParametersInfoW(
+            ctypes.c_uint(SPI_GETANIMATION), ctypes.sizeof(info), ctypes.byref(info), 0)
+        if not ok:
+            return False
+        return bool(info.iMinAnimate)
+    except Exception:
+        return False
+
+
+def minimize_window_native(hwnd: int) -> bool:
+    """Ask Windows to minimize the window, so DWM plays its own animation."""
+    if not hwnd:
+        return False
+    try:
+        return bool(user32.ShowWindow(wt.HWND(hwnd), SW_MINIMIZE))
+    except Exception:
+        return False
+
+
 def system_accent_color(dark: bool = False) -> str:
     """The user's accent colour as '#RRGGBB'.
 

@@ -29,6 +29,12 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" :: {detail}" if detail else ""))
 
 
+def skip(name: str, reason: str) -> None:
+    """Record a check as passed-with-a-note: the machine cannot exercise it."""
+    checks.append((name, True, f"SKIPPED: {reason}"))
+    print(f"[SKIP] {name}  ::  {reason}")
+
+
 def pump(app: QApplication, seconds: float) -> None:
     end = time.perf_counter() + seconds
     while time.perf_counter() < end:
@@ -141,8 +147,10 @@ def main() -> int:
     ring.deleteLater()
 
     # ---------------- 最小化动画 ---------------- #
-    # 用快照浮层做动画：直接缩放真窗口会让 Qt 每帧重排内容（文字重新折行、
-    # 按钮被压扁），完全不像系统的效果。所以真窗口立刻最小化，动的是那张快照。
+    # 首选 Windows 原生动画：ShowWindow(SW_MINIMIZE) 让 DWM 播真正的系统动效，
+    # 比手画的更像系统。自绘快照只在系统把「最小化/最大化时动画显示窗口」关掉时
+    # 才用得上 —— 那种情况下 Windows 什么都不播，窗口会直接消失。
+    from winsnip import winapi as _winapi
     from winsnip.ui.main_window import MainWindow as _MainWindow
 
     window = _MainWindow()
@@ -158,15 +166,38 @@ def main() -> int:
           f"{origin.width()}x{origin.height()} @y{origin.y()} -> "
           f"{target.width()}x{target.height()} @y{target.y()}")
 
-    before_text = window.hint._lines if hasattr(window, "hint") else None
-    window.minimize_animated()
-    pump(app, 0.15)
-    check("动画期间出现快照浮层", anim._minimize_ghost_count() > 0,
-          f"浮层数 {anim._minimize_ghost_count()}")
-    check("真窗口立刻最小化（不等动画跑完）", window.isMinimized())
-    pump(app, 1.2)
-    check("动画结束后快照浮层已清理", anim._minimize_ghost_count() == 0,
-          f"浮层数 {anim._minimize_ghost_count()}")
+    native_available = _winapi.native_minimize_animation_enabled()
+    check("能正确读到系统的「最小化/最大化时动画显示窗口」开关",
+          isinstance(native_available, bool), f"{native_available}")
+
+    if native_available:
+        # 系统自己会播 -> 走原生，不产生自绘浮层
+        window.minimize_animated()
+        pump(app, 0.15)
+        check("系统动画可用时走原生最小化（不画快照浮层）",
+              window.isMinimized() and anim._minimize_ghost_count() == 0,
+              f"isMinimized={window.isMinimized()} 浮层={anim._minimize_ghost_count()}")
+        window.showNormal()
+        pump(app, 0.6)
+    else:
+        skip("系统动画可用时走原生最小化", "本机把该动画关掉了")
+
+    # 回退路径：假装系统关掉了那个开关，应当改用自绘快照
+    real_probe = _winapi.native_minimize_animation_enabled
+    _winapi.native_minimize_animation_enabled = lambda: False
+    try:
+        window.showNormal()
+        pump(app, 0.6)
+        window.minimize_animated()
+        pump(app, 0.15)
+        check("系统关闭该动画时回退到自绘快照",
+              anim._minimize_ghost_count() > 0 and window.isMinimized(),
+              f"浮层数 {anim._minimize_ghost_count()} isMinimized={window.isMinimized()}")
+        pump(app, 1.2)
+        check("回退动画结束后快照浮层已清理", anim._minimize_ghost_count() == 0,
+              f"浮层数 {anim._minimize_ghost_count()}")
+    finally:
+        _winapi.native_minimize_animation_enabled = real_probe
 
     # 抽搐的成因：浮层创建+合成要约 70ms，而动画在此之前就开跑了，于是它以缩小
     # 一半的样子突然出现。修法是先显示并同步画一帧，再在下一个事件循环启动动画。
