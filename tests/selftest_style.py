@@ -1090,6 +1090,11 @@ def main() -> int:
     _src = _inspect.getsource(_Item.paintEvent)
     check("Win11 竖条绘制做了行坐标换算（centre - self.y()）",
           "centre - self.y()" in _src, "绘制代码里含 centre - self.y()")
+    # 单选组的当前值只由蓝条表示，不再画右侧对号（两个标记重复）。
+    # 开关型（录制麦克风 / 系统声音 / 开机自启）没有单选语义，仍保留对号。
+    check("单选组不画右侧对号（蓝条已表示当前值）",
+          'not getattr(self, "radio", False)' in _src,
+          "对号条件含 radio 判断")
     probe.close()
     pump(app, 0.2)
 

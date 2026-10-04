@@ -1778,7 +1778,10 @@ class PopupMenuItem(QWidget):
             QRectF(x, 0, self.width() - x - 34, self.height()),
             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self.label,
         )
-        if self.checked:
+        # 单选组（形状 / 倒计时 / 设备）不画右侧对号：左侧那条短蓝条已经是"当前值"的
+        # 指示，两个标记同时出现是重复的。开关型（录制麦克风 / 系统声音 / 开机自启）没有
+        # 单选语义，仍保留对号表示开或关。
+        if self.checked and not getattr(self, "radio", False):
             icons.paint_icon(painter, "check",
                              QRectF(self.width() - 26, (self.height() - 16) / 2.0, 16, 16),
                              QColor(palette.accent))
