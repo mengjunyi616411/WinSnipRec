@@ -1006,32 +1006,39 @@ def main() -> int:
     # 动画中途跨在两行之间就接不上（每行只画落在自己范围内的那一段）。
     from winsnip.ui.widgets import FluentMenu as _Menu
 
-    def _menu_bar() -> tuple[float | None, float | None, int]:
+    def _menu_bar() -> tuple[float | None, float | None, float | None]:
         menu = _Menu(None, min_width=180)
         menu.add_item("浅色")
-        menu.add_item("深色", checked=True)     # 当前值 = 第 1 行（锚点）
-        menu.add_item("跟随系统")
+        menu.add_item("深色", checked=True)     # 当前值 = 第 1 行
+        item3 = menu.add_item("跟随系统")
         menu.resize(220, 120)
         menu.show()
         pump(app, 0.4)
         anchor_centre = menu.bar_centre_y()
-        menu.set_bar_row(2)                     # 模拟指针划到第 2 行
-        pump(app, 1.0)
+        # 悬停别的行 -> 竖条**不该**动（选择驱动，不是悬停驱动）
+        item3._hover = True
+        item3.update()
+        pump(app, 0.5)
         hover_centre = menu.bar_centre_y()
-        menu.set_bar_row(-1)                    # 移出
+        # 选择了第 2 行 -> 竖条滑过去
+        menu.set_bar_anchor(2)
         pump(app, 1.0)
-        back = menu.bar_centre_y()
+        chosen_centre = menu.bar_centre_y()
+        item3._hover = False
+        item3.update()
         menu.close()
         pump(app, 0.2)
-        return anchor_centre, hover_centre, 0 if back == anchor_centre else 1
+        return anchor_centre, hover_centre, chosen_centre
 
     theme.style = "win11"
     theme.refresh()
-    anchor_c, hover_c = _menu_bar()[:2]
-    check("Win11 菜单的竖条停在当前值（锚点）上", anchor_c is not None, f"centre={anchor_c}")
-    check("Win11 菜单的竖条会随悬停滑到别的行",
-          anchor_c is not None and hover_c is not None and hover_c > anchor_c,
-          f"锚点 {anchor_c} -> 悬停 {hover_c}")
+    anchor_c, hover_c, chosen_c = _menu_bar()
+    check("Win11 菜单的竖条停在当前值上", anchor_c is not None, f"centre={anchor_c}")
+    check("Win11 悬停别的行时竖条不动（选择驱动而非悬停驱动）",
+          hover_c == anchor_c, f"悬停前 {anchor_c} / 悬停后 {hover_c}")
+    check("Win11 选择新值后竖条滑过去",
+          chosen_c is not None and anchor_c is not None and chosen_c > anchor_c,
+          f"原 {anchor_c} -> 新 {chosen_c}")
 
     theme.style = "win10"
     theme.refresh()
