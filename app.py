@@ -192,6 +192,12 @@ def main() -> int:
         return 0
 
     _setup_logging()
+    # 动画能力自检：最小化看不到动画时，先看这行日志就知道是系统没开、还是别的原因。
+    try:
+        logging.getLogger("winsnip").info(
+            "animation self-check: %s", winapi.describe_animation_capabilities())
+    except Exception:
+        pass
     from winsnip import i18n
 
     i18n.set_language(getattr(settings, "language", "system"))
@@ -218,6 +224,11 @@ def main() -> int:
         from winsnip.ui.selftest_frozen import run_quit_selftest
 
         return run_quit_selftest(app)
+
+    if "--selftest-minimize" in sys.argv:
+        from winsnip.ui.selftest_minimize import run_minimize_selftest
+
+        return run_minimize_selftest(app)
 
     window = MainWindow()
     silent = "--tray" in sys.argv

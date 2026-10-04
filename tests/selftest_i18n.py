@@ -29,7 +29,9 @@ from winsnip import i18n, winapi  # noqa: E402
 
 checks: list[tuple[str, bool, str]] = []
 CJK = re.compile(r"[\u4e00-\u9fff]")
-SKIP_FILES = {"selftest_ui.py", "selftest_frozen.py", "i18n.py"}
+SKIP_FILES = {"selftest_ui.py", "selftest_frozen.py", "i18n.py",
+              # 控制台诊断脚本：输出是直接打给人看的报告，不是应用界面文案
+              "selftest_minimize.py"}
 # Deliberately not translated: folder names, matching tables, the app name.
 #: Deliberately NOT translated at all - folder names, matching tables, the app
 #: name, output file names. These must NOT appear in the translation table.

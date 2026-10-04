@@ -299,6 +299,53 @@ def minimize_window_native(hwnd: int) -> bool:
         return False
 
 
+def dwm_composition_enabled() -> bool:
+    """Whether DWM is compositing (required for any native window animation)."""
+    try:
+        enabled = ctypes.c_int(0)
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmIsCompositionEnabled(ctypes.byref(enabled))
+        return bool(enabled.value)
+    except Exception:
+        return False
+
+
+def animation_capabilities() -> dict[str, object]:
+    """What animations this machine will actually play.
+
+    Used by the startup self-check and by ``--selftest-minimize``: when the native
+    minimize animation looks like it does nothing, this says whether Windows is
+    even willing to play it, and therefore whether the app fell back to drawing
+    its own.
+    """
+    client_area = client_area_animations_enabled()
+    minimize_native = native_minimize_animation_enabled()
+    composition = dwm_composition_enabled()
+    return {
+        "dwm_composition": composition,
+        "client_area_animations": client_area,
+        "minimize_animation": minimize_native,
+        # 与 widgets.FluentWindow.minimize_animated() 的判据保持一致
+        "minimize_uses_native": bool(minimize_native),
+    }
+
+
+def describe_animation_capabilities() -> str:
+    """One-line, log-friendly summary of animation_capabilities().
+
+    English on purpose: this goes into app.log for developers, matching the other
+    core-layer diagnostics. The user-facing report is printed by
+    ``--selftest-minimize``, which has its own wording.
+    """
+    caps = animation_capabilities()
+    return (
+        f"DWM composition={'on' if caps['dwm_composition'] else 'off'} "
+        f"client-area animations={'on' if caps['client_area_animations'] else 'off'} "
+        f"minimize animation={'on' if caps['minimize_animation'] else 'off'} "
+        f"-> minimize uses {'native' if caps['minimize_uses_native'] else 'self-drawn'}"
+    )
+
+
 def system_accent_color(dark: bool = False) -> str:
     """The user's accent colour as '#RRGGBB'.
 

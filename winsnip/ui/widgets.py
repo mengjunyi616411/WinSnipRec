@@ -407,15 +407,28 @@ class FluentWindow(QWidget):
         animation is only kept for when the system's own "Animate windows when
         minimizing and maximizing" option is off — in that case Windows plays
         nothing at all and the window would just vanish.
+
+        Which path was taken is logged, so "I don't see any animation" can be
+        answered from app.log instead of guessed at.
         """
         if self.isMinimized():
             return
-        if winapi.native_minimize_animation_enabled():
+        log = logging.getLogger("winsnip.ui")
+        native_ok = False
+        try:
+            native_ok = winapi.native_minimize_animation_enabled()
+        except Exception:
+            native_ok = False
+        if native_ok:
             try:
                 if winapi.minimize_window_native(int(self.winId())):
+                    log.info("minimize: 原生（ShowWindow SW_MINIMIZE，由 DWM 播动画）")
                     return
-            except Exception:
-                pass
+                log.warning("minimize: ShowWindow(SW_MINIMIZE) 返回失败，改用自绘回退")
+            except Exception as exc:
+                log.warning("minimize: 原生调用异常 %r，改用自绘回退", exc)
+        else:
+            log.info("minimize: 自绘回退（系统关闭了「最小化/最大化时动画显示窗口」）")
         anim.minimize_window_animated(self)
 
     def _start_open_animation(self) -> None:
