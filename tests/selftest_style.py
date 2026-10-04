@@ -852,10 +852,12 @@ def main() -> int:
         menu_rules[_style] = (
             _re.findall(r"border-left:\s*([^;]+);", _menu),
             _re.findall(r"border-left:\s*([^;]+);", _popup),
+            _re.findall(r"margin:\s*([^;]+);", _menu),
+            _re.findall(r"margin:\s*([^;]+);", _popup),
         )
 
-    w11_menu, w11_popup = menu_rules["win11"]
-    w10_menu, w10_popup = menu_rules["win10"]
+    w11_menu, w11_popup, w11_menu_margin, w11_popup_margin = menu_rules["win11"]
+    w10_menu, w10_popup, _w10_mm, _w10_pm = menu_rules["win10"]
 
     def _colour(decl: str) -> str:
         return decl.split()[-1] if decl else ""
@@ -874,6 +876,11 @@ def main() -> int:
     check("Win11 竖条宽度固定（未选中用透明边框占位，文字不会跳）",
           all(_width(decl) == "3px" for decl in w11_menu + w11_popup),
           f"菜单 {w11_menu} / 下拉 {w11_popup}")
+    # 竖条要短于整行：border-left 本身占满项高，所以靠 item 的上下 margin 收短。
+    # （下拉弹窗里滚动条也有 margin，所以按"包含"判断而不是全等。）
+    check("Win11 竖条比整行短（item 有上下 margin）",
+          "4px 0" in w11_menu_margin and "4px 0" in w11_popup_margin,
+          f"菜单 margin={w11_menu_margin} / 下拉 margin={w11_popup_margin}")
     check("Win10 菜单与下拉都没有这条竖条",
           not w10_menu and not w10_popup,
           f"菜单 {w10_menu} / 下拉 {w10_popup}")

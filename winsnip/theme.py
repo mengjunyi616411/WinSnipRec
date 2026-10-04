@@ -702,14 +702,16 @@ def application_stylesheet() -> str:
     # 以前这里写死成 3/5/6/8，导致"设置"窗口在 Win10 风格下和 Win11 长得一模一样。
     r_control = theme.radius_control
     r_flyout = theme.radius_flyout
-    # Win11 的菜单在选中项左侧有一条强调色竖条（配浅色圆角底）。未选中时留一条
-    # 同宽的透明边框占位，否则选中瞬间文字会向左跳 3px。Win10 的菜单没有这条。
+    # Win11 的菜单在选中项左侧有一条强调色竖条（配浅色圆角底）。用 border-left 画，
+    # 并给 item 加上下 margin —— 竖条会跟着变短（"线太长"说的就是这个），高亮底也一起
+    # 内缩成胶囊形，正是 Win11 浮出菜单的样子。未选中时用同宽的透明边框占位，否则
+    # 选中瞬间文字会向左跳 3px。Win10 的菜单没有这条竖条。
     if theme.is_win10:
         menu_bar_idle = ""
         menu_bar_selected = ""
     else:
-        menu_bar_idle = "border-left: 3px solid transparent;"
-        menu_bar_selected = f"border-left: 3px solid {p.accent};"
+        menu_bar_idle = "border-left: 3px solid transparent; margin: 4px 0;"
+        menu_bar_selected = f"border-left: 3px solid {p.accent}; margin: 4px 0;"
     return f"""
     QToolTip {{
         background-color: {p.flyout_bg};

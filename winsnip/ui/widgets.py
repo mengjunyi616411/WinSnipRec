@@ -1489,8 +1489,9 @@ class FluentComboBox(QComboBox):
             bar_idle = ""
             bar_selected = ""
         else:
-            bar_idle = "border-left: 3px solid transparent;"
-            bar_selected = f"border-left: 3px solid {p.accent};"
+            # 上下 margin 让竖条短于整行（高亮底也一起内缩成胶囊形）
+            bar_idle = "border-left: 3px solid transparent; margin: 4px 0;"
+            bar_selected = f"border-left: 3px solid {p.accent}; margin: 4px 0;"
         return f"""
         QListView {{
             background-color: {p.flyout_bg};
