@@ -1868,16 +1868,23 @@ class FluentMenu(FluentWindow):
     # ------------------------------------------------------------------ #
     def add_item(self, label: str, *, icon_name: str | None = None,
                  checked: bool | None = None, enabled: bool = True, indent: int = 0,
-                 radio: bool = False, on_activate=None) -> PopupMenuItem:
+                 radio: bool = False, keep_open: bool | None = None,
+                 on_activate=None) -> PopupMenuItem:
         """Add a row.
 
-        ``checked`` given a value marks this as a *choice* row: it keeps the menu
-        open after being picked, so the accent bar is actually seen sliding to the
-        new value (a menu that closes instantly can never show that). Passing no
-        ``checked`` means an action row — 设置 / 关于 / 打开文件夹 — which still
-        dismisses the menu. ``radio=True`` makes it exclusive within the menu.
+        ``checked`` given a value marks this as a *choice* row, and by default a
+        choice row keeps the menu open after being picked — so the accent bar is
+        actually seen sliding to the new value (a menu that closes instantly can
+        never show that). Passing no ``checked`` means an action row — 设置 / 关于 /
+        打开文件夹 — which always dismisses the menu. ``radio=True`` makes it
+        exclusive within the menu.
+
+        ``keep_open=False`` overrides the default and closes after choosing, for
+        menus whose whole point is to pick something and get out of the way — the
+        shape menu in the main window is one: 选完形状就该收起，不然还要再点一下外面。
         """
         is_choice = checked is not None
+        stays_open = is_choice if keep_open is None else bool(keep_open)
 
         def run() -> None:
             try:
@@ -1886,7 +1893,7 @@ class FluentMenu(FluentWindow):
             finally:
                 if is_choice:
                     self._choose(item)
-                else:
+                if not stays_open:
                     # A Qt.Popup only closes itself on an outside click, so choosing
                     # an entry has to dismiss the menu explicitly.
                     self.close()
@@ -1895,6 +1902,7 @@ class FluentMenu(FluentWindow):
                              enabled=enabled, indent=indent, on_activate=run)
         item.is_choice = is_choice
         item.radio = radio
+        item.keep_open = stays_open
         self._layout.addWidget(item)
         self._items.append(item)
         if checked and self._bar_anchor < 0:

@@ -1107,6 +1107,26 @@ def main() -> int:
     theme.style = "win11"
     theme.refresh()
 
+    # keep_open=False 让"选完就该收起"的菜单（主窗口的形状菜单）点选后关闭，
+    # 而不是像延迟菜单那样留着让你看蓝条滑过去。
+    closing = _Menu(None, min_width=180)
+    closing.add_item("矩形区域", checked=True, radio=True, keep_open=False)
+    closing_pick = closing.add_item("窗口", checked=False, radio=True, keep_open=False)
+    closing.resize(200, 120)
+    closing.show()
+    pump(app, 0.4)
+    check("keep_open=False 的选项被标记为不保持打开", closing_pick.keep_open is False,
+          f"keep_open={closing_pick.keep_open}")
+    closing_pick._on_activate()
+    pump(app, 0.5)
+    try:
+        closing_still = closing.isVisible()
+    except RuntimeError:
+        closing_still = False      # WA_DeleteOnClose 已销毁它就是关闭了
+    check("keep_open=False 的菜单点选后收起", not closing_still, f"visible={closing_still}")
+    check("收起前仍然移动了勾选", closing_pick.checked,
+          f"窗口={closing_pick.checked}")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

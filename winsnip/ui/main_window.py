@@ -424,7 +424,7 @@ class MainWindow(FluentWindow):
         for key, label, icon_name in SHAPES:
             enabled = key != "freeform" or self._mode == "camera"
             menu.add_item(label, icon_name=icon_name, checked=(key == self._shape), enabled=enabled,
-                          radio=True,
+                          radio=True, keep_open=False,
                           on_activate=lambda k=key: self._set_shape(k))
         menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() + 6)))
 

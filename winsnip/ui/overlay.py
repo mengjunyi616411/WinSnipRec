@@ -85,7 +85,7 @@ class CaptureBar(QWidget):
         ]
         for key, label, icon_name, enabled in options:
             menu.add_item(label, icon_name=icon_name, checked=(key == self._shape), enabled=enabled,
-                          radio=True,
+                          radio=True, keep_open=False,
                           on_activate=lambda k=key: self.shapeRequested.emit(k))
         menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() + 6)))
 
