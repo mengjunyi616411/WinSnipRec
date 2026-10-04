@@ -1605,7 +1605,7 @@ class FluentComboBox(QComboBox):
         }}
         QListView::item {{
             min-height: 26px;
-            padding: 3px 8px;
+            padding: 3px 8px 3px 18px;
             border-radius: {theme.radius_control}px;
             color: {p.text_primary};
             {item_margin}
@@ -1700,7 +1700,7 @@ class PopupMenuItem(QWidget):
 
     def sizeHint(self) -> QSize:  # noqa: N802
         metrics = QFontMetrics(ui_font(14))
-        width = 24 + self.indent
+        width = 30 + self.indent
         if self.icon_name:
             width += 26
         width += metrics.horizontalAdvance(self.label) + 40
@@ -1763,7 +1763,8 @@ class PopupMenuItem(QWidget):
                     QRectF(6.0, centre - bar_height / 2.0, 3.0, bar_height), 1.5, 1.5)
                 painter.restore()
 
-        x = 12 + self.indent
+        # 竖条占 x 6..9，文字从 18 开始 —— 留出 9px 间隔，之前只有 3px 太挤。
+        x = 18 + self.indent
         color = QColor(palette.text_primary if self._enabled else palette.text_disabled)
         if self.icon_name:
             icons.paint_icon(

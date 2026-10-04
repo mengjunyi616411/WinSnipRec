@@ -1127,6 +1127,18 @@ def main() -> int:
     check("收起前仍然移动了勾选", closing_pick.checked,
           f"窗口={closing_pick.checked}")
 
+    # 竖条与文字之间要留出间隔：竖条占 x 6..9，文字从 18 开始（原来 12，只隔 3px 太挤）。
+    # 两处都要：FluentMenu 的行和下拉弹窗的 QListView::item 左内边距。
+    from winsnip.ui.widgets import PopupMenuItem as _GapItem
+
+    _gap_src = _inspect.getsource(_GapItem.paintEvent)
+    _hint = FluentComboBox._popup_stylesheet(FluentComboBox())
+    check("菜单里竖条与文字留有间隔（文字 x = 18）",
+          "x = 18 + self.indent" in _gap_src, "绘制代码里文字起点为 18")
+    check("下拉弹窗里竖条与文字留有间隔（左内边距 18）",
+          "padding: 3px 8px 3px 18px" in _hint,
+          "弹窗样式表里 padding-left 为 18")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
