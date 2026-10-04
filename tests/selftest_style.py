@@ -1040,6 +1040,29 @@ def main() -> int:
           chosen_c is not None and anchor_c is not None and chosen_c > anchor_c,
           f"原 {anchor_c} -> 新 {chosen_c}")
 
+    # 选项型菜单点选后不关闭 —— 菜单一关就永远看不到蓝条滑过去。
+    # checked= 给了值 = 选项（保持打开）；没给 = 动作项（设置/关于，照旧关闭）。
+    theme.style = "win11"
+    theme.refresh()
+    menu = _Menu(None, min_width=180)
+    pick_a = menu.add_item("矩形", checked=True, radio=True)
+    pick_b = menu.add_item("圆形", checked=False, radio=True)
+    action = menu.add_item("设置")
+    menu.resize(200, 120)
+    menu.show()
+    pump(app, 0.4)
+    check("选项型菜单项被识别为选项（点选后不关闭）",
+          pick_a.is_choice and pick_b.is_choice, f"{pick_a.is_choice} / {pick_b.is_choice}")
+    check("动作型菜单项仍会关闭菜单", not action.is_choice, f"{action.is_choice}")
+    pick_b._on_activate()
+    pump(app, 0.6)
+    check("点选选项后菜单保持打开", menu.isVisible(), f"visible={menu.isVisible()}")
+    check("单选组互斥（旧的勾选被取消，新的勾上）",
+          pick_b.checked and not pick_a.checked,
+          f"矩形={pick_a.checked} 圆形={pick_b.checked}")
+    menu.close()
+    pump(app, 0.2)
+
     theme.style = "win10"
     theme.refresh()
     win10_anchor, _, _ = _menu_bar()

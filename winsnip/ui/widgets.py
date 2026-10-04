@@ -1836,19 +1836,35 @@ class FluentMenu(FluentWindow):
         self._layout.setSpacing(1)
 
     # ------------------------------------------------------------------ #
-    def add_item(self, label: str, *, icon_name: str | None = None, checked: bool = False,
-                 enabled: bool = True, indent: int = 0, on_activate=None) -> PopupMenuItem:
+    def add_item(self, label: str, *, icon_name: str | None = None,
+                 checked: bool | None = None, enabled: bool = True, indent: int = 0,
+                 radio: bool = False, on_activate=None) -> PopupMenuItem:
+        """Add a row.
+
+        ``checked`` given a value marks this as a *choice* row: it keeps the menu
+        open after being picked, so the accent bar is actually seen sliding to the
+        new value (a menu that closes instantly can never show that). Passing no
+        ``checked`` means an action row — 设置 / 关于 / 打开文件夹 — which still
+        dismisses the menu. ``radio=True`` makes it exclusive within the menu.
+        """
+        is_choice = checked is not None
+
         def run() -> None:
             try:
                 if on_activate is not None:
                     on_activate()
             finally:
-                # A Qt.Popup only closes itself on an outside click, so choosing
-                # an entry has to dismiss the menu explicitly.
-                self.close()
+                if is_choice:
+                    self._choose(item)
+                else:
+                    # A Qt.Popup only closes itself on an outside click, so choosing
+                    # an entry has to dismiss the menu explicitly.
+                    self.close()
 
-        item = PopupMenuItem(label, self, icon_name=icon_name, checked=checked, enabled=enabled,
-                             indent=indent, on_activate=run)
+        item = PopupMenuItem(label, self, icon_name=icon_name, checked=bool(checked),
+                             enabled=enabled, indent=indent, on_activate=run)
+        item.is_choice = is_choice
+        item.radio = radio
         self._layout.addWidget(item)
         self._items.append(item)
         if checked and self._bar_anchor < 0:
@@ -1856,6 +1872,20 @@ class FluentMenu(FluentWindow):
             self._bar_anchor = len(self._items) - 1
             self._bar_row = float(self._bar_anchor)
         return item
+
+    def _choose(self, item: "PopupMenuItem") -> None:
+        """A choice row was picked: move the check and slide the bar, keep open."""
+        if item.radio:
+            for other in self._items:
+                if getattr(other, "radio", False) and other is not item:
+                    other.checked = False
+                    other.update()
+        item.checked = True
+        item.update()
+        try:
+            self.set_bar_anchor(self._items.index(item))
+        except ValueError:
+            pass
 
     def add_header(self, text: str) -> QLabel:
         label = QLabel(text, self)

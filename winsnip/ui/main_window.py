@@ -424,6 +424,7 @@ class MainWindow(FluentWindow):
         for key, label, icon_name in SHAPES:
             enabled = key != "freeform" or self._mode == "camera"
             menu.add_item(label, icon_name=icon_name, checked=(key == self._shape), enabled=enabled,
+                          radio=True,
                           on_activate=lambda k=key: self._set_shape(k))
         menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() + 6)))
 
@@ -460,13 +461,13 @@ class MainWindow(FluentWindow):
         if microphones:
             menu.add_header(_t("麦克风设备"))
             for device in microphones[:12]:
-                menu.add_item(_shorten(device.name), checked=(device.id == settings.mic_device),
+                menu.add_item(_shorten(device.name), checked=(device.id == settings.mic_device), radio=True,
                               on_activate=lambda d=device: self._set_mic_device(d.id))
         if loopbacks:
             menu.add_header(_t("系统声音设备（回环）"))
             for device in loopbacks[:12]:
                 menu.add_item(_shorten(device.name),
-                              checked=(device.id == settings.system_audio_device),
+                              checked=(device.id == settings.system_audio_device), radio=True,
                               on_activate=lambda d=device: self._set_loopback_device(d.id))
         if not devices:
             menu.add_item(_t("未找到音频设备"), enabled=False)
@@ -526,7 +527,7 @@ class MainWindow(FluentWindow):
         menu.add_header(_t("开始前延迟"))
         for value in (0, 3, 5, 10):
             menu.add_item(_t("无延迟") if value == 0 else _t("{0} 秒").format(value),
-                            checked=(settings.countdown == value),
+                            checked=(settings.countdown == value), radio=True,
                           on_activate=lambda v=value: self._set_countdown(v))
         menu.add_separator()
         autostart = startup.is_enabled()

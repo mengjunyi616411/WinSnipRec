@@ -172,8 +172,13 @@ def main() -> int:
             still_open = menu.isVisible()
         except RuntimeError:
             still_open = False  # WA_DeleteOnClose already destroyed it
-        check("选择后菜单关闭", not still_open)
+        # 选项型菜单项（给了 checked= 的）点选后**保持打开** —— 菜单一关就永远看不到
+        # 蓝条滑到新值那一项。动作型（设置/关于/打开文件夹）仍然关闭菜单。
+        check("选择后菜单保持打开（才看得到蓝条滑过去）", still_open,
+              f"visible={still_open}")
         settings.countdown = 0
+        menu.close()
+        pump(app, 0.3)
 
     # ---------------- hotkey registration ---------------- #
     from winsnip.ui import hotkeys
