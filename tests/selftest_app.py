@@ -414,11 +414,23 @@ def main() -> int:
     check("关闭设置后实例被保留（不再丢弃重建）", host._settings_window is first,
           f"{host._settings_window!r}")
 
+    # 动画只在设置里开着时才播（套件其余部分把动画关了），这段临时打开再恢复。
+    animations_before = settings.animations
+    settings.animations = True
     host.open_settings()
-    pump(app, 0.3)
+    pump(app, 0.03)
+    # 复用也要有打开动画：曾经为了避免卡顿把复用时的动画一起静音了，窗口就直接蹦出来。
+    # 现在起点 0.92、时长 150ms —— 有过渡但不拖沓。
+    mid_opacity = first.windowOpacity()
+    settle_deadline = time.perf_counter() + 3.0
+    while time.perf_counter() < settle_deadline and first.windowOpacity() < 0.999:
+        pump(app, 0.02)
     check("再次打开复用同一个实例", host._settings_window is first, f"{host._settings_window!r}")
-    check("复用时窗口直接完全不透明", first.windowOpacity() > 0.99,
+    check("复用时仍然会播打开动画（刚打开那一帧不是完全不透明）", mid_opacity < 0.999,
+          f"刚打开 {mid_opacity:.2f}")
+    check("复用时窗口最终完全不透明", first.windowOpacity() > 0.99,
           f"{first.windowOpacity():.2f}")
+    settings.animations = animations_before
 
     first.close()
     pump(app, 0.3)

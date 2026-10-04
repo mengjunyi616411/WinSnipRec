@@ -909,9 +909,13 @@ class MainWindow(FluentWindow):
             # 打开都从头重建。这里只把可能被别处改过的显示值同步一下。
             self._settings_window.refresh_theme()
             self._settings_window.sync_volatile_rows()
-            # 复用时不再播打开动画：这台机器合成慢，150ms 的淡入要 0.5 秒才走完，
-            # 反而是复用的意义所在（瞬间出现）被打折。
-            self._settings_window._suppress_open_animation = True
+            # 复用也要有打开动画：之前为了消掉 2.5 秒的卡顿把这里也一起静音了，
+            # 结果窗口直接蹦出来、没有过渡。现在动画起点是 0.92（不再像块玻璃）、
+            # 时长 150ms，慢机器上约 0.5 秒落位 —— 有过渡但不拖沓。
+            # 用「重新打开」而不是首次打开：slide 小一点，观感更轻。
+            self._settings_window._open_slide = 8
+            # 显式复位：万一之前被置过 True（旧版本的行为），窗口会一直不播动画。
+            self._settings_window._suppress_open_animation = False
         self._settings_window.show()
         self._settings_window.raise_()
         self._settings_window.activateWindow()
