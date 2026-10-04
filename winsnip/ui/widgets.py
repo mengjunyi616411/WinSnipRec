@@ -1466,35 +1466,82 @@ class ToggleSwitch(QWidget):
 
 
 class _SelectionBarDelegate(QStyledItemDelegate):
-    """Draws the Win11 accent bar on the **current value** of a popup.
+    """Draws the Win11 accent bar on the **current value**, sliding between rows.
 
     The bar marks the checked/current entry, not the hovered one: hovering only
-    shows the rounded background. (Getting this backwards is what the reference
-    screenshot caught — a hovered row had a bar it should not have had.)
+    shows the rounded background.
 
-    The stylesheet cannot draw it: ``border-left`` always spans the full item
-    height, while the real indicator is a short bar centred in the row.
+    A slide needs a single thing that travels, so the position is kept here as a
+    float in row units and animated; each row then clips the (possibly straddling)
+    bar to its own rect. Painting it per row without the shared position could
+    only ever make it jump.
     """
 
     def __init__(self, parent=None, *, current_row: int = -1) -> None:
         super().__init__(parent)
         self.current_row = current_row
+        self._anim_row = float(current_row)
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(anim.DURATION_NORMAL)
+        self._anim.setEasingCurve(anim.curve("decelerate"))
+        self._anim.valueChanged.connect(self._on_anim)
 
+    # ------------------------------------------------------------------ #
+    def set_current_row(self, row: int, *, animate: bool = True) -> None:
+        """Move the bar to ``row``, sliding there when it was somewhere else."""
+        if row == self.current_row and float(row) == self._anim_row:
+            return
+        start = self._anim_row
+        self.current_row = row
+        self._anim.stop()
+        if not animate or not anim.animations_enabled() or start < 0:
+            self._anim_row = float(row)
+        else:
+            self._anim.setStartValue(float(start))
+            self._anim.setEndValue(float(row))
+            self._anim.start()
+        view = self.parent()
+        if view is not None and hasattr(view, "viewport"):
+            view.viewport().update()
+
+    def _on_anim(self, value) -> None:
+        self._anim_row = float(value)
+        view = self.parent()
+        if view is not None and hasattr(view, "viewport"):
+            view.viewport().update()
+
+    # ------------------------------------------------------------------ #
     def paint(self, painter, option, index) -> None:  # noqa: N802
         super().paint(painter, option, index)
-        if theme.is_win10 or index.row() != self.current_row:
+        if theme.is_win10 or self._anim_row < 0:
             return
-        rect = option.rect
-        bar_height = min(14.0, rect.height() - 10.0)
+        view = self.parent()
+        model = index.model()
+        if view is None or model is None or not hasattr(view, "visualRect"):
+            return
+        rows = model.rowCount()
+        if rows <= 0:
+            return
+        low = max(0, min(rows - 1, int(self._anim_row)))
+        high = max(0, min(rows - 1, low + 1))
+        frac = self._anim_row - int(self._anim_row)
+        top_rect = view.visualRect(model.index(low, 0))
+        bottom_rect = view.visualRect(model.index(high, 0))
+        if not top_rect.isValid():
+            return
+        centre = top_rect.center().y() + (bottom_rect.center().y() - top_rect.center().y()) * frac
+        bar_height = min(14.0, top_rect.height() - 10.0)
         if bar_height <= 3.0:
             return
         painter.save()
+        # 只画落在本行内的那一段：动画中途竖条会跨在两行之间。
+        painter.setClipRect(QRectF(option.rect))
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(theme.palette.accent))
+        rect = option.rect
         painter.drawRoundedRect(
-            QRectF(rect.x() + 6.0, rect.y() + (rect.height() - bar_height) / 2.0,
-                   3.0, bar_height),
+            QRectF(rect.x() + 6.0, centre - bar_height / 2.0, 3.0, bar_height),
             1.5, 1.5)
         painter.restore()
 
@@ -1556,10 +1603,14 @@ class FluentComboBox(QComboBox):
         if view is None:
             return
         view.setStyleSheet(self._popup_stylesheet())
-        # 竖条只画在**当前值**那一行（不是悬停行），交给 delegate 自绘 —— 样式表的
-        # border-left 只能占满整行，做不出 Win11 那种"比高亮底更矮"的短竖条。
+        # 竖条只画在**当前值**那一行（不是悬停行）。delegate 复用同一个实例，
+        # 这样值变化时它能从旧位置滑到新位置，而不是每次弹出都新建、直接跳过去。
         try:
-            view.setItemDelegate(_SelectionBarDelegate(view, current_row=self.currentIndex()))
+            delegate = view.itemDelegate()
+            if not isinstance(delegate, _SelectionBarDelegate):
+                delegate = _SelectionBarDelegate(view)
+                view.setItemDelegate(delegate)
+            delegate.set_current_row(self.currentIndex())
         except Exception:
             pass
         container = view.window()

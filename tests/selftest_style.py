@@ -869,6 +869,11 @@ def main() -> int:
     check("下拉弹窗有自绘竖条的 delegate", issubclass(_BarDelegate, object)
           and _BarDelegate.__name__ == "_SelectionBarDelegate",
           _BarDelegate.__name__)
+    # 值变化时竖条要从旧位置滑到新位置，而不是直接跳过去：delegate 里存的是浮点的
+    # 动画位置（逐行自绘做不到滑动，必须是"一个东西在移动"）。
+    check("下拉竖条支持滑动（动画位置 + set_current_row）",
+          hasattr(_BarDelegate, "set_current_row") and hasattr(_BarDelegate, "_on_anim"),
+          "有 set_current_row / _on_anim")
 
     def _colour(decl: str) -> str:
         return decl.split()[-1] if decl else ""
