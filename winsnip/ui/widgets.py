@@ -1725,33 +1725,16 @@ class FluentComboBox(QComboBox):
             if container is None or container is self:
                 return
             final = self._centred_geometry(container)
-            # 起始 60% 高、垂直居中 -> 上下同时长出来。之前 70% 太含蓄，看着像没动。
-            grow_from = QRect(final.x(), final.y() + int(final.height() * 0.2),
-                              final.width(), max(24, int(final.height() * 0.6)))
-            # 窗口变矮时内容会被裁切，Qt 会顺手弹出一根滚动条闪一下 —— 动画期间关掉它。
-            scrollbars = []
-            view_widget = self.view()
-            if view_widget is not None:
-                try:
-                    scrollbars.append((view_widget.verticalScrollBarPolicy(),
-                                       view_widget.horizontalScrollBarPolicy()))
-                    view_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-                    view_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-                except Exception:
-                    scrollbars = []
+            # **不做几何动画**：用户要的是"直接在中间"。之前让弹窗从 60% 高度长到全高，
+            # 看着就是"先展开、然后才落到中间"。现在位置一次到位，只留一段淡入。
+            container.setGeometry(final)
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
-            fade.setDuration(anim.DURATION_NORMAL)
+            fade.setDuration(anim.DURATION_FAST)
             fade.setStartValue(anim.OPEN_FADE_START)
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
-            grow = QPropertyAnimation(container, b"geometry", group)
-            grow.setDuration(anim.DURATION_NORMAL)
-            grow.setStartValue(grow_from)
-            grow.setEndValue(final)
-            grow.setEasingCurve(anim.curve("decelerate"))
             container.setWindowOpacity(anim.OPEN_FADE_START)
-            container.setGeometry(grow_from)
             self._popup_scrollbars = scrollbars[0] if scrollbars else None
 
             settled = {"done": False}
@@ -1760,19 +1743,11 @@ class FluentComboBox(QComboBox):
                 if settled["done"]:
                     return
                 settled["done"] = True
-                restore = getattr(self, "_popup_scrollbars", None)
                 try:
                     container.setWindowOpacity(1.0)
                     container.setGeometry(final)
-                    if restore:
-                        view_widget = self.view()
-                        if view_widget is not None:
-                            view_widget.setVerticalScrollBarPolicy(restore[0])
-                            view_widget.setHorizontalScrollBarPolicy(restore[1])
                 except RuntimeError:
                     pass          # 弹窗已经关了，什么都不用做
-                finally:
-                    self._popup_scrollbars = None
 
             group.finished.connect(finished)
             group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
