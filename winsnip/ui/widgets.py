@@ -1685,6 +1685,20 @@ class FluentComboBox(QComboBox):
             if container is None or container is self:
                 return
             final = container.geometry()
+            # 位置改成**与控件上下居中对齐**：Qt 默认把弹窗摆在控件正下方，用户要的是
+            # 控件中线对着弹窗中线（上半在控件上方、下半在下方）。超出屏幕时再夹回来。
+            try:
+                centre_y = self.mapToGlobal(QPoint(0, self.height() // 2)).y()
+                wanted_y = centre_y - final.height() // 2
+                screen = QGuiApplication.screenAt(QPoint(final.x(), centre_y))
+                area = screen.availableGeometry() if screen is not None else None
+                if area is not None:
+                    wanted_y = max(area.top() + 4,
+                                   min(wanted_y, area.bottom() - final.height() - 4))
+                final = QRect(final.x(), wanted_y, final.width(), final.height())
+                container.setGeometry(final)
+            except Exception:
+                pass
             # 起始 60% 高、垂直居中 -> 上下同时长出来。之前 70% 太含蓄，看着像没动。
             grow_from = QRect(final.x(), final.y() + int(final.height() * 0.2),
                               final.width(), max(24, int(final.height() * 0.6)))

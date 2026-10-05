@@ -1198,6 +1198,11 @@ def main() -> int:
           "b\"geometry\"" in _anim_src and "grow_from" in _anim_src,
           "动画目标是 geometry，起始几何为 grow_from")
 
+    # 弹窗位置要与控件上下居中对齐（Qt 默认摆在控件正下方）。
+    check("下拉弹窗与控件上下居中对齐（不是挂在下面）",
+          "centre_y = self.mapToGlobal" in _anim_src and "wanted_y" in _anim_src,
+          "按控件中线计算弹窗 y，并夹在屏幕可用区域内")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
