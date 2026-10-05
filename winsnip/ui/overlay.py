@@ -87,8 +87,7 @@ class CaptureBar(QWidget):
             menu.add_item(label, icon_name=icon_name, checked=(key == self._shape), enabled=enabled,
                           radio=True, keep_open=False,
                           on_activate=lambda k=key: self.shapeRequested.emit(k))
-        menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() // 2)),
-                   centred=True)
+        menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() + 6)))
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)

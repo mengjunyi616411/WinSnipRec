@@ -1207,9 +1207,14 @@ def main() -> int:
     import inspect as _inspect5
 
     _popup_src = _inspect5.getsource(_Menu.popup)
-    check("菜单支持以按钮中线为中心打开（centred=True）",
-          "centred" in _popup_src and "height // 2 + self._margin" in _popup_src,
-          "popup() 接受 centred 并补回 margin")
+    # 工具栏那三个菜单（形状 / 麦克风 / 三个点）按用户要求**挂在按钮下面**；
+    # popup() 里的 centred 选项保留备用（设置里的下拉走的是另一条路径）。
+    _mw_src = (Path(__file__).resolve().parent.parent / "winsnip" / "ui" / "main_window.py").read_text(encoding="utf-8")
+    check("工具栏菜单挂在按钮下面（height() + 6）",
+          "shape_button.height() + 6" in _mw_src and "centred=True" not in _mw_src,
+          "main_window 的调用点没有 centred")
+    check("popup() 仍保留 centred 选项备用",
+          "centred" in _popup_src, "popup() 接受 centred")
 
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
