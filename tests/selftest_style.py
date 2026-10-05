@@ -1161,6 +1161,23 @@ def main() -> int:
     check("菜单留有阴影边距（margin > 0）",
           "margin=14" in _menu_init, "margin=14")
 
+    # ---------------- 关闭后动画回调打到已销毁对象（真实崩溃） ---------------- #
+    # FluentMenu 是 WA_DeleteOnClose：关闭瞬间 C++ 对象就没了，而 _open 集合和还在跑的
+    # QVariantAnimation 会让 Python 包装器活着。回调一旦晚到就会抛
+    #   RuntimeError: libshiboken: Internal C++ object (FluentMenu) already deleted.
+    # 修法是 closeEvent 里停动画 + 从 _open 里摘掉自己，回调再加一层容错。
+    _crash_menu = _Menu(None, min_width=180)
+    _crash_menu.add_item("矩形区域", checked=True, radio=True, keep_open=False)
+    _crash_pick = _crash_menu.add_item("窗口", checked=False, radio=True, keep_open=False)
+    _crash_menu.resize(200, 120)
+    _crash_menu.show()
+    pump(app, 0.4)
+    _crash_pick._on_activate()          # 关掉菜单 -> C++ 对象销毁
+    pump(app, 0.05)                     # 不等动画跑完，模拟原来的时序
+    pump(app, 0.6)                      # 让动画回调有机会打到死对象
+    check("菜单关闭后不留在 _open 里（否则包装器活着、回调会打到已销毁对象）",
+          _crash_menu not in _Menu._open, f"_open 大小 {len(_Menu._open)}")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

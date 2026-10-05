@@ -1823,10 +1823,33 @@ class FluentMenu(FluentWindow):
         self._bar_anim.setEasingCurve(anim.curve("decelerate"))
         self._bar_anim.valueChanged.connect(self._on_bar_anim)
 
+    def closeEvent(self, event) -> None:  # noqa: N802
+        """Stop the bar animation and drop the strong reference before we die.
+
+        The menu is WA_DeleteOnClose, so Qt destroys the C++ object the moment it
+        closes — while ``_open`` (and the running QVariantAnimation) keep the Python
+        wrapper alive. Any later callback then raises
+
+            RuntimeError: libshiboken: Internal C++ object (FluentMenu) already deleted.
+
+        Stopping the animation and discarding ourselves from ``_open`` here removes
+        both ways that could happen.
+        """
+        try:
+            self._bar_anim.stop()
+        except Exception:
+            pass
+        FluentMenu._open.discard(self)
+        super().closeEvent(event)
+
     def _on_bar_anim(self, value) -> None:
-        self._bar_row = float(value)
-        for item in getattr(self, "_items", []):
-            item.update()
+        # 动画有可能在窗口已经开始销毁时回调到最后一帧，这里必须容错。
+        try:
+            self._bar_row = float(value)
+            for item in getattr(self, "_items", []):
+                item.update()
+        except RuntimeError:
+            pass
 
     def set_bar_anchor(self, row: int, *, animate: bool = True) -> None:
         """The chosen value changed: slide the bar to ``row``.
@@ -1834,32 +1857,39 @@ class FluentMenu(FluentWindow):
         Selection-driven on purpose — the bar marks the current value and does NOT
         follow the pointer. Hovering only shows the row's own background.
         """
-        if row < 0:
-            self._bar_row = -1.0
-            return
-        self._bar_anchor = row
-        start = self._bar_row
-        self._bar_anim.stop()
-        if not animate or not anim.animations_enabled() or start < 0:
-            self._bar_row = float(row)
-            for item in getattr(self, "_items", []):
-                item.update()
-            return
-        self._bar_anim.setStartValue(float(start))
-        self._bar_anim.setEndValue(float(row))
-        self._bar_anim.start()
+        try:
+            if row < 0:
+                self._bar_row = -1.0
+                return
+            self._bar_anchor = row
+            start = self._bar_row
+            self._bar_anim.stop()
+            if not animate or not anim.animations_enabled() or start < 0:
+                self._bar_row = float(row)
+                for item in getattr(self, "_items", []):
+                    item.update()
+                return
+            self._bar_anim.setStartValue(float(start))
+            self._bar_anim.setEndValue(float(row))
+            self._bar_anim.start()
+        except RuntimeError:
+            # 菜单已经关了（WA_DeleteOnClose 把 C++ 对象销毁了），静默忽略即可。
+            pass
 
     def bar_centre_y(self) -> float | None:
         """Where the bar's centre is, in this menu's coordinates (or None)."""
-        items = getattr(self, "_items", [])
-        if theme.is_win10 or self._bar_row < 0 or not items:
+        try:
+            items = getattr(self, "_items", [])
+            if theme.is_win10 or self._bar_row < 0 or not items:
+                return None
+            low = max(0, min(len(items) - 1, int(self._bar_row)))
+            high = max(0, min(len(items) - 1, low + 1))
+            frac = self._bar_row - int(self._bar_row)
+            low_centre = items[low].geometry().center().y()
+            high_centre = items[high].geometry().center().y()
+            return low_centre + (high_centre - low_centre) * frac
+        except RuntimeError:
             return None
-        low = max(0, min(len(items) - 1, int(self._bar_row)))
-        high = max(0, min(len(items) - 1, low + 1))
-        frac = self._bar_row - int(self._bar_row)
-        low_centre = items[low].geometry().center().y()
-        high_centre = items[high].geometry().center().y()
-        return low_centre + (high_centre - low_centre) * frac
 
     def __init__(self, parent: QWidget | None = None, *, min_width: int = 200) -> None:
         # shadow=True：菜单是浮出层，有投影才有层次感。这里的 14px 边距正是留给阴影的
