@@ -512,6 +512,18 @@ def main() -> int:
 
 
 def report(app: QApplication) -> int:
+    # 窗口可能在动画跑完前就被销毁（菜单是 WA_DeleteOnClose，点选即关），
+    # 回调晚到会撞上已删除的 C++ 对象。play_window_open / hide_window_animated 的
+    # finished() 都必须容错，否则抛 RuntimeError 直接把程序打崩。
+    import inspect as _ia
+
+    from winsnip import anim as _anim_mod
+
+    for _fn in (_anim_mod.play_window_open, _anim_mod.hide_window_animated):
+        _src = _ia.getsource(_fn)
+        check(f"{_fn.__name__} 的回调对已销毁窗口容错",
+              "except RuntimeError" in _src, "源码里含 except RuntimeError")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- ANIMATION SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

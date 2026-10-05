@@ -102,10 +102,16 @@ def play_window_open(window: QWidget, *, slide: int = 14, fade_only: bool = Fals
         if settled["done"]:
             return
         settled["done"] = True
-        if not fade_only:
-            window.setGeometry(final)
-        window.setWindowOpacity(1.0)
-        _freeze(window, False)
+        # 窗口可能已经销毁了：菜单这类窗口带 WA_DeleteOnClose，点选后立刻关闭，
+        # 而动画组和兜底定时器还活着 —— 回调晚到就会撞上已删除的 C++ 对象，
+        # 抛 "Internal C++ object (FluentMenu) already deleted" 把整个程序打崩。
+        try:
+            if not fade_only:
+                window.setGeometry(final)
+            window.setWindowOpacity(1.0)
+            _freeze(window, False)
+        except RuntimeError:
+            pass
 
     group.finished.connect(finished)
     group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
@@ -233,8 +239,13 @@ def hide_window_animated(window: QWidget, *, on_finished=None,
         if settled["done"]:
             return
         settled["done"] = True
-        window.hide()
-        window.setWindowOpacity(1.0)
+        # 与 play_window_open 同理：菜单这类窗口带 WA_DeleteOnClose，可能在动画跑完前
+        # 就被销毁了（点选后立即关闭），回调晚到会撞上已删除的 C++ 对象。
+        try:
+            window.hide()
+            window.setWindowOpacity(1.0)
+        except RuntimeError:
+            pass
         if on_finished is not None:
             on_finished()
 
