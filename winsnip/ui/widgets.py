@@ -9,7 +9,8 @@ from collections.abc import Callable
 import logging
 
 from PySide6.QtCore import (
-    QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
+    QEvent, QParallelAnimationGroup, QPoint, QPointF, QPropertyAnimation, QRect,
+    QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
 )
 from PySide6.QtGui import (
     QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QIcon, QPainter,
@@ -1663,6 +1664,55 @@ class FluentComboBox(QComboBox):
     def showPopup(self) -> None:  # noqa: N802
         self._style_popup()
         super().showPopup()
+        self._animate_popup_open()
+
+    def _animate_popup_open(self) -> None:
+        """Win11 的下拉是滑下来的；Qt 的弹窗是直接出现，这里补一段淡入 + 下滑。
+
+        参数与窗口打开动画一致（起点 0.92、时长 DURATION_FAST），这样下拉弹出和
+        其它窗口的观感统一。带幂等判断 + 兜底定时器 + 已销毁容错 —— 弹窗容器会在
+        关闭时销毁，回调晚到必须不能崩（这个坑刚踩过）。
+        """
+        try:
+            if not anim.animations_enabled():
+                return
+            view = self.view()
+            container = view.window() if view is not None else None
+            if container is None or container is self:
+                return
+            final = container.pos()
+            slide = 6
+            group = QParallelAnimationGroup(container)
+            fade = QPropertyAnimation(container, b"windowOpacity", group)
+            fade.setDuration(anim.DURATION_FAST)
+            fade.setStartValue(anim.OPEN_FADE_START)
+            fade.setEndValue(1.0)
+            fade.setEasingCurve(anim.curve("out"))
+            move = QPropertyAnimation(container, b"pos", group)
+            move.setDuration(anim.DURATION_FAST)
+            move.setStartValue(QPoint(final.x(), final.y() - slide))
+            move.setEndValue(final)
+            move.setEasingCurve(anim.curve("decelerate"))
+            container.setWindowOpacity(anim.OPEN_FADE_START)
+            container.move(final.x(), final.y() - slide)
+
+            settled = {"done": False}
+
+            def finished() -> None:
+                if settled["done"]:
+                    return
+                settled["done"] = True
+                try:
+                    container.setWindowOpacity(1.0)
+                    container.move(final)
+                except RuntimeError:
+                    pass
+
+            group.finished.connect(finished)
+            group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+            QTimer.singleShot(max(400, anim.DURATION_FAST * 4 + 300), finished)
+        except Exception:
+            pass
 
     def refresh_theme(self) -> None:
         self.update()

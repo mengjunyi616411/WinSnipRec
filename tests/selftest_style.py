@@ -1178,6 +1178,21 @@ def main() -> int:
     check("菜单关闭后不留在 _open 里（否则包装器活着、回调会打到已销毁对象）",
           _crash_menu not in _Menu._open, f"_open 大小 {len(_Menu._open)}")
 
+    # Win11 的下拉是滑下来的，Qt 的弹窗是直接出现 —— 补一段淡入 + 下滑，
+    # 参数与窗口打开动画一致（起点 0.92、时长 DURATION_FAST）。
+    import inspect as _inspect4
+
+    _show_src = _inspect4.getsource(FluentComboBox.showPopup)
+    _anim_src = _inspect4.getsource(FluentComboBox._animate_popup_open)
+    check("下拉弹窗有展开动画（淡入 + 下滑）",
+          "_animate_popup_open" in _show_src and "QPropertyAnimation" in _anim_src,
+          "showPopup 调用 _animate_popup_open，内部用 QPropertyAnimation")
+    check("下拉展开动画与窗口打开动画同参数",
+          "OPEN_FADE_START" in _anim_src and "DURATION_FAST" in _anim_src,
+          "起点 0.92 / 时长 DURATION_FAST")
+    check("下拉展开动画对已销毁弹窗容错（否则关闭时会崩）",
+          "except RuntimeError" in _anim_src, "finished() 里包了 RuntimeError")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
