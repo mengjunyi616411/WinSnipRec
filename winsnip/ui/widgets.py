@@ -1672,6 +1672,10 @@ class FluentComboBox(QComboBox):
         参数与窗口打开动画一致（起点 0.92、时长 DURATION_FAST），这样下拉弹出和
         其它窗口的观感统一。带幂等判断 + 兜底定时器 + 已销毁容错 —— 弹窗容器会在
         关闭时销毁，回调晚到必须不能崩（这个坑刚踩过）。
+
+        展开方向：**同时向上和向下**。做法是把起始几何设成最终高度的 70%、并且垂直
+        居中，再动画到最终几何 —— 上边缘往上长、下边缘往下长，两边同时展开。
+        （只动 pos 的话只会朝一个方向滑。）
         """
         try:
             if not anim.animations_enabled():
@@ -1680,21 +1684,22 @@ class FluentComboBox(QComboBox):
             container = view.window() if view is not None else None
             if container is None or container is self:
                 return
-            final = container.pos()
-            slide = 6
+            final = container.geometry()
+            grow_from = QRect(final.x(), final.y() + int(final.height() * 0.15),
+                              final.width(), max(24, int(final.height() * 0.7)))
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
             fade.setDuration(anim.DURATION_FAST)
             fade.setStartValue(anim.OPEN_FADE_START)
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
-            move = QPropertyAnimation(container, b"pos", group)
-            move.setDuration(anim.DURATION_FAST)
-            move.setStartValue(QPoint(final.x(), final.y() - slide))
-            move.setEndValue(final)
-            move.setEasingCurve(anim.curve("decelerate"))
+            grow = QPropertyAnimation(container, b"geometry", group)
+            grow.setDuration(anim.DURATION_FAST)
+            grow.setStartValue(grow_from)
+            grow.setEndValue(final)
+            grow.setEasingCurve(anim.curve("decelerate"))
             container.setWindowOpacity(anim.OPEN_FADE_START)
-            container.move(final.x(), final.y() - slide)
+            container.setGeometry(grow_from)
 
             settled = {"done": False}
 
@@ -1704,7 +1709,7 @@ class FluentComboBox(QComboBox):
                 settled["done"] = True
                 try:
                     container.setWindowOpacity(1.0)
-                    container.move(final)
+                    container.setGeometry(final)
                 except RuntimeError:
                     pass
 

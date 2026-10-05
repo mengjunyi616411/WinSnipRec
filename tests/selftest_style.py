@@ -1193,6 +1193,11 @@ def main() -> int:
     check("下拉展开动画对已销毁弹窗容错（否则关闭时会崩）",
           "except RuntimeError" in _anim_src, "finished() 里包了 RuntimeError")
 
+    # 展开方向：上下同时（顶边往上、底边往下），不是只朝一个方向滑。
+    check("下拉展开是上下同时（用 geometry 动画而不是只动 pos）",
+          "b\"geometry\"" in _anim_src and "grow_from" in _anim_src,
+          "动画目标是 geometry，起始几何为 grow_from")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
