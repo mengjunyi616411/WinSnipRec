@@ -1199,8 +1199,9 @@ def main() -> int:
           "动画目标是 geometry，起始几何为 grow_from")
 
     # 弹窗位置要与控件上下居中对齐（Qt 默认摆在控件正下方）。
+    _centre_src = _inspect4.getsource(FluentComboBox._centred_geometry)
     check("下拉弹窗与控件上下居中对齐（不是挂在下面）",
-          "centre_y = self.mapToGlobal" in _anim_src and "wanted_y" in _anim_src,
+          "centre_y = self.mapToGlobal" in _centre_src and "wanted_y" in _centre_src,
           "按控件中线计算弹窗 y，并夹在屏幕可用区域内")
 
     # 菜单以按钮中线为中心打开（centred=True），不是挂在按钮下面。
@@ -1215,6 +1216,15 @@ def main() -> int:
           "main_window 的调用点没有 centred")
     check("popup() 仍保留 centred 选项备用",
           "centred" in _popup_src, "popup() 接受 centred")
+
+    # 打开的那一瞬间就要在中间：靠容器 Show 事件里定位（Show 在首次绘制之前），
+    # 否则会先按 Qt 的默认位置（控件正下方）画一帧再跳上来。
+    _filter_src = _inspect4.getsource(FluentComboBox.eventFilter)
+    check("弹窗在 Show 事件里就摆到居中位置（不会先出现在下面）",
+          "QEvent.Type.Show" in _filter_src and "_centred_geometry" in _filter_src,
+          "eventFilter 处理 Show 并调用 _centred_geometry")
+    check("居中几何计算抽出为 _centred_geometry",
+          hasattr(FluentComboBox, "_centred_geometry"), "_centred_geometry 存在")
 
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")

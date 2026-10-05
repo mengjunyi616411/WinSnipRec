@@ -1646,6 +1646,14 @@ class FluentComboBox(QComboBox):
             pass
         container = view.window()
         if container is not None and container is not self:
+            # 弹窗在 show 时 Qt 会先把它摆到控件正下方。装一个事件过滤器，在 Show 事件里
+            # 就把几何改成居中的 —— Show 发生在第一次绘制之前，所以屏幕上不会先闪一下
+            # "在下面"再跳上来（"打开就在中间"）。
+            try:
+                container.removeEventFilter(self)
+                container.installEventFilter(self)
+            except Exception:
+                pass
             # 弹窗容器默认是**不透明方窗口** —— 圆角会被背景填满、根本看不出来，边框也是
             # 实色，整体显得硬。开半透明之后 QFrame 的 border-radius 才真正切出圆角，
             # 再配一条半透明描边，观感接近 Windows 的浮出菜单。
@@ -1661,6 +1669,38 @@ class FluentComboBox(QComboBox):
             container.setContentsMargins(0, 0, 0, 0)
 
     # ------------------------------------------------------------------ #
+    def _centred_geometry(self, container) -> QRect:
+        """The popup geometry with its vertical centre on the combo's centre.
+
+        Qt puts a QComboBox popup directly below the control; the user wants the
+        control's centre line to meet the popup's centre line (half above, half
+        below). Clamped into the screen's available area.
+        """
+        final = container.geometry()
+        try:
+            centre_y = self.mapToGlobal(QPoint(0, self.height() // 2)).y()
+            wanted_y = centre_y - final.height() // 2
+            screen = QGuiApplication.screenAt(QPoint(final.x(), centre_y))
+            area = screen.availableGeometry() if screen is not None else None
+            if area is not None:
+                wanted_y = max(area.top() + 4,
+                               min(wanted_y, area.bottom() - final.height() - 4))
+            final = QRect(final.x(), wanted_y, final.width(), final.height())
+        except Exception:
+            pass
+        return final
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        """Reposition the popup the moment it is shown, before it is painted."""
+        if event.type() == QEvent.Type.Show:
+            try:
+                view = self.view()
+                if view is not None and obj is view.window() and obj is not self:
+                    obj.setGeometry(self._centred_geometry(obj))
+            except Exception:
+                pass
+        return super().eventFilter(obj, event)
+
     def showPopup(self) -> None:  # noqa: N802
         self._style_popup()
         super().showPopup()
@@ -1684,21 +1724,7 @@ class FluentComboBox(QComboBox):
             container = view.window() if view is not None else None
             if container is None or container is self:
                 return
-            final = container.geometry()
-            # 位置改成**与控件上下居中对齐**：Qt 默认把弹窗摆在控件正下方，用户要的是
-            # 控件中线对着弹窗中线（上半在控件上方、下半在下方）。超出屏幕时再夹回来。
-            try:
-                centre_y = self.mapToGlobal(QPoint(0, self.height() // 2)).y()
-                wanted_y = centre_y - final.height() // 2
-                screen = QGuiApplication.screenAt(QPoint(final.x(), centre_y))
-                area = screen.availableGeometry() if screen is not None else None
-                if area is not None:
-                    wanted_y = max(area.top() + 4,
-                                   min(wanted_y, area.bottom() - final.height() - 4))
-                final = QRect(final.x(), wanted_y, final.width(), final.height())
-                container.setGeometry(final)
-            except Exception:
-                pass
+            final = self._centred_geometry(container)
             # 起始 60% 高、垂直居中 -> 上下同时长出来。之前 70% 太含蓄，看着像没动。
             grow_from = QRect(final.x(), final.y() + int(final.height() * 0.2),
                               final.width(), max(24, int(final.height() * 0.6)))
