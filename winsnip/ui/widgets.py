@@ -2091,16 +2091,29 @@ class FluentMenu(FluentWindow):
             label.setStyleSheet(f"color: {theme.palette.text_secondary};")
         self.set_card_size(int(width), int(height))
 
-    def popup(self, global_pos: QPoint) -> None:  # noqa: N802
+    def popup(self, global_pos: QPoint, *, centred: bool = False) -> None:  # noqa: N802
+        """Show the menu.
+
+        ``centred=True`` treats ``global_pos`` as the **vertical centre** the card
+        should straddle, instead of its top-left corner — 菜单打开就在中间，而不是挂在
+        按钮下面。传入的 y 应当是按钮的中线。位置在 show() 之前就摆好，所以不会先出现
+        在别处再跳过来。
+        """
         self.finalize()
         screen = QGuiApplication.screenAt(global_pos) or QGuiApplication.primaryScreen()
         available = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
         x, y = global_pos.x(), global_pos.y()
         width, height = self.width(), self.height()
+        if centred:
+            # 卡片比窗口小 2*margin（外边距留给阴影）。move_card_to 收的是**卡片**位置，
+            # 所以按窗口高度算完中心还要补回 margin，否则卡片会整体偏上 14px。
+            y = global_pos.y() - height // 2 + self._margin
         if x + width > available.right():
             x = max(available.left(), available.right() - width)
         if y + height > available.bottom():
-            y = max(available.top(), global_pos.y() - height)
+            y = max(available.top(), available.bottom() - height)
+        if y < available.top():
+            y = available.top()
         self.move_card_to(x, y)
         FluentMenu._open.add(self)
         self.show()

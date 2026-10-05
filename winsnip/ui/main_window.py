@@ -426,7 +426,8 @@ class MainWindow(FluentWindow):
             menu.add_item(label, icon_name=icon_name, checked=(key == self._shape), enabled=enabled,
                           radio=True, keep_open=False,
                           on_activate=lambda k=key: self._set_shape(k))
-        menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() + 6)))
+        menu.popup(self.shape_button.mapToGlobal(QPoint(0, self.shape_button.height() // 2)),
+                   centred=True)
 
     def _set_shape(self, shape: str) -> None:
         self._shape = shape
@@ -471,7 +472,8 @@ class MainWindow(FluentWindow):
                               on_activate=lambda d=device: self._set_loopback_device(d.id))
         if not devices:
             menu.add_item(_t("未找到音频设备"), enabled=False)
-        menu.popup(self.audio_button.mapToGlobal(QPoint(0, self.audio_button.height() + 6)))
+        menu.popup(self.audio_button.mapToGlobal(QPoint(0, self.audio_button.height() // 2)),
+                   centred=True)
 
     def _set_mic_enabled(self, enabled: bool) -> None:
         settings.mic_enabled = enabled
@@ -537,7 +539,8 @@ class MainWindow(FluentWindow):
         menu.add_item(_t("打开保存文件夹"), icon_name="folder", on_activate=self.open_output_folder)
         menu.add_separator()
         menu.add_item(_t("关于截图工具"), icon_name="info", on_activate=self._show_about)
-        menu.popup(self.more_button.mapToGlobal(QPoint(0, self.more_button.height() + 6)))
+        menu.popup(self.more_button.mapToGlobal(QPoint(0, self.more_button.height() // 2)),
+                   centred=True)
 
     def _toggle_autostart(self) -> None:
         from .. import startup

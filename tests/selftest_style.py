@@ -1203,6 +1203,14 @@ def main() -> int:
           "centre_y = self.mapToGlobal" in _anim_src and "wanted_y" in _anim_src,
           "按控件中线计算弹窗 y，并夹在屏幕可用区域内")
 
+    # 菜单以按钮中线为中心打开（centred=True），不是挂在按钮下面。
+    import inspect as _inspect5
+
+    _popup_src = _inspect5.getsource(_Menu.popup)
+    check("菜单支持以按钮中线为中心打开（centred=True）",
+          "centred" in _popup_src and "height // 2 + self._margin" in _popup_src,
+          "popup() 接受 centred 并补回 margin")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
