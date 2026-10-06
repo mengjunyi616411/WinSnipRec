@@ -9,7 +9,7 @@ from collections.abc import Callable
 import logging
 
 from PySide6.QtCore import (
-    QEvent, QPoint, QPointF, QRect,
+    QEvent, QParallelAnimationGroup, QPoint, QPointF, QPropertyAnimation, QRect,
     QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
 )
 from PySide6.QtGui import (
@@ -1707,20 +1707,52 @@ class FluentComboBox(QComboBox):
         self._animate_popup_open()
 
     def _animate_popup_open(self) -> None:
-        """Position the popup — no animation.
+        """Win11 的下拉是滑下来的；Qt 的弹窗是直接出现，这里补一段淡入 + 下滑。
 
-        用户明确要求"不要有下拉动画"：弹窗直接出现在中间，不淡入、不滑动、不变尺寸。
-        Qt 在 show 时先把弹窗摆到控件正下方，所以这里（以及下面 Show 事件里的那一次）
-        负责把它挪到居中的位置，位置和尺寸都不再随时间变化。
+        参数与窗口打开动画一致（起点 0.92、时长 DURATION_FAST），这样下拉弹出和
+        其它窗口的观感统一。带幂等判断 + 兜底定时器 + 已销毁容错 —— 弹窗容器会在
+        关闭时销毁，回调晚到必须不能崩（这个坑刚踩过）。
+
+        展开方向：**同时向上和向下**。做法是把起始几何设成最终高度的 70%、并且垂直
+        居中，再动画到最终几何 —— 上边缘往上长、下边缘往下长，两边同时展开。
+        （只动 pos 的话只会朝一个方向滑。）
         """
         try:
+            if not anim.animations_enabled():
+                return
             view = self.view()
             container = view.window() if view is not None else None
             if container is None or container is self:
                 return
-            container.setWindowOpacity(1.0)
-            container.setGeometry(self._centred_geometry(container))
-        except RuntimeError:
+            final = self._centred_geometry(container)
+            # **不做几何动画**：用户要的是"直接在中间"。之前让弹窗从 60% 高度长到全高，
+            # 看着就是"先展开、然后才落到中间"。现在位置一次到位，只留一段淡入。
+            container.setGeometry(final)
+            group = QParallelAnimationGroup(container)
+            fade = QPropertyAnimation(container, b"windowOpacity", group)
+            fade.setDuration(anim.DURATION_FAST)
+            fade.setStartValue(anim.OPEN_FADE_START)
+            fade.setEndValue(1.0)
+            fade.setEasingCurve(anim.curve("out"))
+            container.setWindowOpacity(anim.OPEN_FADE_START)
+            self._popup_scrollbars = scrollbars[0] if scrollbars else None
+
+            settled = {"done": False}
+
+            def finished() -> None:
+                if settled["done"]:
+                    return
+                settled["done"] = True
+                try:
+                    container.setWindowOpacity(1.0)
+                    container.setGeometry(final)
+                except RuntimeError:
+                    pass          # 弹窗已经关了，什么都不用做
+
+            group.finished.connect(finished)
+            group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+            QTimer.singleShot(max(400, anim.DURATION_FAST * 4 + 300), finished)
+        except Exception:
             pass
 
     def refresh_theme(self) -> None:
