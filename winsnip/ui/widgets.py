@@ -1416,25 +1416,52 @@ class Separator(QFrame):
 
 
 class ToggleSwitch(QWidget):
-    """Fluent toggle switch used by the settings flyout."""
+    """Fluent toggle switch used by the settings flyout.
+
+    开关有动画：_t 是 0（关）到 1（开）的进度，滑块位置、圆角、以及轨道/边框/滑块的
+    颜色都按它插值，所以拨动时是**滑过去 + 渐变色**，不是瞬间跳。进度用
+    QVariantAnimation 推进，并且尊重设置里的"界面动画"开关（关掉就直接跳）。
+    """
 
     toggled = Signal(bool)
 
     def __init__(self, checked: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._checked = checked
+        self._t = 1.0 if checked else 0.0
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(anim.DURATION_FAST)
+        self._anim.setEasingCurve(anim.curve("decelerate"))
+        self._anim.valueChanged.connect(self._on_anim)
         self.setFixedSize(40, 20)
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def isChecked(self) -> bool:  # noqa: N802
         return self._checked
 
-    def setChecked(self, value: bool) -> None:  # noqa: N802
+    def setChecked(self, value: bool, *, animate: bool = True) -> None:  # noqa: N802
         value = bool(value)
-        if value != self._checked:
-            self._checked = value
+        if value == self._checked:
+            return
+        self._checked = value
+        target = 1.0 if value else 0.0
+        self._anim.stop()
+        if not animate or not anim.animations_enabled():
+            self._t = target
             self.update()
-            self.toggled.emit(value)
+        else:
+            self._anim.setStartValue(float(self._t))
+            self._anim.setEndValue(target)
+            self._anim.start()
+        self.toggled.emit(value)
+
+    def _on_anim(self, value) -> None:
+        # 控件可能在动画跑完前就被销毁（设置窗口关闭），回调晚到不能崩。
+        try:
+            self._t = float(value)
+            self.update()
+        except RuntimeError:
+            pass
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
@@ -1445,27 +1472,35 @@ class ToggleSwitch(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         palette = theme.palette
         track = QRectF(0, 2, self.width(), self.height() - 4)
-        if self._checked:
-            painter.setBrush(QColor(palette.accent))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(track, track.height() / 2, track.height() / 2)
-            knob_color = QColor("#FFFFFF")
-        else:
-            # 关：轨道是**近白填充 + 一条浅灰细边**，滑块是深灰圆点。
-            # 参考 Windows 的取值：轨道 #F4F6F7、边框 #D9DBDC、滑块 #5D5E5E。
-            # 以前这里不填充（直接透出行的底色）、边框还用 text_secondary，显得又空又重。
-            painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", 0.03))
-            pen = painter.pen()
-            pen.setWidthF(1.0)
-            pen.setColor(rgba(palette.text_primary, 0.16))
-            painter.setPen(pen)
-            painter.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5), track.height() / 2,
-                                    track.height() / 2)
-            knob_color = QColor(palette.text_secondary)
-        radius = 5.0 if self._checked else 4.0
-        cx = self.width() - 8 if self._checked else 8
+        # _t 是 0（关）-> 1（开）的进度，位置和颜色都按它插值，所以拨动是滑过去 + 渐变色。
+        t = max(0.0, min(1.0, float(self._t)))
+
+        def _mix(a: QColor, b: QColor, k: float) -> QColor:
+            return QColor(int(round(a.red() + (b.red() - a.red()) * k)),
+                          int(round(a.green() + (b.green() - a.green()) * k)),
+                          int(round(a.blue() + (b.blue() - a.blue()) * k)),
+                          int(round(a.alpha() + (b.alpha() - a.alpha()) * k)))
+
+        # 关：轨道近白填充 + 浅灰细边 + 深灰滑块。参考 Windows 取值
+        # 轨道 #F4F6F7、边框 #D9DBDC、滑块 #5D5E5E。
+        off_track = rgba("#000000" if not palette.dark else "#FFFFFF", 0.03)
+        off_border = rgba(palette.text_primary, 0.16)
+        off_knob = QColor(palette.text_secondary)
+        on_track = QColor(palette.accent)
+        on_knob = QColor("#FFFFFF")
+
+        painter.setBrush(_mix(off_track, on_track, t))
+        pen = painter.pen()
+        pen.setWidthF(1.0)
+        pen.setColor(_mix(off_border, on_track, t))
+        painter.setPen(pen)
+        painter.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5), track.height() / 2,
+                                track.height() / 2)
+
+        radius = 4.0 + (5.0 - 4.0) * t
+        cx = 8.0 + ((self.width() - 8) - 8.0) * t
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(knob_color)
+        painter.setBrush(_mix(off_knob, on_knob, t))
         painter.drawEllipse(QRectF(cx - radius, self.height() / 2 - radius, radius * 2, radius * 2))
         painter.end()
 

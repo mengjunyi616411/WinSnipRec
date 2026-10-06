@@ -1271,6 +1271,32 @@ def main() -> int:
           "QColor(palette.accent)" in _tg_src and 'QColor("#FFFFFF")' in _tg_src,
           "开态 accent / #FFFFFF")
 
+    # 开关拨动是**滑过去 + 渐变色**，不是瞬间跳；关掉界面动画时则直接跳。
+    # 进度 _t 在 0（关）和 1（开）之间插值滑块位置与全部颜色。
+    _anim_before = settings.animations
+    settings.animations = True
+    _sw = _Toggle(False)
+    _sw.show()
+    pump(app, 0.2)
+    _steps = []
+    _sw.setChecked(True)
+    _deadline = time.perf_counter() + 1.0
+    while time.perf_counter() < _deadline and _sw._t < 0.999:
+        pump(app, 0.01)
+        _steps.append(round(_sw._t, 2))
+    check("开关拨动有中间进度（是滑过去而不是瞬间跳）",
+          len(set(_steps)) > 2 and _sw._t > 0.99,
+          f"轨迹 {sorted(set(_steps))[:6]}")
+    settings.animations = False
+    _sw2 = _Toggle(False)
+    _sw2.show()
+    pump(app, 0.2)
+    _sw2.setChecked(True)
+    pump(app, 0.02)
+    check("关掉界面动画时开关直接到位（无过渡）",
+          _sw2._t > 0.99, f"_t={_sw2._t}")
+    settings.animations = _anim_before
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
