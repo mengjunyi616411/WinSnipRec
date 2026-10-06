@@ -1434,7 +1434,8 @@ class ToggleSwitch(QWidget):
         self._anim.setDuration(anim.DURATION_NORMAL)
         self._anim.setEasingCurve(anim.curve("decelerate"))
         self._anim.valueChanged.connect(self._on_anim)
-        self.setFixedSize(40, 20)
+        # 50x26（原来 40x20）。内部所有尺寸都按比例算，改大小不会失调。
+        self.setFixedSize(50, 26)
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def isChecked(self) -> bool:  # noqa: N802
@@ -1472,7 +1473,12 @@ class ToggleSwitch(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         palette = theme.palette
-        track = QRectF(0, 2, self.width(), self.height() - 4)
+        # 内部尺寸全部按控件尺寸算，改 setFixedSize 不用再逐个调数字。
+        # 比例取自原来 40x20 时的取值：轨道高 16（占高 80%）、滑块内缩 8（高×0.4）、
+        # 半径 4 / 5（轨道高×0.25 / ×0.31）。
+        w, h = float(self.width()), float(self.height())
+        track = QRectF(0, h * 0.1, w, h * 0.8)
+        inset = h * 0.4
         # _t 是 0（关）-> 1（开）的进度，位置和颜色都按它插值，所以拨动是滑过去 + 渐变色。
         t = max(0.0, min(1.0, float(self._t)))
 
@@ -1498,11 +1504,11 @@ class ToggleSwitch(QWidget):
         painter.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5), track.height() / 2,
                                 track.height() / 2)
 
-        radius = 4.0 + (5.0 - 4.0) * t
-        cx = 8.0 + ((self.width() - 8) - 8.0) * t
+        radius = track.height() * (0.25 + (0.31 - 0.25) * t)
+        cx = inset + ((w - inset) - inset) * t
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(_mix(off_knob, on_knob, t))
-        painter.drawEllipse(QRectF(cx - radius, self.height() / 2 - radius, radius * 2, radius * 2))
+        painter.drawEllipse(QRectF(cx - radius, h / 2 - radius, radius * 2, radius * 2))
         painter.end()
 
 
