@@ -1275,6 +1275,12 @@ def main() -> int:
     # 进度 _t 在 0（关）和 1（开）之间插值滑块位置与全部颜色。
     _anim_before = settings.animations
     settings.animations = True
+    # 把时长临时拉长再验证：默认 240ms，在负载高的机器上 processEvents 可能被卡住，
+    # 采样会退化成"只有首尾两帧"，看起来像没有中间帧（误判）。
+    from winsnip import anim as _anim_mod2
+
+    _dur_before = _anim_mod2.DURATION_NORMAL
+    _anim_mod2.DURATION_NORMAL = 1200
     _sw = _Toggle(False)
     _sw.show()
     pump(app, 0.2)
@@ -1287,6 +1293,10 @@ def main() -> int:
     check("开关拨动有中间进度（是滑过去而不是瞬间跳）",
           len(set(_steps)) > 2 and _sw._t > 0.99,
           f"轨迹 {sorted(set(_steps))[:6]}")
+    check("开关动画时长用 DURATION_NORMAL（比 FAST 慢）",
+          _dur_before > _anim_mod2.DURATION_FAST,
+          f"{_dur_before} vs {_anim_mod2.DURATION_FAST}")
+    _anim_mod2.DURATION_NORMAL = _dur_before
     settings.animations = False
     _sw2 = _Toggle(False)
     _sw2.show()

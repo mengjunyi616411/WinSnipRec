@@ -1430,7 +1430,8 @@ class ToggleSwitch(QWidget):
         self._checked = checked
         self._t = 1.0 if checked else 0.0
         self._anim = QVariantAnimation(self)
-        self._anim.setDuration(anim.DURATION_FAST)
+        # 240ms（DURATION_NORMAL）：150ms 太快，滑块一闪就到，看不出"滑过去"。
+        self._anim.setDuration(anim.DURATION_NORMAL)
         self._anim.setEasingCurve(anim.curve("decelerate"))
         self._anim.valueChanged.connect(self._on_anim)
         self.setFixedSize(40, 20)
