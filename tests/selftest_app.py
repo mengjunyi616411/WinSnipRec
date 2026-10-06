@@ -447,6 +447,42 @@ def main() -> int:
 
 
 def report(app: QApplication) -> int:
+    # 拨一个跟配色无关的开关不该重建调色板：以前每次都重建（实测约 1.8 秒），
+    # 这就是"点开关有卡顿"。现在用主题签名判断，没变就直接返回。
+    import time as _time
+
+    from winsnip.ui.main_window import MainWindow as _MW2
+
+    _host2 = _MW2()
+    _host2.show()
+    pump(app, 0.8)
+    _host2.open_settings()
+    pump(app, 1.0)
+    _sw = _host2._settings_window
+    check("构造时就记下了主题签名（第一次拨开关也能跳过重建）",
+          getattr(_host2, "_applied_theme_signature", None) is not None,
+          f"{getattr(_host2, '_applied_theme_signature', None)}")
+    _costs = []
+    for _name in ("tray_toggle", "open_folder_toggle", "cursor_toggle"):
+        _tog = getattr(_sw, _name, None)
+        if _tog is None:
+            continue
+        _t0 = _time.perf_counter()
+        _tog.setChecked(not _tog.isChecked())
+        pump(app, 0.005)
+        _costs.append((_time.perf_counter() - _t0) * 1000)
+    _worst = max(_costs) if _costs else 0.0
+    check("拨非配色类开关不再触发配色重建（不再卡顿）", _costs and _worst < 400,
+          f"最慢一次 {_worst:.0f} ms（重建约 1600 ms）")
+    _sig_before = _host2._theme_signature()
+    _sw.theme_combo.setCurrentIndex(2 if _sw.theme_combo.currentIndex() != 2 else 0)
+    pump(app, 0.05)
+    check("改主题仍然会重建（签名变了）",
+          _host2._theme_signature() != _sig_before, f"{_host2._theme_signature()}")
+    _host2._quitting = True
+    _host2.close()
+    pump(app, 0.3)
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- APP SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

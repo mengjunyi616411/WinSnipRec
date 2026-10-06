@@ -238,6 +238,9 @@ class MainWindow(FluentWindow):
         self._pending_rect: QRect | None = None
         self._hint_mode = "both"
         self._quitting = False
+        # 启动时主题已经按当前设置应用过了，这里先记下签名 —— 否则"设置里第一次拨开关"
+        # 会因为签名还是 None 而白跑一次约 1.8 秒的配色重建。
+        self._applied_theme_signature = self._theme_signature()
 
         self._build()
         self.refresh_theme()
@@ -921,11 +924,27 @@ class MainWindow(FluentWindow):
         self._settings_window.raise_()
         self._settings_window.activateWindow()
 
+    #: 影响配色/材质重建的设置项。只有这些变了才需要重建调色板与窗口背景。
+    _THEME_ATTRS = ("theme", "style", "backdrop", "reveal")
+
+    def _theme_signature(self) -> tuple:
+        return tuple(getattr(settings, name, None) for name in self._THEME_ATTRS)
+
     def _on_settings_applied(self) -> None:
         from PySide6.QtWidgets import QApplication
 
         from .. import anim
         from ..theme import apply_app_theme
+
+        # 大多数设置项（各种开关、帧率、目录…）跟配色无关，但它们同样会走这条路径。
+        # 以前一律重建调色板 + 给每个顶层窗口 invalidate_backdrop()，实测接近 1 秒 ——
+        # 这就是"点开关有卡顿"的来源。先比签名，没变就只刷新提示后返回。
+        signature = self._theme_signature()
+        if signature == getattr(self, "_applied_theme_signature", None):
+            self._update_hint()
+            self.settingsChanged.emit()
+            return
+        self._applied_theme_signature = signature
 
         app = QApplication.instance()
         was_dark = theme.dark
