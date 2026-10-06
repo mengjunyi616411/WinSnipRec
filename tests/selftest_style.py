@@ -1318,6 +1318,20 @@ def main() -> int:
           and "track.height() * (" in _size_src,
           "轨道/内缩/半径都从 h 与 track 推导")
 
+    # 开态轨道要比强调色深一档（用户："按钮的颜色改深一点"）。
+    from winsnip.ui.widgets import ToggleSwitch as _DeepToggle
+
+    _deep_src = _inspect6.getsource(_DeepToggle.paintEvent)
+    check("开关开态用比强调色更深的蓝（darker(115)）",
+          "QColor(palette.accent).darker(" in _deep_src,
+          "开态轨道 = accent.darker(115)")
+    from PySide6.QtGui import QColor as _QC2
+
+    _acc = _QC2(theme.palette.accent)
+    check("加深后的颜色确实比强调色暗",
+          _acc.darker(115).lightness() < _acc.lightness(),
+          f"{_acc.name()} -> {_acc.darker(115).name()}")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:

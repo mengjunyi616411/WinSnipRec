@@ -1494,7 +1494,9 @@ class ToggleSwitch(QWidget):
         off_track = rgba("#000000" if not palette.dark else "#FFFFFF", 0.03)
         off_border = rgba(palette.text_primary, 0.16)
         off_knob = QColor(palette.text_secondary)
-        on_track = QColor(palette.accent)
+        # 开态轨道比强调色深一档（用户要"颜色改深一点"）。darker(115) ≈ 深 15%，
+        # 边框是从 off_border 混到 on_track，所以线条也会跟着一起变深。
+        on_track = QColor(palette.accent).darker(115)
         on_knob = QColor("#FFFFFF")
 
         painter.setBrush(_mix(off_track, on_track, t))
