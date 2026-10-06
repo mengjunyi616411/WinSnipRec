@@ -1735,7 +1735,6 @@ class FluentComboBox(QComboBox):
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
             container.setWindowOpacity(anim.OPEN_FADE_START)
-            self._popup_scrollbars = scrollbars[0] if scrollbars else None
 
             settled = {"done": False}
 

@@ -1228,6 +1228,31 @@ def main() -> int:
     check("居中几何计算抽出为 _centred_geometry",
           hasattr(FluentComboBox, "_centred_geometry"), "_centred_geometry 存在")
 
+    # 运行时断言：弹窗淡入必须**真的跑完并回到完全不透明**。
+    # 这条是因为踩过坑才加的 —— 之前动画里有一行引用已删除变量的残留代码，异常被外层
+    # except 静默吞掉，动画根本没启动，弹窗永久停在 0.92 半透明（发虚）。
+    # 当时只断言了"几何不变"，没看透明度，所以漏掉了。
+    _rv = SettingsWindow()
+    _rv.show()
+    _rv.move(60, 30)
+    pump(app, 1.0)
+    _rc = _rv.theme_combo
+    _rc.showPopup()
+    _popup = _rc.view().window()
+    _seen = []
+    _deadline = time.perf_counter() + 1.5
+    while time.perf_counter() < _deadline and _popup.windowOpacity() < 0.999:
+        pump(app, 0.02)
+        _seen.append(round(_popup.windowOpacity(), 2))
+    check("下拉弹窗淡入真的跑完并回到完全不透明（不是永久发虚）",
+          _popup.windowOpacity() > 0.99,
+          f"最终 {_popup.windowOpacity():.2f}，轨迹 {sorted(set(_seen))[:6]}")
+    _rc.hidePopup()
+    pump(app, 0.2)
+    _rv._quitting = True
+    _rv.close()
+    pump(app, 0.3)
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
