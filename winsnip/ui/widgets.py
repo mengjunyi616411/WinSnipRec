@@ -1756,34 +1756,40 @@ class FluentComboBox(QComboBox):
         self._animate_popup_open()
 
     def _animate_popup_open(self) -> None:
-        """Win11 的下拉是滑下来的；Qt 的弹窗是直接出现，这里补一段淡入 + 下滑。
+        """下拉弹窗的展开动画 —— **仅在 Win11 风格下**，且与 Win11 的观感保持一致。
 
-        参数与窗口打开动画一致（起点 0.92、时长 DURATION_FAST），这样下拉弹出和
-        其它窗口的观感统一。带幂等判断 + 兜底定时器 + 已销毁容错 —— 弹窗容器会在
-        关闭时销毁，回调晚到必须不能崩（这个坑刚踩过）。
+        Windows 11 的下拉是"淡入 + 轻微位移"进来的，不做尺寸变化（早先试过让弹窗从
+        60% 高度长到全高，看起来像"先展开、再落到中间"，那是错的）。所以这里只动
+        windowOpacity 和 pos，几何尺寸一次到位。
 
-        展开方向：**同时向上和向下**。做法是把起始几何设成最终高度的 70%、并且垂直
-        居中，再动画到最终几何 —— 上边缘往上长、下边缘往下长，两边同时展开。
-        （只动 pos 的话只会朝一个方向滑。）
+        Win10 风格下不播动画（用户要求"仅在 win11 风格下"），弹窗直接出现在居中位置。
+
+        三件套照旧：幂等 finished()、兜底 QTimer、碰容器的操作包 RuntimeError
+        —— 弹窗容器关闭即销毁，回调晚到不能崩。
         """
         try:
-            if not anim.animations_enabled():
+            if theme.is_win10 or not anim.animations_enabled():
                 return
             view = self.view()
             container = view.window() if view is not None else None
             if container is None or container is self:
                 return
             final = self._centred_geometry(container)
-            # **不做几何动画**：用户要的是"直接在中间"。之前让弹窗从 60% 高度长到全高，
-            # 看着就是"先展开、然后才落到中间"。现在位置一次到位，只留一段淡入。
+            slide = 6.0
             container.setGeometry(final)
+            container.setWindowOpacity(anim.OPEN_FADE_START)
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
             fade.setDuration(anim.DURATION_FAST)
             fade.setStartValue(anim.OPEN_FADE_START)
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
-            container.setWindowOpacity(anim.OPEN_FADE_START)
+            move = QPropertyAnimation(container, b"pos", group)
+            move.setDuration(anim.DURATION_FAST)
+            move.setStartValue(QPoint(final.x(), final.y() - int(slide)))
+            move.setEndValue(QPoint(final.x(), final.y()))
+            move.setEasingCurve(anim.curve("decelerate"))
+            container.move(final.x(), final.y() - int(slide))
 
             settled = {"done": False}
 

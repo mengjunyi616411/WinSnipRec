@@ -1184,21 +1184,22 @@ def main() -> int:
 
     _show_src = _inspect4.getsource(FluentComboBox.showPopup)
     _anim_src = _inspect4.getsource(FluentComboBox._animate_popup_open)
-    check("下拉弹窗只淡入、不做几何动画（用户要的是直接在中间）",
-          "_animate_popup_open" in _show_src and "QPropertyAnimation" in _anim_src
-          and 'b"geometry"' not in _anim_src,
-          "showPopup 调用 _animate_popup_open，内部只有 windowOpacity 动画")
+    check("下拉弹窗只在 Win11 风格下播动画（Win10 直接出现）",
+          "_animate_popup_open" in _show_src
+          and "if theme.is_win10 or not anim.animations_enabled()" in _anim_src,
+          "showPopup 调用 _animate_popup_open，开头按 theme.is_win10 提前返回")
     check("下拉展开动画与窗口打开动画同参数",
           "OPEN_FADE_START" in _anim_src and "DURATION_FAST" in _anim_src,
           "起点 0.92 / 时长 DURATION_FAST")
     check("下拉展开动画对已销毁弹窗容错（否则关闭时会崩）",
           "except RuntimeError" in _anim_src, "finished() 里包了 RuntimeError")
 
-    # 展开方向：上下同时（顶边往上、底边往下），不是只朝一个方向滑。
-    check("弹窗位置一次到位（setGeometry 后再淡入，动画期间不移动）",
-          "container.setGeometry(final)" in _anim_src
-          and _anim_src.index("setGeometry(final)") < _anim_src.index("QPropertyAnimation"),
-          "先 setGeometry(final) 再起淡入")
+    # Win11 的下拉是"淡入 + 轻微位移"进来的：只动 windowOpacity 和 pos，尺寸不动。
+    # （早先试过让弹窗从 60% 高度长到全高，用户看到的是"先展开、再落到中间"，那是错的。）
+    check("Win11 下拉做淡入 + 轻微位移，且不动尺寸",
+          'b"windowOpacity"' in _anim_src and 'b"pos"' in _anim_src
+          and 'b"geometry"' not in _anim_src,
+          "只动 windowOpacity 与 pos")
 
     # 弹窗位置要与控件上下居中对齐（Qt 默认摆在控件正下方）。
     _centre_src = _inspect4.getsource(FluentComboBox._centred_geometry)
