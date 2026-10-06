@@ -1494,9 +1494,10 @@ class ToggleSwitch(QWidget):
         off_track = rgba("#000000" if not palette.dark else "#FFFFFF", 0.03)
         off_border = rgba(palette.text_primary, 0.16)
         off_knob = QColor(palette.text_secondary)
-        # 开态轨道比强调色深一档（用户要"颜色改深一点"）。darker(115) ≈ 深 15%，
-        # 边框是从 off_border 混到 on_track，所以线条也会跟着一起变深。
-        on_track = QColor(palette.accent).darker(115)
+        # 开态轨道比强调色深两档（用户先要"深一点"，再要"再深一点、和 win11 按钮一样深"）。
+        # darker(130) ≈ 深 30%：本机 #0068B8 -> #004A84，和 Windows 11 强调色按钮的
+        # 深色态（#0055A0 一族）处在同一档。边框从 off_border 混到 on_track，会一起变深。
+        on_track = QColor(palette.accent).darker(130)
         on_knob = QColor("#FFFFFF")
 
         painter.setBrush(_mix(off_track, on_track, t))

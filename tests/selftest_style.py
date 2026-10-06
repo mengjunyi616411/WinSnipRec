@@ -1322,15 +1322,15 @@ def main() -> int:
     from winsnip.ui.widgets import ToggleSwitch as _DeepToggle
 
     _deep_src = _inspect6.getsource(_DeepToggle.paintEvent)
-    check("开关开态用比强调色更深的蓝（darker(115)）",
-          "QColor(palette.accent).darker(" in _deep_src,
+    check("开关开态用比强调色深两档的蓝（darker(130)）",
+          "QColor(palette.accent).darker(130)" in _deep_src,
           "开态轨道 = accent.darker(115)")
     from PySide6.QtGui import QColor as _QC2
 
     _acc = _QC2(theme.palette.accent)
     check("加深后的颜色确实比强调色暗",
-          _acc.darker(115).lightness() < _acc.lightness(),
-          f"{_acc.name()} -> {_acc.darker(115).name()}")
+          _acc.darker(130).lightness() < _acc.lightness(),
+          f"{_acc.name()} -> {_acc.darker(130).name()}")
 
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
