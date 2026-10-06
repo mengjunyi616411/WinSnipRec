@@ -1184,10 +1184,11 @@ def main() -> int:
 
     _show_src = _inspect4.getsource(FluentComboBox.showPopup)
     _anim_src = _inspect4.getsource(FluentComboBox._animate_popup_open)
-    check("下拉弹窗只在 Win11 风格下播动画（Win10 直接出现）",
+    check("两种风格播同一个弹窗动画（不再按 theme.is_win10 分流）",
           "_animate_popup_open" in _show_src
-          and "if theme.is_win10 or not anim.animations_enabled()" in _anim_src,
-          "showPopup 调用 _animate_popup_open，开头按 theme.is_win10 提前返回")
+          and "theme.is_win10" not in _anim_src
+          and "if not anim.animations_enabled()" in _anim_src,
+          "开头只判 anim.animations_enabled()，不按风格分流")
     check("下拉展开动画与窗口打开动画同参数",
           "OPEN_FADE_START" in _anim_src and "DURATION_FAST" in _anim_src,
           "起点 0.92 / 时长 DURATION_FAST")

@@ -1762,13 +1762,14 @@ class FluentComboBox(QComboBox):
         60% 高度长到全高，看起来像"先展开、再落到中间"，那是错的）。所以这里只动
         windowOpacity 和 pos，几何尺寸一次到位。
 
-        Win10 风格下不播动画（用户要求"仅在 win11 风格下"），弹窗直接出现在居中位置。
+        **两种风格播同一个动画**（用户："win10 的动画和 win11 一致"）—— 之前按界面风格
+        提前返回是把上一句要求理解反了。
 
         三件套照旧：幂等 finished()、兜底 QTimer、碰容器的操作包 RuntimeError
         —— 弹窗容器关闭即销毁，回调晚到不能崩。
         """
         try:
-            if theme.is_win10 or not anim.animations_enabled():
+            if not anim.animations_enabled():
                 return
             view = self.view()
             container = view.window() if view is not None else None
