@@ -1451,12 +1451,15 @@ class ToggleSwitch(QWidget):
             painter.drawRoundedRect(track, track.height() / 2, track.height() / 2)
             knob_color = QColor("#FFFFFF")
         else:
-            painter.setBrush(Qt.BrushStyle.NoBrush)
+            # 关：轨道是**近白填充 + 一条浅灰细边**，滑块是深灰圆点。
+            # 参考 Windows 的取值：轨道 #F4F6F7、边框 #D9DBDC、滑块 #5D5E5E。
+            # 以前这里不填充（直接透出行的底色）、边框还用 text_secondary，显得又空又重。
+            painter.setBrush(rgba("#000000" if not palette.dark else "#FFFFFF", 0.03))
             pen = painter.pen()
-            pen.setWidthF(1.4)
-            pen.setColor(QColor(palette.text_secondary))
+            pen.setWidthF(1.0)
+            pen.setColor(rgba(palette.text_primary, 0.16))
             painter.setPen(pen)
-            painter.drawRoundedRect(track.adjusted(0.7, 0.7, -0.7, -0.7), track.height() / 2,
+            painter.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5), track.height() / 2,
                                     track.height() / 2)
             knob_color = QColor(palette.text_secondary)
         radius = 5.0 if self._checked else 4.0

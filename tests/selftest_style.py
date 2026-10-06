@@ -1253,6 +1253,24 @@ def main() -> int:
     _rv.close()
     pump(app, 0.3)
 
+    # 开关（ToggleSwitch）：关态必须有**近白填充 + 浅灰细边 + 深灰滑块**。
+    # 以前关态完全不填充（透出行底色）、边框还用 text_secondary，显得又空又重；
+    # 参考 Windows 实测取值 轨道 #F4F6F7 / 边框 #D9DBDC / 滑块 #5D5E5E。
+    import inspect as _inspect6
+
+    from winsnip.ui.widgets import ToggleSwitch as _Toggle
+
+    _tg_src = _inspect6.getsource(_Toggle.paintEvent)
+    check("开关关态有近白填充（不是透明透出底色）",
+          'rgba("#000000" if not palette.dark else "#FFFFFF", 0.03)' in _tg_src,
+          "关态轨道用 0.03 的黑/白叠加填充")
+    check("开关关态边框是浅灰细线（不是 text_secondary + 1.4px）",
+          "pen.setWidthF(1.0)" in _tg_src and "rgba(palette.text_primary, 0.16)" in _tg_src,
+          "1.0px + text_primary 16%")
+    check("开关开态仍是实心强调色 + 白色滑块",
+          "QColor(palette.accent)" in _tg_src and 'QColor("#FFFFFF")' in _tg_src,
+          "开态 accent / #FFFFFF")
+
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
     for name, ok, detail in checks:
