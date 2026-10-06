@@ -1309,8 +1309,8 @@ def main() -> int:
 
     # 开关尺寸放大到 50x26（原 40x20），内部尺寸全部按比例算，改大小不会失调。
     _size_probe = _Toggle(False)
-    check("开关尺寸为 50x26（比原来的 40x20 大）",
-          (_size_probe.width(), _size_probe.height()) == (50, 26),
+    check("开关尺寸为 44x26（比原来的 40x20 大、宽度收窄）",
+          (_size_probe.width(), _size_probe.height()) == (44, 26),
           f"{_size_probe.width()}x{_size_probe.height()}")
     _size_src = _inspect6.getsource(_Toggle.paintEvent)
     check("开关内部尺寸按比例算（不写死像素）",

@@ -1434,8 +1434,9 @@ class ToggleSwitch(QWidget):
         self._anim.setDuration(anim.DURATION_NORMAL)
         self._anim.setEasingCurve(anim.curve("decelerate"))
         self._anim.valueChanged.connect(self._on_anim)
-        # 50x26（原来 40x20）。内部所有尺寸都按比例算，改大小不会失调。
-        self.setFixedSize(50, 26)
+        # 44x26：宽度由 50 收到 44（用户要"短一点"），高度保持 26。
+        # 内部所有尺寸都按比例算，只改这一个数字即可。
+        self.setFixedSize(44, 26)
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def isChecked(self) -> bool:  # noqa: N802
