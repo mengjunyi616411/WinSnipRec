@@ -1756,18 +1756,29 @@ class FluentComboBox(QComboBox):
         self._animate_popup_open()
 
     def _animate_popup_open(self) -> None:
-        """下拉弹窗的展开动画 —— **仅在 Win11 风格下**，且与 Win11 的观感保持一致。
+        """下拉弹窗的展开动画 —— 对齐 Windows 11 浮出层的观感。
 
-        Windows 11 的下拉是"淡入 + 轻微位移"进来的，不做尺寸变化（早先试过让弹窗从
-        60% 高度长到全高，看起来像"先展开、再落到中间"，那是错的）。所以这里只动
-        windowOpacity 和 pos，几何尺寸一次到位。
+        用户确认的四个要点（都是他选出来的）：
+          1. 位移/淡入幅度要更明显
+          2. 要像 Windows 那样"从锚点长大"
+          3. 时长要更长
+          4. 每一项要分别出现（错开）
 
-        **两种风格播同一个动画**（用户："win10 的动画和 win11 一致"）—— 之前按界面风格
-        提前返回是把上一句要求理解反了。
+        做法：把起始几何设成最终几何**以控件中心为原点缩放到 SCALE**，动画到最终几何。
+        缩放让弹窗从控件那里"长出来"（要点 2）；窗口变小时内容被裁切，于是列表是
+        一行一行露出来的（要点 4，不需要额外做逐项动画）；配一段更明显的淡入（要点 1）；
+        时长用 DURATION_SLOW（要点 3）。
 
-        三件套照旧：幂等 finished()、兜底 QTimer、碰容器的操作包 RuntimeError
-        —— 弹窗容器关闭即销毁，回调晚到不能崩。
+        之前失败过一次：那次起始取到 60% 高度并垂直居中，用户看到的是"先展开、再落到
+        中间"。区别在于**缩放比例要小（92%，不是 60%）**，而且缩放原点是**控件中心**
+        而不是弹窗自己 —— 这样才是"从锚点长出来"。
+
+        窗口变矮时内容被裁切，Qt 会顺手弹一根滚动条闪一下 —— 动画期间先关掉再恢复。
+        三件套照旧：幂等 finished()、兜底 QTimer、碰容器的操作包 RuntimeError。
         """
+        #: 起始缩放比例。88% 大概差 12px，能明显看出"长大"，也让最后一行确实被裁到
+        #: （逐行露出的效果才成立）；又不会像 60% 那样被误读成"展开再落位"。
+        SCALE = 0.88
         try:
             if not anim.animations_enabled():
                 return
@@ -1776,21 +1787,37 @@ class FluentComboBox(QComboBox):
             if container is None or container is self:
                 return
             final = self._centred_geometry(container)
-            slide = 6.0
-            container.setGeometry(final)
+            # 缩放原点 = 控件中心（用户点击的地方），弹窗就是从那里长出来的。
+            anchor = self.mapToGlobal(QPoint(self.width() // 2, self.height() // 2))
+            start = QRect(
+                int(round(anchor.x() - (anchor.x() - final.x()) * SCALE)),
+                int(round(anchor.y() - (anchor.y() - final.y()) * SCALE)),
+                max(1, int(round(final.width() * SCALE))),
+                max(1, int(round(final.height() * SCALE))),
+            )
+
+            # 动画期间关掉滚动条，避免中间帧闪一下（尺寸在变，内容会被裁切）。
+            scrollbars = None
+            try:
+                scrollbars = (view.verticalScrollBarPolicy(), view.horizontalScrollBarPolicy())
+                view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            except Exception:
+                scrollbars = None
+
+            container.setGeometry(start)
             container.setWindowOpacity(anim.OPEN_FADE_START)
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
-            fade.setDuration(anim.DURATION_FAST)
+            fade.setDuration(anim.DURATION_SLOW)
             fade.setStartValue(anim.OPEN_FADE_START)
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
-            move = QPropertyAnimation(container, b"pos", group)
-            move.setDuration(anim.DURATION_FAST)
-            move.setStartValue(QPoint(final.x(), final.y() - int(slide)))
-            move.setEndValue(QPoint(final.x(), final.y()))
-            move.setEasingCurve(anim.curve("decelerate"))
-            container.move(final.x(), final.y() - int(slide))
+            grow = QPropertyAnimation(container, b"geometry", group)
+            grow.setDuration(anim.DURATION_SLOW)
+            grow.setStartValue(start)
+            grow.setEndValue(final)
+            grow.setEasingCurve(anim.curve("decelerate"))
 
             settled = {"done": False}
 
@@ -1801,12 +1828,15 @@ class FluentComboBox(QComboBox):
                 try:
                     container.setWindowOpacity(1.0)
                     container.setGeometry(final)
+                    if scrollbars:
+                        view.setVerticalScrollBarPolicy(scrollbars[0])
+                        view.setHorizontalScrollBarPolicy(scrollbars[1])
                 except RuntimeError:
                     pass          # 弹窗已经关了，什么都不用做
 
             group.finished.connect(finished)
             group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
-            QTimer.singleShot(max(400, anim.DURATION_FAST * 4 + 300), finished)
+            QTimer.singleShot(max(500, anim.DURATION_SLOW * 3 + 400), finished)
         except Exception:
             pass
 

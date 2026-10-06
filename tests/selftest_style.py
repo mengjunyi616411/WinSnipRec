@@ -1189,18 +1189,23 @@ def main() -> int:
           and "theme.is_win10" not in _anim_src
           and "if not anim.animations_enabled()" in _anim_src,
           "开头只判 anim.animations_enabled()，不按风格分流")
-    check("下拉展开动画与窗口打开动画同参数",
-          "OPEN_FADE_START" in _anim_src and "DURATION_FAST" in _anim_src,
-          "起点 0.92 / 时长 DURATION_FAST")
+    check("下拉展开的淡入起点与窗口打开动画一致（OPEN_FADE_START）",
+          "OPEN_FADE_START" in _anim_src, "起点 0.92")
+    check("下拉展开不再用 DURATION_FAST（已提到 DURATION_SLOW）",
+          "DURATION_FAST" not in _anim_src, "源码里没有 DURATION_FAST")
     check("下拉展开动画对已销毁弹窗容错（否则关闭时会崩）",
           "except RuntimeError" in _anim_src, "finished() 里包了 RuntimeError")
 
-    # Win11 的下拉是"淡入 + 轻微位移"进来的：只动 windowOpacity 和 pos，尺寸不动。
-    # （早先试过让弹窗从 60% 高度长到全高，用户看到的是"先展开、再落到中间"，那是错的。）
-    check("Win11 下拉做淡入 + 轻微位移，且不动尺寸",
-          'b"windowOpacity"' in _anim_src and 'b"pos"' in _anim_src
-          and 'b"geometry"' not in _anim_src,
-          "只动 windowOpacity 与 pos")
+    # Win11 浮出层：从**控件中心**缩放长大（不是从弹窗自己的中心），窗口变小时内容被
+    # 裁切 -> 列表逐行露出；配一段更明显的淡入，时长用 DURATION_SLOW。
+    check("下拉从控件中心缩放长大（geometry 动画 + 以控件中心为原点）",
+          'b"geometry"' in _anim_src and "self.mapToGlobal(QPoint(self.width() // 2"
+          in _anim_src and "SCALE" in _anim_src,
+          "起点按控件中心缩放，动画目标是 geometry")
+    check("下拉展开时长用 DURATION_SLOW（更长）",
+          "DURATION_SLOW" in _anim_src, "时长 DURATION_SLOW")
+    check("展开期间关掉滚动条（尺寸在变，否则中间帧会闪滚动条）",
+          "ScrollBarAlwaysOff" in _anim_src, "动画期间 AlwaysOff，结束恢复")
 
     # 弹窗位置要与控件上下居中对齐（Qt 默认摆在控件正下方）。
     _centre_src = _inspect4.getsource(FluentComboBox._centred_geometry)
