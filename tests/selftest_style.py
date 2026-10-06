@@ -1205,9 +1205,9 @@ def main() -> int:
           'b"geometry"' in _anim_src and "final.height() * 0.8" in _anim_src
           and "QRect(final.x(), final.y(), final.width()" in _anim_src,
           "起点 = 最终几何但高度 80%，左上角不动")
-    check("下拉展开时长用 DURATION_FAST（录屏里只有 1~2 帧）",
-          "DURATION_FAST" in _anim_src and "DURATION_SLOW" not in _anim_src,
-          "时长 DURATION_FAST")
+    # 参考录屏全片实测：开启动画约 100~135ms（关闭是一帧完成的瞬间效果）。
+    check("下拉展开时长按录屏实测（130ms，不是 150/240/320）",
+          "setDuration(130)" in _anim_src, "两个动画都是 130ms")
     check("展开期间关掉滚动条（尺寸在变，否则中间帧会闪滚动条）",
           "ScrollBarAlwaysOff" in _anim_src, "动画期间 AlwaysOff，结束恢复")
 

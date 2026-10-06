@@ -1798,12 +1798,14 @@ class FluentComboBox(QComboBox):
             container.setWindowOpacity(anim.OPEN_FADE_START)
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
-            fade.setDuration(anim.DURATION_FAST)
+            # 录屏实测开启动画约 100~135ms（DURATION_FAST=150 已很接近，这里按实测
+            # 再收一点到 130ms）。关闭则是瞬间完成，Qt 默认行为一致，不用动。
+            fade.setDuration(130)
             fade.setStartValue(anim.OPEN_FADE_START)
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
             grow = QPropertyAnimation(container, b"geometry", group)
-            grow.setDuration(anim.DURATION_FAST)
+            grow.setDuration(130)
             grow.setStartValue(start)
             grow.setEndValue(final)
             grow.setEasingCurve(anim.curve("decelerate"))
@@ -1825,7 +1827,7 @@ class FluentComboBox(QComboBox):
 
             group.finished.connect(finished)
             group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
-            QTimer.singleShot(max(400, anim.DURATION_FAST * 4 + 300), finished)
+            QTimer.singleShot(700, finished)
         except Exception:
             pass
 
