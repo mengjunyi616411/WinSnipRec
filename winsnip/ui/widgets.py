@@ -1756,29 +1756,24 @@ class FluentComboBox(QComboBox):
         self._animate_popup_open()
 
     def _animate_popup_open(self) -> None:
-        """下拉弹窗的展开动画 —— 对齐 Windows 11 浮出层的观感。
+        """下拉弹窗的展开动画 —— 按参考录屏实测出来的 Windows 观感。
 
-        用户确认的四个要点（都是他选出来的）：
-          1. 位移/淡入幅度要更明显
-          2. 要像 Windows 那样"从锚点长大"
-          3. 时长要更长
-          4. 每一项要分别出现（错开）
+        用户发了一段 Windows 自己的菜单录屏（196x206 @30fps）。逐帧量下来：
+          · 整个过渡只占 1~2 帧（约 60~100ms），非常快；
+          · 把中间帧和完全打开帧逐行对比，**只有菜单底部（y=136~160）有差异**，
+            顶部（y=0~40，第一行）已经完全一致 —— 也就是说
+            **宽度不变、顶边固定，高度从顶部往下擦出来**，逐行露出；
+          · 没有任何整体位移，也没有从中心缩放。
 
-        做法：把起始几何设成最终几何**以控件中心为原点缩放到 SCALE**，动画到最终几何。
-        缩放让弹窗从控件那里"长出来"（要点 2）；窗口变小时内容被裁切，于是列表是
-        一行一行露出来的（要点 4，不需要额外做逐项动画）；配一段更明显的淡入（要点 1）；
-        时长用 DURATION_SLOW（要点 3）。
+        之前的实现是以控件中心缩放（顶边会往上跑），方向错了，所以观感对不上。
 
-        之前失败过一次：那次起始取到 60% 高度并垂直居中，用户看到的是"先展开、再落到
-        中间"。区别在于**缩放比例要小（92%，不是 60%）**，而且缩放原点是**控件中心**
-        而不是弹窗自己 —— 这样才是"从锚点长出来"。
+        现在：起点 = 最终几何但高度只有 80%、**左上角不动**，动画到全高。窗口变矮时
+        内容被裁切，列表自然一行行露出来。时长用 DURATION_FAST（150ms），接近录屏里
+        那 1~2 帧的观感。
 
-        窗口变矮时内容被裁切，Qt 会顺手弹一根滚动条闪一下 —— 动画期间先关掉再恢复。
-        三件套照旧：幂等 finished()、兜底 QTimer、碰容器的操作包 RuntimeError。
+        三件套照旧：幂等 finished()、兜底 QTimer、碰容器的操作包 RuntimeError；
+        展开期间临时关掉滚动条（尺寸在变，否则中间帧会闪一根滚动条）。
         """
-        #: 起始缩放比例。88% 大概差 12px，能明显看出"长大"，也让最后一行确实被裁到
-        #: （逐行露出的效果才成立）；又不会像 60% 那样被误读成"展开再落位"。
-        SCALE = 0.88
         try:
             if not anim.animations_enabled():
                 return
@@ -1787,16 +1782,10 @@ class FluentComboBox(QComboBox):
             if container is None or container is self:
                 return
             final = self._centred_geometry(container)
-            # 缩放原点 = 控件中心（用户点击的地方），弹窗就是从那里长出来的。
-            anchor = self.mapToGlobal(QPoint(self.width() // 2, self.height() // 2))
-            start = QRect(
-                int(round(anchor.x() - (anchor.x() - final.x()) * SCALE)),
-                int(round(anchor.y() - (anchor.y() - final.y()) * SCALE)),
-                max(1, int(round(final.width() * SCALE))),
-                max(1, int(round(final.height() * SCALE))),
-            )
+            # 宽度不变、顶边固定，只把高度从 80% 长到 100% —— 与录屏一致。
+            start = QRect(final.x(), final.y(), final.width(),
+                          max(1, int(round(final.height() * 0.8))))
 
-            # 动画期间关掉滚动条，避免中间帧闪一下（尺寸在变，内容会被裁切）。
             scrollbars = None
             try:
                 scrollbars = (view.verticalScrollBarPolicy(), view.horizontalScrollBarPolicy())
@@ -1809,12 +1798,12 @@ class FluentComboBox(QComboBox):
             container.setWindowOpacity(anim.OPEN_FADE_START)
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
-            fade.setDuration(anim.DURATION_SLOW)
+            fade.setDuration(anim.DURATION_FAST)
             fade.setStartValue(anim.OPEN_FADE_START)
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
             grow = QPropertyAnimation(container, b"geometry", group)
-            grow.setDuration(anim.DURATION_SLOW)
+            grow.setDuration(anim.DURATION_FAST)
             grow.setStartValue(start)
             grow.setEndValue(final)
             grow.setEasingCurve(anim.curve("decelerate"))
@@ -1836,7 +1825,7 @@ class FluentComboBox(QComboBox):
 
             group.finished.connect(finished)
             group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
-            QTimer.singleShot(max(500, anim.DURATION_SLOW * 3 + 400), finished)
+            QTimer.singleShot(max(400, anim.DURATION_FAST * 4 + 300), finished)
         except Exception:
             pass
 

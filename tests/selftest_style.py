@@ -1191,19 +1191,23 @@ def main() -> int:
           "开头只判 anim.animations_enabled()，不按风格分流")
     check("下拉展开的淡入起点与窗口打开动画一致（OPEN_FADE_START）",
           "OPEN_FADE_START" in _anim_src, "起点 0.92")
-    check("下拉展开不再用 DURATION_FAST（已提到 DURATION_SLOW）",
-          "DURATION_FAST" not in _anim_src, "源码里没有 DURATION_FAST")
+    check("下拉展开没有整体位移（不做从中心缩放）",
+          "self.mapToGlobal(QPoint(self.width() // 2" not in _anim_src
+          and "SCALE" not in _anim_src,
+          "没有以控件中心为原点的缩放")
     check("下拉展开动画对已销毁弹窗容错（否则关闭时会崩）",
           "except RuntimeError" in _anim_src, "finished() 里包了 RuntimeError")
 
     # Win11 浮出层：从**控件中心**缩放长大（不是从弹窗自己的中心），窗口变小时内容被
     # 裁切 -> 列表逐行露出；配一段更明显的淡入，时长用 DURATION_SLOW。
-    check("下拉从控件中心缩放长大（geometry 动画 + 以控件中心为原点）",
-          'b"geometry"' in _anim_src and "self.mapToGlobal(QPoint(self.width() // 2"
-          in _anim_src and "SCALE" in _anim_src,
-          "起点按控件中心缩放，动画目标是 geometry")
-    check("下拉展开时长用 DURATION_SLOW（更长）",
-          "DURATION_SLOW" in _anim_src, "时长 DURATION_SLOW")
+    # 参考录屏实测：宽度不变、顶边固定，高度从顶部往下"擦"出来（逐行露出）。
+    check("下拉顶边固定、宽度不变，高度从 80% 往下长（与参考录屏一致）",
+          'b"geometry"' in _anim_src and "final.height() * 0.8" in _anim_src
+          and "QRect(final.x(), final.y(), final.width()" in _anim_src,
+          "起点 = 最终几何但高度 80%，左上角不动")
+    check("下拉展开时长用 DURATION_FAST（录屏里只有 1~2 帧）",
+          "DURATION_FAST" in _anim_src and "DURATION_SLOW" not in _anim_src,
+          "时长 DURATION_FAST")
     check("展开期间关掉滚动条（尺寸在变，否则中间帧会闪滚动条）",
           "ScrollBarAlwaysOff" in _anim_src, "动画期间 AlwaysOff，结束恢复")
 
