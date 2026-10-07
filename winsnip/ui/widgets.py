@@ -1782,9 +1782,16 @@ class FluentComboBox(QComboBox):
             if container is None or container is self:
                 return
             final = self._centred_geometry(container)
-            # 宽度不变、顶边固定，只把高度从 80% 长到 100% —— 与录屏一致。
-            start = QRect(final.x(), final.y(), final.width(),
-                          max(1, int(round(final.height() * 0.8))))
+            # 录屏逐帧实测（y 上边..下边）：
+            #     关  84..110 | 中 54..126 | 中 38..152 | ... | 全部到位 38..174
+            # 上边往上走了 16px、下边往下走了 48px —— 是**上下同时长**，但下边占 75%、
+            # 上边只占 25%。等价于"以距顶边 25% 处为锚点缩放到 80%"。
+            # （之前做成"顶边完全固定"是错的；做成"以弹窗中心缩放"则上下各半，也不对。）
+            H_START = 0.80
+            ANCHOR = 0.25
+            start_h = max(1, int(round(final.height() * H_START)))
+            start_y = final.y() + int(round((final.height() - start_h) * ANCHOR))
+            start = QRect(final.x(), start_y, final.width(), start_h)
 
             scrollbars = None
             try:
@@ -1795,17 +1802,18 @@ class FluentComboBox(QComboBox):
                 scrollbars = None
 
             container.setGeometry(start)
-            container.setWindowOpacity(anim.OPEN_FADE_START)
+            container.setWindowOpacity(0.55)
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
-            # 录屏实测开启动画约 100~135ms（DURATION_FAST=150 已很接近，这里按实测
-            # 再收一点到 130ms）。关闭则是瞬间完成，Qt 默认行为一致，不用动。
-            fade.setDuration(130)
-            fade.setStartValue(anim.OPEN_FADE_START)
+            # 时长按录屏实测：下边一直长到 t=933ms 才停（567ms 开始），约 370ms。
+            # 之前按"帧间变化峰值"估的 100~135ms 是错的 —— 那个方法只看到第一波变化。
+            # 关闭仍是瞬间完成（Qt 默认行为），不用动。
+            fade.setDuration(360)
+            fade.setStartValue(0.55)      # 录屏里中途亮度掉得比 0.92 更多，淡入要更明显
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
             grow = QPropertyAnimation(container, b"geometry", group)
-            grow.setDuration(130)
+            grow.setDuration(360)
             grow.setStartValue(start)
             grow.setEndValue(final)
             grow.setEasingCurve(anim.curve("decelerate"))
@@ -1827,7 +1835,7 @@ class FluentComboBox(QComboBox):
 
             group.finished.connect(finished)
             group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
-            QTimer.singleShot(700, finished)
+            QTimer.singleShot(1400, finished)
         except Exception:
             pass
 

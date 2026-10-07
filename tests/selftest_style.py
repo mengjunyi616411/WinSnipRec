@@ -1189,8 +1189,11 @@ def main() -> int:
           and "theme.is_win10" not in _anim_src
           and "if not anim.animations_enabled()" in _anim_src,
           "开头只判 anim.animations_enabled()，不按风格分流")
-    check("下拉展开的淡入起点与窗口打开动画一致（OPEN_FADE_START）",
-          "OPEN_FADE_START" in _anim_src, "起点 0.92")
+    # 录屏里中途框内平均亮度掉到 231.5（最终 234.2），比 0.92 的淡入明显得多，
+    # 所以下拉不用窗口那套 OPEN_FADE_START，而是更低的 0.55。
+    check("下拉淡入起点按录屏实测用 0.55（比窗口的 0.92 更明显）",
+          "setStartValue(0.55)" in _anim_src and "setWindowOpacity(0.55)" in _anim_src,
+          "淡入 0.55 -> 1.0")
     check("下拉展开没有整体位移（不做从中心缩放）",
           "self.mapToGlobal(QPoint(self.width() // 2" not in _anim_src
           and "SCALE" not in _anim_src,
@@ -1201,13 +1204,15 @@ def main() -> int:
     # Win11 浮出层：从**控件中心**缩放长大（不是从弹窗自己的中心），窗口变小时内容被
     # 裁切 -> 列表逐行露出；配一段更明显的淡入，时长用 DURATION_SLOW。
     # 参考录屏实测：宽度不变、顶边固定，高度从顶部往下"擦"出来（逐行露出）。
-    check("下拉顶边固定、宽度不变，高度从 80% 往下长（与参考录屏一致）",
-          'b"geometry"' in _anim_src and "final.height() * 0.8" in _anim_src
-          and "QRect(final.x(), final.y(), final.width()" in _anim_src,
-          "起点 = 最终几何但高度 80%，左上角不动")
+    # 录屏逐帧实测：上边往上 16px、下边往下 48px -> 以距顶边 25% 处为锚点缩放到 80%。
+    check("下拉以距顶边 25% 处为锚点、上下同时长大（录屏 25%:75%）",
+          'b"geometry"' in _anim_src and "H_START = 0.80" in _anim_src
+          and "ANCHOR = 0.25" in _anim_src,
+          "起点按 H_START/ANCHOR 计算")
     # 参考录屏全片实测：开启动画约 100~135ms（关闭是一帧完成的瞬间效果）。
-    check("下拉展开时长按录屏实测（130ms，不是 150/240/320）",
-          "setDuration(130)" in _anim_src, "两个动画都是 130ms")
+    # 录屏里下边一直长到 933ms（567ms 起）=> 约 370ms，取 360ms。
+    check("下拉展开时长按录屏实测（360ms，约等于实测 370ms）",
+          "setDuration(360)" in _anim_src, "两个动画都是 360ms")
     check("展开期间关掉滚动条（尺寸在变，否则中间帧会闪滚动条）",
           "ScrollBarAlwaysOff" in _anim_src, "动画期间 AlwaysOff，结束恢复")
 
