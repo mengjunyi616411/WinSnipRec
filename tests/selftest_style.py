@@ -892,8 +892,10 @@ def main() -> int:
           f"菜单 {w11_menu} / 下拉 {w11_popup}")
     # 竖条要短于整行：border-left 本身占满项高，所以靠 item 的上下 margin 收短。
     # （下拉弹窗里滚动条也有 margin，所以按"包含"判断而不是全等。）
-    check("Win11 竖条比整行短（item 有上下 margin）",
-          "4px 0" in w11_menu_margin and "4px 0" in w11_popup_margin,
+    # 下拉弹窗改成 Win10 实心菜单后，item 不再有上下 margin（菜单本身还有，
+    # 那是 FluentMenu 的 Win11 竖条样式，与弹窗无关）。
+    check("菜单的 Win11 竖条比整行短（item 有上下 margin）",
+          "4px 0" in w11_menu_margin,
           f"菜单 margin={w11_menu_margin} / 下拉 margin={w11_popup_margin}")
     check("Win10 菜单与下拉都没有这条竖条",
           not w10_menu and not w10_popup,
@@ -1150,10 +1152,14 @@ def main() -> int:
     # QPainterPath 切出来（样式表只剩 transparent）。所以这条改查自绘代码。
     import inspect as _insp_paint
 
-    _paint_src = _insp_paint.getsource(FluentComboBox._paint_popup_container)
-    check("下拉弹窗的圆角比设计 token 略大（更接近 Windows 浮出）",
-          "theme.radius_flyout + 2" in _paint_src and "addRoundedRect" in _paint_src,
-          "自绘时圆角为 radius_flyout + 2")
+    # 用户："改成 win10 风格的" —— 弹窗回到不透明实心菜单：纯色底 + 4px 小圆角 +
+    # 1px 细边框，直接写在样式表里（自绘的模糊卡片已经删掉）。
+    _popup_style_src = _insp_paint.getsource(FluentComboBox._style_popup)
+    check("下拉弹窗是 Win10 实心菜单（纯色底 + 4px 小圆角 + 细边框）",
+          "background-color: {palette.flyout_bg}" in _popup_style_src
+          and "border-radius: 4px" in _popup_style_src
+          and "border: 1px solid" in _popup_style_src,
+          "容器 = 实心底 + 1px 边框 + 4px 圆角")
 
     # 菜单是浮出层，必须有投影。shadow 默认是 False，而全项目此前没有任何窗口传过
     # shadow=True —— 所以谁都没有阴影，菜单看着是"贴在"背景上而不是浮在上面。
