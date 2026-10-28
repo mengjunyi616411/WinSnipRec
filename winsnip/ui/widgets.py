@@ -1792,7 +1792,12 @@ class FluentComboBox(QComboBox):
             # 高的菜单（语言下拉）会被拉宽；矮而宽的菜单（主题下拉）会被拉高，
             # 多出来的高度在列表下面留白，换来的是真正的正方形卡片。
             side = min(320, max(final.width(), final.height()))
-            wanted_y = centre_y - side // 2
+            if theme.is_win10:
+                # 用户："在 win10 风格下菜单不要升上去，直接下拉出来就好" ——
+                # Win10 用标准下拉：保持 Qt 摆好的位置（控件正下方），不做垂直居中。
+                wanted_y = final.y()
+            else:
+                wanted_y = centre_y - side // 2
             wanted_x = final.x()
             screen = QGuiApplication.screenAt(QPoint(final.x(), centre_y))
             area = screen.availableGeometry() if screen is not None else None
