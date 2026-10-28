@@ -1651,6 +1651,8 @@ class FluentComboBox(QComboBox):
                     try:
                         winapi.set_rounded_corners(
                             int(container0.winId()), winapi.DWMWCP_DONOTROUND)
+                        # 角上不圆了，但 DWM 仍会画一条 1px 边框 —— 把它并进客户区（用户："有一点黑边"）。
+                        winapi.extend_frame_into_client(int(container0.winId()))
                     except Exception:
                         pass
                     self._refresh_popup_backdrop(container0)

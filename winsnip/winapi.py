@@ -152,6 +152,28 @@ def is_windows_11() -> bool:
         return False
 
 
+def extend_frame_into_client(hwnd: int) -> bool:
+    """把 DWM 边框并进客户区。
+
+    无边框窗口（FramelessWindowHint + 直角）下，DWM 仍会在四周画一条 1px 的深色边框，
+    在磨砂底上看着就是"有一点黑边"。DwmExtendFrameIntoClientArea(-1) 让客户区覆盖整个
+    窗口，那条边框就不画了。
+    """
+    try:
+        class _MARGINS(ctypes.Structure):
+            _fields_ = [("cxLeftWidth", ctypes.c_int),
+                        ("cxRightWidth", ctypes.c_int),
+                        ("cyTopHeight", ctypes.c_int),
+                        ("cyBottomHeight", ctypes.c_int)]
+
+        margins = _MARGINS(-1, -1, -1, -1)
+        hr = ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(
+            ctypes.c_void_p(hwnd), ctypes.byref(margins))
+        return hr == 0
+    except Exception:
+        return False
+
+
 def set_rounded_corners(hwnd: int, preference: int = DWMWCP_ROUND) -> bool:
     """Ask DWM to round the window corners (Win11). Returns False on Win10."""
     if not dwmapi:
