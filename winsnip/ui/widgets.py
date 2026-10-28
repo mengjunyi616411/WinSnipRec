@@ -1731,19 +1731,21 @@ class FluentComboBox(QComboBox):
         try:
             centre_y = self.mapToGlobal(QPoint(0, self.height() // 2)).y()
             wanted_y = centre_y - final.height() // 2
-            # 用户："要改成正方形的" —— 高的菜单（语言下拉 5 项）原来是一条窄长条，
-            # 这里把宽度拉到接近高度（上限 260），矮菜单保持原宽度。
-            wanted_w = max(final.width(), min(final.height(), 260))
+            # 用户："是正方形不要接近" —— 宽高严格相等，取两者较大值（上限 320）。
+            # 高的菜单（语言下拉）会被拉宽；矮而宽的菜单（主题下拉）会被拉高，
+            # 多出来的高度在列表下面留白，换来的是真正的正方形卡片。
+            side = min(320, max(final.width(), final.height()))
+            wanted_y = centre_y - side // 2
             wanted_x = final.x()
             screen = QGuiApplication.screenAt(QPoint(final.x(), centre_y))
             area = screen.availableGeometry() if screen is not None else None
             if area is not None:
                 wanted_y = max(area.top() + 4,
-                               min(wanted_y, area.bottom() - final.height() - 4))
+                               min(wanted_y, area.bottom() - side - 4))
                 # 加宽后靠右的下拉会顶出屏幕，所以 x 也要钳制（原来只钳了 y）。
                 wanted_x = max(area.left() + 4,
-                               min(wanted_x, area.right() - wanted_w - 4))
-            final = QRect(wanted_x, wanted_y, wanted_w, final.height())
+                               min(wanted_x, area.right() - side - 4))
+            final = QRect(wanted_x, wanted_y, side, side)
         except Exception:
             pass
         return final
@@ -1784,10 +1786,25 @@ class FluentComboBox(QComboBox):
             physical = QRect(int(g.x() * dpr), int(g.y() * dpr),
                              max(1, int(g.width() * dpr)), max(1, int(g.height() * dpr)))
             radius = int((theme.radius_flyout + 2) * dpr)
-            self._popup_backdrop = mica.backdrop(
+            blurred = mica.backdrop(
                 physical, radius, dpr,
                 0.88,                        # 比主窗口(0.86)略实一点，菜单要看清字
                 acrylic=theme.uses_acrylic)
+            # 用户："不要有杂色，只有模糊" —— 直接抓下来的模糊图会带着壁纸的蓝紫色
+            # （截图里那片蓝紫就是它）。先转灰度，再和浮出层底色混合，颜色统一成中性，
+            # 只保留"糊"这一层信息。
+            try:
+                gray = blurred.toImage().convertToFormat(QImage.Format.Format_Grayscale8)
+                gray = gray.convertToFormat(QImage.Format.Format_RGB32)
+                tinted = QImage(gray.size(), QImage.Format.Format_ARGB32_Premultiplied)
+                tinted.fill(QColor(theme.palette.flyout_bg))
+                painter = QPainter(tinted)
+                painter.setOpacity(0.30)     # 只留一点明暗起伏，颜色归中性
+                painter.drawImage(0, 0, gray)
+                painter.end()
+                self._popup_backdrop = QPixmap.fromImage(tinted)
+            except Exception:
+                self._popup_backdrop = blurred
             try:
                 self._popup_backdrop.setDevicePixelRatio(dpr)
             except Exception:
