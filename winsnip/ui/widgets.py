@@ -1839,16 +1839,19 @@ class FluentComboBox(QComboBox):
             blurred = mica.backdrop(physical, radius, dpr, 0.45,
                                     acrylic=theme.uses_acrylic)
             blurred = self._gaussian_pixmap(blurred, max(8.0, 14.0 * dpr))
+            # 用户："没有高斯模糊" —— 根因是我把模糊图转成灰度再叠，糊出来是一块浅灰，
+            # 和纯白卡片视觉上几乎一样，当然看不出模糊。高斯模糊的经典观感就是"把底下的
+            # 颜色糊开"，所以**保留颜色**：把高斯糊过的原图按 ~62% 叠到浮出层底色上，
+            # 既能看到被糊开的色块，又不会糊到看不清文字。
             try:
-                gray = blurred.toImage().convertToFormat(QImage.Format.Format_Grayscale8)
-                gray = gray.convertToFormat(QImage.Format.Format_RGB32)
-                tinted = QImage(gray.size(), QImage.Format.Format_ARGB32_Premultiplied)
+                source = blurred.toImage().convertToFormat(
+                    QImage.Format.Format_ARGB32_Premultiplied)
+                tinted = QImage(source.size(),
+                                QImage.Format.Format_ARGB32_Premultiplied)
                 tinted.fill(QColor(theme.palette.flyout_bg))
                 painter = QPainter(tinted)
-                # 0.35 太淡：在浅色亚克力背景上几乎看不出模糊（用户："还是没改"）。
-                # 调到 0.72，模糊纹理能明显看出来，同时仍是中性灰（无杂色）。
-                painter.setOpacity(0.72)
-                painter.drawImage(0, 0, gray)
+                painter.setOpacity(0.62)
+                painter.drawImage(0, 0, source)
                 painter.end()
                 self._popup_backdrop = QPixmap.fromImage(tinted)
             except Exception:
