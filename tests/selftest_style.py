@@ -1155,11 +1155,20 @@ def main() -> int:
     # 用户："改成 win10 风格的" —— 弹窗回到不透明实心菜单：纯色底 + 4px 小圆角 +
     # 1px 细边框，直接写在样式表里（自绘的模糊卡片已经删掉）。
     _popup_style_src = _insp_paint.getsource(FluentComboBox._style_popup)
-    check("下拉弹窗是 Win10 实心菜单（纯色底 + 4px 小圆角 + 细边框）",
-          "background-color: {palette.flyout_bg}" in _popup_style_src
-          and "border-radius: 4px" in _popup_style_src
-          and "border: 1px solid" in _popup_style_src,
-          "容器 = 实心底 + 1px 边框 + 4px 圆角")
+    # 用户："改成高斯模糊" —— 背景回到模糊材质：容器/列表都透明，模糊底 + 圆角 +
+    # 描边由 _paint_popup_container 自绘，模糊用的是 Qt 的 QGraphicsBlurEffect（真高斯）。
+    import inspect as _insp_g
+
+    _paint_src = _insp_g.getsource(FluentComboBox._paint_popup_container)
+    _gauss_src = _insp_g.getsource(FluentComboBox._gaussian_pixmap)
+    check("下拉用高斯模糊底（QGraphicsBlurEffect）+ 自绘圆角描边",
+          "QGraphicsBlurEffect" in _gauss_src and "BlurHint.QualityHint" in _gauss_src
+          and "addRoundedRect" in _paint_src,
+          "真高斯 + QPainterPath 圆角")
+    check("下拉容器和列表都透明（模糊底才能透出来）",
+          "background-color: transparent; border: none;" in _popup_style_src
+          and "background-color: transparent;" in _insp_g.getsource(FluentComboBox._popup_stylesheet),
+          "容器与 QListView 都透明")
 
     # 菜单是浮出层，必须有投影。shadow 默认是 False，而全项目此前没有任何窗口传过
     # shadow=True —— 所以谁都没有阴影，菜单看着是"贴在"背景上而不是浮在上面。

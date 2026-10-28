@@ -291,10 +291,10 @@ def main() -> int:
         _list_bg = combo.view().styleSheet()
         # _popup_stylesheet() 返回的是**渲染后**的字符串（f-string 已展开成 #F9F9F9），
         # 所以这里查"有背景色且不是 transparent"，而不是查模板占位符。
-        _has_solid_bg = ('background-color:' in _list_bg
-                         and 'background-color: transparent' not in _list_bg)
-        check(f"{mode}：下拉列表是不透明实心底（Win10 风格）",
-              _has_solid_bg, "QListView 有实心背景色")
+        _has_backdrop = getattr(combo, '_popup_backdrop', None) is not None
+        check(f"{mode}：下拉列表背景透明 + 有高斯模糊底",
+              'background-color: transparent' in _list_bg and _has_backdrop,
+              f"列表透明={'background-color: transparent' in _list_bg} 模糊底={_has_backdrop}")
         check(f"{mode}：下拉样张明暗与主题一致（模糊底随主题）",
               (sum(dominant) / 3 > 128) == (mode == 'light'),
               f"实测 #{dominant[0]:02X}{dominant[1]:02X}{dominant[2]:02X}，"

@@ -1622,6 +1622,7 @@ class FluentComboBox(QComboBox):
         # 关键在于把鼠标释放事件吞掉 —— QComboBox 的弹窗容器就是靠这个事件自行关闭的。
         self._keep_popup_open = True
         self._popup_backdrop = None
+        self._popup_backdrop = None
         self.view().viewport().installEventFilter(self)
 
     # ------------------------------------------------------------------ #
@@ -1632,12 +1633,20 @@ class FluentComboBox(QComboBox):
             container0 = view0.window() if view0 is not None else None
         except Exception:
             container0 = None
+        if (container0 is not None and container0 is not self
+                and obj is container0 and event.type() == QEvent.Type.Paint):
+            try:
+                self._paint_popup_container(container0)
+                return True
+            except Exception:
+                return False
         if container0 is not None and container0 is not self and obj is container0:
             if event.type() == QEvent.Type.Show:
                 # Show 发生在第一次绘制之前，在这里把几何改成居中的，屏幕上不会先闪一下
                 # "在下面"再跳上来（用户："打开就在中间"）。
                 try:
                     container0.setGeometry(self._centred_geometry(container0))
+                    self._refresh_popup_backdrop(container0)
                 except Exception:
                     pass
         try:
@@ -1668,7 +1677,7 @@ class FluentComboBox(QComboBox):
         item_margin = ""
         return f"""
         QListView {{
-            background-color: {p.flyout_bg};
+            background-color: transparent;
             color: {p.text_primary};
             border: none;
             padding: 4px;
@@ -1731,9 +1740,9 @@ class FluentComboBox(QComboBox):
             # 用户："改成 win10 风格的" —— Win10 的下拉是**不透明实心**菜单：
             # 纯色底 + 1px 细边框 + 小圆角（4px），没有模糊也没有亚克力。
             container.setStyleSheet(
-                f"QFrame {{ background-color: {palette.flyout_bg};"
-                f" border: 1px solid {palette.flyout_border};"
-                f" border-radius: 4px; }}"
+                f"QFrame {{ background-color: transparent; border: none; }}"
+                
+                
             )
             container.setContentsMargins(0, 0, 0, 0)
 
@@ -1767,6 +1776,83 @@ class FluentComboBox(QComboBox):
         except Exception:
             pass
         return final
+
+    @staticmethod
+    def _gaussian_pixmap(pixmap, radius: float):
+        """用 Qt 自带的 QGraphicsBlurEffect 做真高斯模糊（QualityHint）。
+
+        之前是 theme 里那套"降采样再放大"的近似模糊；用户明确要"高斯模糊"，换成 Qt 内置的。
+        """
+        from PySide6.QtWidgets import (QGraphicsBlurEffect, QGraphicsPixmapItem,
+                                       QGraphicsScene)
+
+        scene = QGraphicsScene()
+        item = QGraphicsPixmapItem(pixmap)
+        effect = QGraphicsBlurEffect()
+        effect.setBlurRadius(radius)
+        effect.setBlurHints(QGraphicsBlurEffect.BlurHint.QualityHint)
+        item.setGraphicsEffect(effect)
+        scene.addItem(item)
+        out = QPixmap(pixmap.size())
+        out.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(out)
+        scene.render(painter)
+        painter.end()
+        return out
+
+    def _refresh_popup_backdrop(self, container) -> None:
+        """抓弹窗背后那块屏幕 -> 高斯模糊 -> 去色后和浮出层底色混合。"""
+        try:
+            handle = container.windowHandle()
+            dpr = handle.devicePixelRatio() if handle else container.devicePixelRatioF()
+            dpr = dpr or 1.0
+            g = container.geometry()
+            physical = QRect(int(g.x() * dpr), int(g.y() * dpr),
+                             max(1, int(g.width() * dpr)), max(1, int(g.height() * dpr)))
+            radius = int((theme.radius_flyout + 2) * dpr)
+            blurred = mica.backdrop(physical, radius, dpr, 0.86,
+                                    acrylic=theme.uses_acrylic)
+            blurred = self._gaussian_pixmap(blurred, max(8.0, 14.0 * dpr))
+            try:
+                gray = blurred.toImage().convertToFormat(QImage.Format.Format_Grayscale8)
+                gray = gray.convertToFormat(QImage.Format.Format_RGB32)
+                tinted = QImage(gray.size(), QImage.Format.Format_ARGB32_Premultiplied)
+                tinted.fill(QColor(theme.palette.flyout_bg))
+                painter = QPainter(tinted)
+                painter.setOpacity(0.35)
+                painter.drawImage(0, 0, gray)
+                painter.end()
+                self._popup_backdrop = QPixmap.fromImage(tinted)
+            except Exception:
+                self._popup_backdrop = blurred
+            self._popup_backdrop.setDevicePixelRatio(dpr)
+        except Exception:
+            self._popup_backdrop = None
+
+    def _paint_popup_container(self, container) -> None:
+        from PySide6.QtGui import QPainterPath, QPen
+
+        painter = QPainter(container)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            radius = 4
+            rect = QRectF(container.rect())
+            path = QPainterPath()
+            path.addRoundedRect(rect, radius, radius)
+            painter.setClipPath(path)
+            pixmap = getattr(self, '_popup_backdrop', None)
+            if pixmap is not None and not pixmap.isNull():
+                painter.drawPixmap(0, 0, pixmap)
+            else:
+                painter.fillRect(container.rect(), QColor(theme.palette.flyout_bg))
+            painter.setClipping(False)
+            pen = QPen(rgba(theme.palette.flyout_border, 0.75))
+            pen.setWidthF(1.0)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+        finally:
+            painter.end()
 
     def showPopup(self) -> None:  # noqa: N802
         self._style_popup()
