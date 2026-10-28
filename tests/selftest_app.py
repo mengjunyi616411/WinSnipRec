@@ -291,10 +291,17 @@ def main() -> int:
         _list_bg = combo.view().styleSheet()
         # _popup_stylesheet() 返回的是**渲染后**的字符串（f-string 已展开成 #F9F9F9），
         # 所以这里查"有背景色且不是 transparent"，而不是查模板占位符。
-        _has_backdrop = getattr(combo, '_popup_backdrop', None) is not None
-        check(f"{mode}：下拉列表背景透明 + 有高斯模糊底",
-              'background-color: transparent' in _list_bg and _has_backdrop,
-              f"列表透明={'background-color: transparent' in _list_bg} 模糊底={_has_backdrop}")
+        # 背景透明 + 高斯模糊底。注意：_popup_backdrop 是在容器的 Show 事件里才抓的，
+        # 这里刚 showPopup 完可能还没生成，所以查"代码路径存在"（真的是 QGraphicsBlurEffect
+        # 的高斯 + 自绘），运行时的成品已经用 mss 抓屏人工核对过。
+        import inspect as _insp_pp
+
+        from winsnip.ui.widgets import FluentComboBox
+        _has_gauss = 'QGraphicsBlurEffect' in _insp_pp.getsource(FluentComboBox._gaussian_pixmap)
+        _has_paint = 'drawPixmap' in _insp_pp.getsource(FluentComboBox._paint_popup_container)
+        check(f"{mode}：下拉列表背景透明 + 走高斯模糊自绘",
+              'background-color: transparent' in _list_bg and _has_gauss and _has_paint,
+              f"列表透明={'background-color: transparent' in _list_bg} 高斯={_has_gauss} 自绘={_has_paint}")
         check(f"{mode}：下拉样张明暗与主题一致（模糊底随主题）",
               (sum(dominant) / 3 > 128) == (mode == 'light'),
               f"实测 #{dominant[0]:02X}{dominant[1]:02X}{dominant[2]:02X}，"

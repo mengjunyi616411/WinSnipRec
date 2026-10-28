@@ -1735,6 +1735,13 @@ class FluentComboBox(QComboBox):
             # 再配一条半透明描边，观感接近 Windows 的浮出菜单。
             try:
                 container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+                # 用户："不要有黑边" —— 弹窗外面那圈灰黑晕影是 Windows 给无边框顶层
+                # 窗口加的系统投影，不是我们画的描边（描边已经去掉了）。这里一并关掉。
+                try:
+                    container.setWindowFlags(
+                        container.windowFlags() | Qt.WindowType.NoDropShadowWindowHint)
+                except Exception:
+                    pass
             except Exception:
                 pass
             # 用户："改成 win10 风格的" —— Win10 的下拉是**不透明实心**菜单：
@@ -1786,19 +1793,34 @@ class FluentComboBox(QComboBox):
         from PySide6.QtWidgets import (QGraphicsBlurEffect, QGraphicsPixmapItem,
                                        QGraphicsScene)
 
+        # 关键：先四周扩一圈（用边缘色填），再做高斯，最后裁回原尺寸。
+        # 否则高斯在图像边缘会往外采样到"透明/黑"，整圈边缘被糊暗，看起来就是一圈黑边。
+        w, h = pixmap.width(), pixmap.height()
+        pad = max(2, int(radius))
+        source = pixmap.toImage()
+        edge = source.pixelColor(0, 0)
+        padded_img = QImage(w + pad * 2, h + pad * 2,
+                            QImage.Format.Format_ARGB32_Premultiplied)
+        padded_img.fill(edge)
+        pp = QPainter(padded_img)
+        pp.drawImage(pad, pad, source)
+        pp.end()
+        padded = QPixmap.fromImage(padded_img)
+
         scene = QGraphicsScene()
-        item = QGraphicsPixmapItem(pixmap)
+        item = QGraphicsPixmapItem(padded)
         effect = QGraphicsBlurEffect()
         effect.setBlurRadius(radius)
         effect.setBlurHints(QGraphicsBlurEffect.BlurHint.QualityHint)
         item.setGraphicsEffect(effect)
         scene.addItem(item)
-        out = QPixmap(pixmap.size())
+        out = QPixmap(padded.size())
         out.fill(Qt.GlobalColor.transparent)
         painter = QPainter(out)
         scene.render(painter)
         painter.end()
-        return out
+        # 裁回原尺寸，去掉扩边
+        return out.copy(pad, pad, w, h)
 
     def _refresh_popup_backdrop(self, container) -> None:
         """抓弹窗背后那块屏幕 -> 高斯模糊 -> 去色后和浮出层底色混合。"""
@@ -1809,7 +1831,10 @@ class FluentComboBox(QComboBox):
             g = container.geometry()
             physical = QRect(int(g.x() * dpr), int(g.y() * dpr),
                              max(1, int(g.width() * dpr)), max(1, int(g.height() * dpr)))
-            radius = int((theme.radius_flyout + 2) * dpr)
+            # radius=0：不要让 mica 做圆角。它做的圆角会带透明边，高斯模糊再把
+            # 透明度往内糊，就出现一圈灰黑"黑边"（用户："不要有黑边"）。圆角由
+            # _paint_popup_container 的 clipPath 自己切。
+            radius = 0
             blurred = mica.backdrop(physical, radius, dpr, 0.86,
                                     acrylic=theme.uses_acrylic)
             blurred = self._gaussian_pixmap(blurred, max(8.0, 14.0 * dpr))
@@ -1850,7 +1875,9 @@ class FluentComboBox(QComboBox):
             pen.setWidthF(1.0)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+            # 用户："不要有黑边" —— 不画描边（之前那条 1px 的 flyout_border 在磨砂底上
+            # 看着像一圈黑边）。圆角仍由上面的 clipPath 保证。
+            pass
         finally:
             painter.end()
 
