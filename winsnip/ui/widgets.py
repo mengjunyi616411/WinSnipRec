@@ -1646,6 +1646,13 @@ class FluentComboBox(QComboBox):
                 # "在下面"再跳上来（用户："打开就在中间"）。
                 try:
                     container0.setGeometry(self._centred_geometry(container0))
+                    # 用户："不要有圆边" —— 我们自己画的 clip 已是直角，但 Windows 11 的 DWM
+                    # 默认会给顶层窗口加圆角，这里显式要求不圆角。
+                    try:
+                        winapi.set_rounded_corners(
+                            int(container0.winId()), winapi.DWMWCP_DONOTROUND)
+                    except Exception:
+                        pass
                     self._refresh_popup_backdrop(container0)
                 except Exception:
                     pass
@@ -1871,7 +1878,8 @@ class FluentComboBox(QComboBox):
         painter = QPainter(container)
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            radius = 4
+            # 用户："不要有圆边" —— 弹窗四角改成直角。
+            radius = 0
             rect = QRectF(container.rect())
             path = QPainterPath()
             path.addRoundedRect(rect, radius, radius)
