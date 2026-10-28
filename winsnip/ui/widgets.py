@@ -1835,7 +1835,8 @@ class FluentComboBox(QComboBox):
             # 透明度往内糊，就出现一圈灰黑"黑边"（用户："不要有黑边"）。圆角由
             # _paint_popup_container 的 clipPath 自己切。
             radius = 0
-            blurred = mica.backdrop(physical, radius, dpr, 0.86,
+            # tint 从 0.86 降到 0.45：0.86 会把背景几乎全盖成主题色，模糊完全看不见。
+            blurred = mica.backdrop(physical, radius, dpr, 0.45,
                                     acrylic=theme.uses_acrylic)
             blurred = self._gaussian_pixmap(blurred, max(8.0, 14.0 * dpr))
             try:
@@ -1844,7 +1845,9 @@ class FluentComboBox(QComboBox):
                 tinted = QImage(gray.size(), QImage.Format.Format_ARGB32_Premultiplied)
                 tinted.fill(QColor(theme.palette.flyout_bg))
                 painter = QPainter(tinted)
-                painter.setOpacity(0.35)
+                # 0.35 太淡：在浅色亚克力背景上几乎看不出模糊（用户："还是没改"）。
+                # 调到 0.72，模糊纹理能明显看出来，同时仍是中性灰（无杂色）。
+                painter.setOpacity(0.72)
                 painter.drawImage(0, 0, gray)
                 painter.end()
                 self._popup_backdrop = QPixmap.fromImage(tinted)
