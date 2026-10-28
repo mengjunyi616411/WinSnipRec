@@ -1684,6 +1684,9 @@ class FluentComboBox(QComboBox):
         # 用户："改成 win10 风格的" —— 下拉弹窗统一按 Win10 实心菜单处理：
         # 不透明底、小圆角、细边框，没有 Win11 那种选中项上下留白。
         item_margin = ""
+        # Win11 的选项左边要留 18px 给强调色竖条；Win10 没有竖条，
+        # 留着就是多余缩进，字看起来像居中（用户："在win10风格下字要左对齐"）。
+        item_pad = "3px 8px 3px 8px" if theme.is_win10 else "3px 8px 3px 18px"
         return f"""
         QListView {{
             background-color: transparent;
@@ -1694,7 +1697,7 @@ class FluentComboBox(QComboBox):
         }}
         QListView::item {{
             min-height: 26px;
-            padding: 3px 8px 3px 18px;
+            padding: {item_pad};
             border-radius: {theme.radius_control}px;
             color: {p.text_primary};
             {item_margin}
@@ -1727,6 +1730,17 @@ class FluentComboBox(QComboBox):
                 delegate = _SelectionBarDelegate(view)
                 view.setItemDelegate(delegate)
             delegate.set_current_row(self.currentIndex())
+            # Win10 风格下**显式**左对齐（不依赖样式表默认值）。
+            if theme.is_win10 and view.model() is not None:
+                from PySide6.QtCore import Qt as _QtA
+
+                model = view.model()
+                for row in range(model.rowCount()):
+                    model.setData(
+                        model.index(row, 0),
+                        int(_QtA.AlignmentFlag.AlignLeft
+                            | _QtA.AlignmentFlag.AlignVCenter),
+                        _QtA.ItemDataRole.TextAlignmentRole)
         except Exception:
             pass
         container = view.window()
