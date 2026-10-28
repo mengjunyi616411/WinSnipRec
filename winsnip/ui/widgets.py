@@ -1662,7 +1662,9 @@ class FluentComboBox(QComboBox):
                         winapi.extend_frame_into_client(int(container0.winId()))
                     except Exception:
                         pass
-                    self._refresh_popup_backdrop(container0)
+                    # 用户："这个在 win11 风格下改回去" —— Win11 风格回到纯色底，只给 Win10 做模糊。
+                    if theme.is_win10:
+                        self._refresh_popup_backdrop(container0)
                 except Exception:
                     pass
         try:
@@ -1932,7 +1934,9 @@ class FluentComboBox(QComboBox):
             path = QPainterPath()
             path.addRoundedRect(rect, radius, radius)
             painter.setClipPath(path)
-            pixmap = getattr(self, '_popup_backdrop', None)
+            # Win11 风格用纯色底（用户要求改回去）；Win10 风格用高斯模糊底。
+            pixmap = (getattr(self, '_popup_backdrop', None)
+                      if theme.is_win10 else None)
             if pixmap is not None and not pixmap.isNull():
                 painter.drawPixmap(0, 0, pixmap)
             else:
