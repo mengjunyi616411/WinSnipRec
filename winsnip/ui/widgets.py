@@ -1622,6 +1622,7 @@ class FluentComboBox(QComboBox):
         # 关键在于把鼠标释放事件吞掉 —— QComboBox 的弹窗容器就是靠这个事件自行关闭的。
         self._keep_popup_open = True
         self._popup_backdrop = None
+        self._backdrop_key = None
         self._popup_backdrop = None
         self.view().viewport().installEventFilter(self)
 
@@ -1813,16 +1814,17 @@ class FluentComboBox(QComboBox):
         return final
 
     @staticmethod
+    @staticmethod
     def _gaussian_pixmap(pixmap, radius: float):
-        """用 Qt 自带的 QGraphicsBlurEffect 做真高斯模糊（QualityHint）。
+        """真高斯模糊（QGraphicsBlurEffect）。
 
-        之前是 theme 里那套"降采样再放大"的近似模糊；用户明确要"高斯模糊"，换成 Qt 内置的。
+        性能优化：
+          · 先把图缩到一半再做高斯，做完再放大回去 —— 视觉上几乎一样，耗时降到 1/4；
+          · 用 PerformanceHint 而不是 QualityHint（Quality 很慢，菜单这点模糊看不出差别）。
         """
         from PySide6.QtWidgets import (QGraphicsBlurEffect, QGraphicsPixmapItem,
                                        QGraphicsScene)
 
-        # 关键：先四周扩一圈（用边缘色填），再做高斯，最后裁回原尺寸。
-        # 否则高斯在图像边缘会往外采样到"透明/黑"，整圈边缘被糊暗，看起来就是一圈黑边。
         w, h = pixmap.width(), pixmap.height()
         pad = max(2, int(radius))
         source = pixmap.toImage()
@@ -1833,44 +1835,59 @@ class FluentComboBox(QComboBox):
         pp = QPainter(padded_img)
         pp.drawImage(pad, pad, source)
         pp.end()
-        padded = QPixmap.fromImage(padded_img)
 
+        # 降采样再做高斯
+        scale = 0.5
+        small = padded_img.scaled(max(1, int(padded_img.width() * scale)),
+                                  max(1, int(padded_img.height() * scale)),
+                                  Qt.AspectRatioMode.IgnoreAspectRatio,
+                                  Qt.TransformationMode.SmoothTransformation)
         scene = QGraphicsScene()
-        item = QGraphicsPixmapItem(padded)
+        item = QGraphicsPixmapItem(QPixmap.fromImage(small))
         effect = QGraphicsBlurEffect()
-        effect.setBlurRadius(radius)
-        effect.setBlurHints(QGraphicsBlurEffect.BlurHint.QualityHint)
+        effect.setBlurRadius(max(1.0, radius * scale))
+        effect.setBlurHints(QGraphicsBlurEffect.BlurHint.PerformanceHint)
         item.setGraphicsEffect(effect)
         scene.addItem(item)
-        out = QPixmap(padded.size())
+        out = QPixmap(small.size())
         out.fill(Qt.GlobalColor.transparent)
         painter = QPainter(out)
         scene.render(painter)
         painter.end()
-        # 裁回原尺寸，去掉扩边
+        # 放大回原尺寸并裁掉扩边
+        out = out.scaled(padded_img.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
+                         Qt.TransformationMode.SmoothTransformation)
         return out.copy(pad, pad, w, h)
 
+
     def _refresh_popup_backdrop(self, container) -> None:
-        """抓弹窗背后那块屏幕 -> 高斯模糊 -> 去色后和浮出层底色混合。"""
+        """抓弹窗背后那块屏幕 -> 高斯模糊 -> 保留颜色叠到浮出层底色上。
+
+        性能：结果按"几何 + 主题"缓存。菜单每次都从同一位置弹出，所以第二次打开是
+        直接复用，完全不卡（用户反馈"下拉不流畅"就是每次同步抓屏+高斯导致的）。
+        """
+        import time as _time
+
+        started = _time.perf_counter()
         try:
             handle = container.windowHandle()
             dpr = handle.devicePixelRatio() if handle else container.devicePixelRatioF()
             dpr = dpr or 1.0
             g = container.geometry()
+            key = (g.x(), g.y(), g.width(), g.height(), dpr,
+                   theme.style, theme.mode, theme.palette.flyout_bg,
+                   getattr(theme, 'uses_acrylic', False))
+            if getattr(self, '_backdrop_key', None) == key and \
+                    getattr(self, '_popup_backdrop', None) is not None:
+                logging.getLogger(__name__).debug("popup backdrop: cache hit")
+                return
             physical = QRect(int(g.x() * dpr), int(g.y() * dpr),
                              max(1, int(g.width() * dpr)), max(1, int(g.height() * dpr)))
-            # radius=0：不要让 mica 做圆角。它做的圆角会带透明边，高斯模糊再把
-            # 透明度往内糊，就出现一圈灰黑"黑边"（用户："不要有黑边"）。圆角由
-            # _paint_popup_container 的 clipPath 自己切。
+            # radius=0：不要让 mica 做圆角，否则高斯会把透明边糊成灰边。
             radius = 0
-            # tint 从 0.86 降到 0.45：0.86 会把背景几乎全盖成主题色，模糊完全看不见。
             blurred = mica.backdrop(physical, radius, dpr, 0.45,
                                     acrylic=theme.uses_acrylic)
             blurred = self._gaussian_pixmap(blurred, max(8.0, 14.0 * dpr))
-            # 用户："没有高斯模糊" —— 根因是我把模糊图转成灰度再叠，糊出来是一块浅灰，
-            # 和纯白卡片视觉上几乎一样，当然看不出模糊。高斯模糊的经典观感就是"把底下的
-            # 颜色糊开"，所以**保留颜色**：把高斯糊过的原图按 ~62% 叠到浮出层底色上，
-            # 既能看到被糊开的色块，又不会糊到看不清文字。
             try:
                 source = blurred.toImage().convertToFormat(
                     QImage.Format.Format_ARGB32_Premultiplied)
@@ -1885,13 +1902,16 @@ class FluentComboBox(QComboBox):
             except Exception:
                 self._popup_backdrop = blurred
             self._popup_backdrop.setDevicePixelRatio(dpr)
+            self._backdrop_key = key
             logging.getLogger(__name__).info(
-                "popup backdrop: ok %sx%s dpr=%.2f",
-                self._popup_backdrop.width(), self._popup_backdrop.height(), dpr)
+                "popup backdrop: ok %sx%s dpr=%.2f in %.0f ms",
+                self._popup_backdrop.width(), self._popup_backdrop.height(), dpr,
+                (_time.perf_counter() - started) * 1000)
         except Exception as exc:
             self._popup_backdrop = None
             logging.getLogger(__name__).warning(
                 "popup backdrop FAILED: %s: %s", type(exc).__name__, exc)
+
 
     def _paint_popup_container(self, container) -> None:
         from PySide6.QtGui import QPainterPath, QPen
