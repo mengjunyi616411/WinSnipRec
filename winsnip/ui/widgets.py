@@ -13,8 +13,8 @@ from PySide6.QtCore import (
     QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
 )
 from PySide6.QtGui import (
-    QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QIcon, QPainter,
-    QPainterPath, QPixmap, QRadialGradient,
+    QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QIcon, QImage,
+    QPainter, QPainterPath, QPixmap, QRadialGradient,
 )
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
@@ -1851,8 +1851,13 @@ class FluentComboBox(QComboBox):
             except Exception:
                 self._popup_backdrop = blurred
             self._popup_backdrop.setDevicePixelRatio(dpr)
-        except Exception:
+            logging.getLogger(__name__).info(
+                "popup backdrop: ok %sx%s dpr=%.2f",
+                self._popup_backdrop.width(), self._popup_backdrop.height(), dpr)
+        except Exception as exc:
             self._popup_backdrop = None
+            logging.getLogger(__name__).warning(
+                "popup backdrop FAILED: %s: %s", type(exc).__name__, exc)
 
     def _paint_popup_container(self, container) -> None:
         from PySide6.QtGui import QPainterPath, QPen
