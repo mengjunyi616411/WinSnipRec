@@ -1620,6 +1620,7 @@ class FluentComboBox(QComboBox):
         # 点击某个条目后弹窗**不关闭**：选完立刻关闭的话，蓝条滑向新值的过程根本看不到。
         # 关键在于把鼠标释放事件吞掉 —— QComboBox 的弹窗容器就是靠这个事件自行关闭的。
         self._keep_popup_open = True
+        self._popup_backdrop = None
         self.view().viewport().installEventFilter(self)
 
     # ------------------------------------------------------------------ #
@@ -1651,7 +1652,7 @@ class FluentComboBox(QComboBox):
         item_margin = "" if theme.is_win10 else "margin: 4px 0;"
         return f"""
         QListView {{
-            background-color: {p.flyout_bg};
+            background-color: transparent;
             color: {p.text_primary};
             border: none;
             padding: 4px;
@@ -1711,10 +1712,10 @@ class FluentComboBox(QComboBox):
                 container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
             except Exception:
                 pass
+            # 背景改透明：模糊底 + 圆角 + 描边全部在 eventFilter 的 Paint 分支里自绘
+            # （之前是不透明纯色，和窗口的亚克力材质对不上，用户要求"和背景一样的模糊"）。
             container.setStyleSheet(
-                f"QFrame {{ background-color: {palette.flyout_bg};"
-                f" border: 1px solid {rgba(palette.flyout_border, 0.75).name(QColor.NameFormat.HexArgb)};"
-                f" border-radius: {theme.radius_flyout + 2}px; }}"
+                f"QFrame {{ background-color: transparent; border: none; }}"
             )
             container.setContentsMargins(0, 0, 0, 0)
 
@@ -1730,26 +1731,96 @@ class FluentComboBox(QComboBox):
         try:
             centre_y = self.mapToGlobal(QPoint(0, self.height() // 2)).y()
             wanted_y = centre_y - final.height() // 2
+            # 用户："要改成正方形的" —— 高的菜单（语言下拉 5 项）原来是一条窄长条，
+            # 这里把宽度拉到接近高度（上限 260），矮菜单保持原宽度。
+            wanted_w = max(final.width(), min(final.height(), 260))
+            wanted_x = final.x()
             screen = QGuiApplication.screenAt(QPoint(final.x(), centre_y))
             area = screen.availableGeometry() if screen is not None else None
             if area is not None:
                 wanted_y = max(area.top() + 4,
                                min(wanted_y, area.bottom() - final.height() - 4))
-            final = QRect(final.x(), wanted_y, final.width(), final.height())
+                # 加宽后靠右的下拉会顶出屏幕，所以 x 也要钳制（原来只钳了 y）。
+                wanted_x = max(area.left() + 4,
+                               min(wanted_x, area.right() - wanted_w - 4))
+            final = QRect(wanted_x, wanted_y, wanted_w, final.height())
         except Exception:
             pass
         return final
 
     def eventFilter(self, obj, event) -> bool:  # noqa: N802
-        """Reposition the popup the moment it is shown, before it is painted."""
-        if event.type() == QEvent.Type.Show:
+        """弹窗容器：Show 时摆到居中位置，Paint 时自绘模糊底 + 圆角 + 描边。
+
+        容器背景在样式表里是透明的，模糊底由 _popup_backdrop（mica.backdrop 抓取弹窗
+        背后区域再模糊）画上去，材质参数与主窗口一致 —— "模糊效果和背景一样"。
+        """
+        try:
+            view = self.view()
+            container = view.window() if view is not None else None
+        except Exception:
+            container = None
+        if container is not None and container is not self and obj is container:
+            if event.type() == QEvent.Type.Show:
+                try:
+                    container.setGeometry(self._centred_geometry(container))
+                    self._refresh_popup_backdrop(container)
+                except Exception:
+                    pass
+            elif event.type() == QEvent.Type.Paint:
+                try:
+                    self._paint_popup_container(container)
+                    return True
+                except Exception:
+                    return False
+        return super().eventFilter(obj, event)
+
+    def _refresh_popup_backdrop(self, container) -> None:
+        """抓取弹窗背后那块屏幕，按主窗口同样的参数模糊（Mica / Acrylic）。"""
+        try:
+            handle = container.windowHandle()
+            dpr = handle.devicePixelRatio() if handle else container.devicePixelRatioF()
+            dpr = dpr or 1.0
+            g = container.geometry()          # 顶层窗口，geometry 就是全局坐标
+            physical = QRect(int(g.x() * dpr), int(g.y() * dpr),
+                             max(1, int(g.width() * dpr)), max(1, int(g.height() * dpr)))
+            radius = int((theme.radius_flyout + 2) * dpr)
+            self._popup_backdrop = mica.backdrop(
+                physical, radius, dpr,
+                0.88,                        # 比主窗口(0.86)略实一点，菜单要看清字
+                acrylic=theme.uses_acrylic)
             try:
-                view = self.view()
-                if view is not None and obj is view.window() and obj is not self:
-                    obj.setGeometry(self._centred_geometry(obj))
+                self._popup_backdrop.setDevicePixelRatio(dpr)
             except Exception:
                 pass
-        return super().eventFilter(obj, event)
+        except Exception:
+            self._popup_backdrop = None
+
+    def _paint_popup_container(self, container) -> None:
+        from PySide6.QtGui import QPainterPath, QPen
+
+        painter = QPainter(container)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            radius = theme.radius_flyout + 2
+            rect = QRectF(container.rect())
+            path = QPainterPath()
+            path.addRoundedRect(rect, radius, radius)
+            painter.setClipPath(path)
+            pixmap = getattr(self, '_popup_backdrop', None)
+            if pixmap is not None and not pixmap.isNull():
+                # 不缩放：动画期间容器比最终矮，只露出这张最终尺寸图的上半部分，
+                # 才不会把模糊糊成一条压扁的带子。
+                painter.drawPixmap(0, 0, pixmap)
+            else:
+                painter.fillRect(container.rect(), QColor(theme.palette.flyout_bg))
+            painter.setClipping(False)
+            pen = QPen(rgba(theme.palette.flyout_border, 0.75))
+            pen.setWidthF(1.0)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+        finally:
+            painter.end()
 
     def showPopup(self) -> None:  # noqa: N802
         self._style_popup()

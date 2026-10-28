@@ -1146,8 +1146,14 @@ def main() -> int:
     check("下拉弹窗开了半透明（否则圆角被方窗口填满，显得硬）",
           "WA_TranslucentBackground" in _popup_src,
           "容器设置了 WA_TranslucentBackground")
+    # 背景改成自绘之后，圆角不再写在样式表里，而是由 _paint_popup_container 用
+    # QPainterPath 切出来（样式表只剩 transparent）。所以这条改查自绘代码。
+    import inspect as _insp_paint
+
+    _paint_src = _insp_paint.getsource(FluentComboBox._paint_popup_container)
     check("下拉弹窗的圆角比设计 token 略大（更接近 Windows 浮出）",
-          "theme.radius_flyout + 2" in _popup_src, "圆角为 radius_flyout + 2")
+          "theme.radius_flyout + 2" in _paint_src and "addRoundedRect" in _paint_src,
+          "自绘时圆角为 radius_flyout + 2")
 
     # 菜单是浮出层，必须有投影。shadow 默认是 False，而全项目此前没有任何窗口传过
     # shadow=True —— 所以谁都没有阴影，菜单看着是"贴在"背景上而不是浮在上面。

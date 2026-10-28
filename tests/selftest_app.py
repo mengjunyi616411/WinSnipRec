@@ -286,12 +286,19 @@ def main() -> int:
                 key = (colour.red(), colour.green(), colour.blue())
                 counts[key] = counts.get(key, 0) + 1
         dominant = max(counts.items(), key=lambda kv: kv[1])[0]
-        expected = QtColor(theme.palette.flyout_bg)
-        wanted = (expected.red(), expected.green(), expected.blue())
-        check(f"{mode}：下拉列表使用浮出层背景色",
-              all(abs(dominant[i] - wanted[i]) <= 8 for i in range(3)),
+        # 下拉列表现在背景透明，模糊底由 _paint_popup_container 用 mica.backdrop 自绘
+        # （用户要求"和背景一样的模糊效果"）。所以不再比对纯色 flyout_bg，改为：
+        #   1. 列表确实透明、容器拿到了模糊底；
+        #   2. 样张整体明暗跟主题一致（模糊底会随主题变色）。
+        _list_bg = combo.view().styleSheet()
+        _has_backdrop = getattr(combo, '_popup_backdrop', None) is not None
+        check(f"{mode}：下拉列表背景透明 + 容器有模糊底（不再是纯色）",
+              'background-color: transparent' in _list_bg and _has_backdrop,
+              f"列表透明={'background-color: transparent' in _list_bg} 模糊底={_has_backdrop}")
+        check(f"{mode}：下拉样张明暗与主题一致（模糊底随主题）",
+              (sum(dominant) / 3 > 128) == (mode == 'light'),
               f"实测 #{dominant[0]:02X}{dominant[1]:02X}{dominant[2]:02X}，"
-              f"期望 {expected.name()}")
+              f"期望{'浅色' if mode == 'light' else '深色'}浮出层")
         def luma(colour: tuple[int, int, int]) -> float:
             return 0.299 * colour[0] + 0.587 * colour[1] + 0.114 * colour[2]
 
