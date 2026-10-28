@@ -1569,7 +1569,7 @@ class _SelectionBarDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index) -> None:  # noqa: N802
         super().paint(painter, option, index)
         # 弹窗整体走 Win10 风格，选中项左侧那条强调色竖条是 Win11 才有的，这里不画。
-        if True or self._anim_row < 0:
+        if theme.is_win10 or self._anim_row < 0:
             return
         view = self.parent()
         model = index.model()
@@ -1650,9 +1650,15 @@ class FluentComboBox(QComboBox):
                     # 用户："不要有圆边" —— 我们自己画的 clip 已是直角，但 Windows 11 的 DWM
                     # 默认会给顶层窗口加圆角，这里显式要求不圆角。
                     try:
-                        winapi.set_rounded_corners(
-                            int(container0.winId()), winapi.DWMWCP_DONOTROUND)
-                        # 角上不圆了，但 DWM 仍会画一条 1px 边框 —— 把它并进客户区（用户："有一点黑边"）。
+                        if theme.is_win10:
+                            # Win10：直角 + 把 DWM 的 1px 边框并进客户区（否则有黑边）。
+                            winapi.set_rounded_corners(
+                                int(container0.winId()), winapi.DWMWCP_DONOTROUND)
+                            winapi.extend_frame_into_client(int(container0.winId()))
+                        else:
+                            # Win11：保持系统默认圆角，不并边框（圆角本身会盖住边框）。
+                            winapi.set_rounded_corners(
+                                int(container0.winId()), winapi.DWMWCP_ROUND)
                         winapi.extend_frame_into_client(int(container0.winId()))
                     except Exception:
                         pass
@@ -1684,7 +1690,7 @@ class FluentComboBox(QComboBox):
         # 做不出 Win11 那种"比高亮底更矮"的短竖条）。这里只让高亮底内缩成胶囊形。
         # 用户："改成 win10 风格的" —— 下拉弹窗统一按 Win10 实心菜单处理：
         # 不透明底、小圆角、细边框，没有 Win11 那种选中项上下留白。
-        item_margin = ""
+        item_margin = "" if theme.is_win10 else "margin: 4px 0;"
         # Win11 的选项左边要留 18px 给强调色竖条；Win10 没有竖条，
         # 留着就是多余缩进，字看起来像居中（用户："在win10风格下字要左对齐"）。
         item_pad = "3px 8px 3px 8px" if theme.is_win10 else "3px 8px 3px 18px"
@@ -1884,7 +1890,8 @@ class FluentComboBox(QComboBox):
             physical = QRect(int(g.x() * dpr), int(g.y() * dpr),
                              max(1, int(g.width() * dpr)), max(1, int(g.height() * dpr)))
             # radius=0：不要让 mica 做圆角，否则高斯会把透明边糊成灰边。
-            radius = 0
+            # 分风格：Win11 用设计 token 的圆角，Win10 是直角（用户："不要有圆边"）。
+            radius = 0 if theme.is_win10 else theme.radius_flyout + 2
             blurred = mica.backdrop(physical, radius, dpr, 0.45,
                                     acrylic=theme.uses_acrylic)
             blurred = self._gaussian_pixmap(blurred, max(8.0, 14.0 * dpr))
