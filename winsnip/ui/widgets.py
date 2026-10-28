@@ -1494,10 +1494,11 @@ class ToggleSwitch(QWidget):
         off_track = rgba("#000000" if not palette.dark else "#FFFFFF", 0.03)
         off_border = rgba(palette.text_primary, 0.16)
         off_knob = QColor(palette.text_secondary)
-        # 开态轨道比强调色深两档（用户先要"深一点"，再要"再深一点、和 win11 按钮一样深"）。
-        # darker(130) ≈ 深 30%：本机 #0068B8 -> #004A84，和 Windows 11 强调色按钮的
-        # 深色态（#0055A0 一族）处在同一档。边框从 off_border 混到 on_track，会一起变深。
-        on_track = QColor(palette.accent).darker(130)
+        # 开态轨道**直接用强调色**（用户："风格统一下"）。
+        # 从设置窗口截图里量过：完成按钮 #0068B8 = 强调色，而开关当时是 #00508E
+        # （之前把强调色调深三成，调过头了），两者的蓝明显不一样。Windows 11 的强调色
+        # 按钮本身就是强调色，所以"统一"与"和 win11 按钮一样深"是同一个答案。
+        on_track = QColor(palette.accent)
         on_knob = QColor("#FFFFFF")
 
         painter.setBrush(_mix(off_track, on_track, t))

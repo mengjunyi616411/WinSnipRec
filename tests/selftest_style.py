@@ -1334,19 +1334,19 @@ def main() -> int:
           and "track.height() * (" in _size_src,
           "轨道/内缩/半径都从 h 与 track 推导")
 
-    # 开态轨道要比强调色深一档（用户："按钮的颜色改深一点"）。
+    # 开态轨道直接用强调色 —— 与设置窗口里的"完成"按钮、下拉蓝条保持同一套蓝
+    # （用户："风格统一下"；之前 darker(130) 加深过头，截图实测按钮 #0068B8 vs 开关 #00508E）。
     from winsnip.ui.widgets import ToggleSwitch as _DeepToggle
 
     _deep_src = _inspect6.getsource(_DeepToggle.paintEvent)
-    check("开关开态用比强调色深两档的蓝（darker(130)）",
-          "QColor(palette.accent).darker(130)" in _deep_src,
-          "开态轨道 = accent.darker(115)")
+    check("开关开态直接用强调色（与完成按钮/蓝条统一）",
+          "on_track = QColor(palette.accent)" in _deep_src and "darker(" not in _deep_src,
+          "开态轨道 = palette.accent，不做 darker")
     from PySide6.QtGui import QColor as _QC2
 
     _acc = _QC2(theme.palette.accent)
-    check("加深后的颜色确实比强调色暗",
-          _acc.darker(130).lightness() < _acc.lightness(),
-          f"{_acc.name()} -> {_acc.darker(130).name()}")
+    check("强调色本身是有效蓝色（全界面统一引用它）",
+          _acc.blue() > _acc.red() and _acc.blue() > _acc.green(), _acc.name())
 
     failures = [name for name, ok, _ in checks if not ok]
     print("\n--- STYLE SELFTEST SUMMARY ---")
