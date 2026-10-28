@@ -34,3 +34,5 @@ desktop.ini
 
 # 配了自己音乐的成品不要提交（商业音乐有版权）
 promo/video/*_配乐.mp4
+# 构建脚本的运行期临时文件
+ffmpeg_path.tmp
