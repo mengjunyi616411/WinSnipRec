@@ -53,7 +53,8 @@ $ffmpeg = (& $venvPython -c "import imageio_ffmpeg,sys; sys.stdout.write(imageio
 if (-not (Test-Path $ffmpeg)) {
     # PowerShell wraps long native-command output at the console width, which
     # corrupts paths containing spaces; fall back to reading it from a file.
-    $ffTmp = Join-Path $env:TEMP 'winsnip_ffmpeg_path.txt'
+    # 系统临时目录在本机出现过 Permission denied（写成只读/被占用），改放项目目录内。
+    $ffTmp = Join-Path $PSScriptRoot 'ffmpeg_path.tmp'
     & $venvPython -c "import sys, imageio_ffmpeg; open(sys.argv[1], 'w', encoding='utf-8').write(imageio_ffmpeg.get_ffmpeg_exe())" $ffTmp
     $ffmpeg = (Get-Content -Raw -Encoding UTF8 $ffTmp).Trim()
 }
