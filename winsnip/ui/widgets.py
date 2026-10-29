@@ -1623,6 +1623,7 @@ class FluentComboBox(QComboBox):
         self._keep_popup_open = True
         self._popup_backdrop = None
         self._backdrop_key = None
+        self._screen_shot = None
         self._popup_backdrop = None
         self.view().viewport().installEventFilter(self)
 
@@ -1892,8 +1893,18 @@ class FluentComboBox(QComboBox):
             # radius=0：不要让 mica 做圆角，否则高斯会把透明边糊成灰边。
             # 分风格：Win11 用设计 token 的圆角，Win10 是直角（用户："不要有圆边"）。
             radius = 0 if theme.is_win10 else theme.radius_flyout + 2
-            blurred = mica.backdrop(physical, radius, dpr, 0.45,
-                                    acrylic=theme.uses_acrylic)
+            shot = getattr(self, "_screen_shot", None)
+            if shot is not None:
+                # 从弹出前抓到的屏幕图里裁出弹窗区域 —— 这就是"下面的内容"。
+                crop = shot.copy(physical.x(), physical.y(),
+                                physical.width(), physical.height())
+                blurred = QPixmap.fromImage(crop)
+                if blurred.isNull():
+                    blurred = mica.backdrop(physical, radius, dpr, 0.45,
+                                            acrylic=theme.uses_acrylic)
+            else:
+                blurred = mica.backdrop(physical, radius, dpr, 0.45,
+                                        acrylic=theme.uses_acrylic)
             blurred = self._gaussian_pixmap(blurred, max(8.0, 14.0 * dpr))
             try:
                 source = blurred.toImage().convertToFormat(
@@ -1902,7 +1913,7 @@ class FluentComboBox(QComboBox):
                                 QImage.Format.Format_ARGB32_Premultiplied)
                 tinted.fill(QColor(theme.palette.flyout_bg))
                 painter = QPainter(tinted)
-                painter.setOpacity(0.62)
+                painter.setOpacity(0.85)
                 painter.drawImage(0, 0, source)
                 painter.end()
                 self._popup_backdrop = QPixmap.fromImage(tinted)
@@ -1952,6 +1963,15 @@ class FluentComboBox(QComboBox):
 
     def showPopup(self) -> None:  # noqa: N802
         self._style_popup()
+        # 用户："要高斯模糊出下面的内容" —— 在弹窗出现**之前**先抓一张真实屏幕，
+        # 之后再从中裁出弹窗那块做模糊，这样糊出来的是设置窗口里的内容，而不是壁纸。
+        try:
+            # mss 在这个环境里抓全屏会硬崩，改用 Qt 自己的屏幕截图。
+            _scr = QGuiApplication.primaryScreen()
+            _shot = _scr.grabWindow(0) if _scr is not None else None
+            self._screen_shot = _shot.toImage() if _shot is not None else None
+        except Exception:
+            self._screen_shot = None
         super().showPopup()
         self._animate_popup_open()
 
