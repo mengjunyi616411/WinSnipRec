@@ -1999,8 +1999,10 @@ class FluentComboBox(QComboBox):
                 start_y = final.y() + int(round((final.height() - start_h) * ANCHOR))
             else:
                 # Win11：从控件那一侧往下展开，顶边不动
-                start_h = max(8, int(round(final.height() * 0.06)))
-                start_y = final.y()
+                # Win11：**不改变高度**（改成从 9px 长到全高看起来像"板子往下滑"，不是系统那种展开），
+                # 整块一开始就是全尺寸，配合淡入 + 4px 的极轻微位移进来。
+                start_h = final.height()
+                start_y = final.y() - 4
             start = QRect(final.x(), start_y, final.width(), start_h)
 
             scrollbars = None
@@ -2016,8 +2018,11 @@ class FluentComboBox(QComboBox):
                 _fade_from = 0.55
             else:
                 # Win11：系统的展开更快、淡入更彻底
-                _dur = 190
-                _fade_from = 0.2
+                _dur = 160
+                _fade_from = 0.15
+            import time as _t_anim
+
+            _anim_started = _t_anim.perf_counter()
             container.setGeometry(start)
             container.setWindowOpacity(_fade_from)
             group = QParallelAnimationGroup(container)
@@ -2050,6 +2055,14 @@ class FluentComboBox(QComboBox):
                 except RuntimeError:
                     pass          # 弹窗已经关了，什么都不用做
 
+            def _log_anim_done() -> None:
+                import time as _t2
+                logging.getLogger(__name__).info(
+                    "popup open anim: %s in %.0f ms",
+                    "win10" if theme.is_win10 else "win11",
+                    (_t2.perf_counter() - _anim_started) * 1000)
+
+            group.finished.connect(_log_anim_done)
             group.finished.connect(finished)
             group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
             QTimer.singleShot(1400, finished)
