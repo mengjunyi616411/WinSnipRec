@@ -1800,23 +1800,21 @@ class FluentComboBox(QComboBox):
             # 用户："是正方形不要接近" —— 宽高严格相等，取两者较大值（上限 320）。
             # 高的菜单（语言下拉）会被拉宽；矮而宽的菜单（主题下拉）会被拉高，
             # 多出来的高度在列表下面留白，换来的是真正的正方形卡片。
-            side = min(320, max(final.width(), final.height()))
-            if theme.is_win10:
-                # 用户："在 win10 风格下菜单不要升上去，直接下拉出来就好" ——
-                # Win10 用标准下拉：保持 Qt 摆好的位置（控件正下方），不做垂直居中。
-                wanted_y = final.y()
-            else:
-                wanted_y = centre_y - side // 2
+            # 用户："菜单要和控件一样宽度" —— 不再把宽度拉成正方形，直接用容器原始宽度
+            # （Qt 给的弹窗宽度就等于控件宽度）；高度保持列表内容需要的高度。
+            wanted_w = final.width()
+            wanted_h = final.height()
             wanted_x = final.x()
-            screen = QGuiApplication.screenAt(QPoint(final.x(), centre_y))
+            wanted_y = final.y()
+            screen = QGuiApplication.screenAt(QPoint(final.x(), final.y()))
             area = screen.availableGeometry() if screen is not None else None
             if area is not None:
+                # 行数多的时候可能超出屏幕底边，往上收。
                 wanted_y = max(area.top() + 4,
-                               min(wanted_y, area.bottom() - side - 4))
-                # 加宽后靠右的下拉会顶出屏幕，所以 x 也要钳制（原来只钳了 y）。
+                               min(wanted_y, area.bottom() - wanted_h - 4))
                 wanted_x = max(area.left() + 4,
-                               min(wanted_x, area.right() - side - 4))
-            final = QRect(wanted_x, wanted_y, side, side)
+                               min(wanted_x, area.right() - wanted_w - 4))
+            final = QRect(wanted_x, wanted_y, wanted_w, wanted_h)
         except Exception:
             pass
         return final
@@ -2018,7 +2016,7 @@ class FluentComboBox(QComboBox):
                 _fade_from = 0.55
             else:
                 # Win11：系统的展开更快、淡入更彻底
-                _dur = 160
+                _dur = 260
                 _fade_from = 0.15
             import time as _t_anim
 
