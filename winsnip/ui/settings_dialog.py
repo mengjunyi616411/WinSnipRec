@@ -214,6 +214,9 @@ class SettingsWindow(FluentWindow):
         self._add_row(_t("光效强度"),
                       _t("Windows 10 风格下跟随鼠标的高光强度，也用于按钮悬停边框"),
                       self.reveal_combo)
+        # 用户："在 win11 风格下隐藏光效强度" —— 这一项只有 Win10 风格才有效。
+        self._reveal_row = self._rows[-1]
+        self._reveal_row.setVisible(theme.is_win10)
 
         self.tray_toggle = ToggleSwitch(settings.minimize_to_tray, self)
         self.tray_toggle.toggled.connect(lambda v: self._set("minimize_to_tray", v))
@@ -485,6 +488,10 @@ class SettingsWindow(FluentWindow):
                 widget.invalidate_backdrop()
             if hasattr(widget, "refresh_theme"):
                 widget.refresh_theme()
+        # 光效强度只在 Win10 风格下有意义，切换风格时同步显隐。
+        row = getattr(self, "_reveal_row", None)
+        if row is not None:
+            row.setVisible(theme.is_win10)
         label = {"system": _t("跟随系统"), "win11": "Windows 11", "win10": "Windows 10"}[name]
         show_toast(_t("界面风格已切换"), _t("当前：{0}").format(label), "check",
                        duration=2600)
