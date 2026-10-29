@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from .. import __version__, icons, startup
 from .. import i18n as _i18n
+from .. import anim
 from ..settings import Settings, settings
 from ..theme import apply_app_theme, rgba, theme, ui_font
 from .widgets import (
@@ -476,6 +477,58 @@ class SettingsWindow(FluentWindow):
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])
 
+    def _set_row_visible_animated(self, row, visible: bool) -> None:
+        """带展开/收起动画地显示或隐藏一行（光效强度用）。
+
+        - 展开：高度 0 -> 自然高度，同时淡入；
+        - 收起：自然高度 -> 0，同时淡出，结束后 setVisible(False)。
+        """
+        if row is None:
+            return
+        from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+        from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+        effect = row.graphicsEffect()
+        if not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(row)
+            row.setGraphicsEffect(effect)
+        if not anim.animations_enabled():
+            row.setMaximumHeight(16777215)
+            effect.setOpacity(1.0 if visible else 0.0)
+            row.setVisible(visible)
+            return
+        if visible:
+            row.setVisible(True)
+        full = max(1, row.sizeHint().height())
+        start_h = row.maximumHeight() if row.isVisible() else 0
+        if start_h >= 16777215 or start_h <= 0:
+            start_h = full if row.isVisible() and not visible else 0
+        end_h = full if visible else 0
+        row.setMaximumHeight(start_h)
+        anim_h = QPropertyAnimation(row, b"maximumHeight", row)
+        anim_h.setDuration(240)
+        anim_h.setStartValue(start_h)
+        anim_h.setEndValue(end_h)
+        anim_h.setEasingCurve(anim.curve("decelerate"))
+        anim_o = QPropertyAnimation(effect, b"opacity", row)
+        anim_o.setDuration(240)
+        anim_o.setStartValue(0.0 if visible else 1.0)
+        anim_o.setEndValue(1.0 if visible else 0.0)
+        anim_o.setEasingCurve(anim.curve("out"))
+
+        def _finish() -> None:
+            try:
+                if not visible:
+                    row.setVisible(False)
+                row.setMaximumHeight(16777215)
+                effect.setOpacity(1.0)
+            except RuntimeError:
+                pass
+
+        anim_h.finished.connect(_finish)
+        anim_h.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+        anim_o.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
     def _on_style_changed(self, index: int) -> None:
         name = ["system", "win11", "win10"][index]
         self._set("style", name)
@@ -491,7 +544,7 @@ class SettingsWindow(FluentWindow):
         # 光效强度只在 Win10 风格下有意义，切换风格时同步显隐。
         row = getattr(self, "_reveal_row", None)
         if row is not None:
-            row.setVisible(theme.is_win10)
+            self._set_row_visible_animated(row, theme.is_win10)
         label = {"system": _t("跟随系统"), "win11": "Windows 11", "win10": "Windows 10"}[name]
         show_toast(_t("界面风格已切换"), _t("当前：{0}").format(label), "check",
                        duration=2600)
