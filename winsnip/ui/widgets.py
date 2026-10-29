@@ -1997,6 +1997,11 @@ class FluentComboBox(QComboBox):
         try:
             if not anim.animations_enabled():
                 return
+            # 用户："在 win10 风格下，菜单的弹出要采用 win10 的动画"。
+            # Windows 10 的下拉是**瞬间出现**的，没有展开/淡入过程，所以这里直接返回，
+            # 保持 Show 事件里已经设好的最终几何与不透明度。
+            if theme.is_win10:
+                return
             view = self.view()
             container = view.window() if view is not None else None
             if container is None or container is self:
