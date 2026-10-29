@@ -1989,10 +1989,18 @@ class FluentComboBox(QComboBox):
             # 上边往上走了 16px、下边往下走了 48px —— 是**上下同时长**，但下边占 75%、
             # 上边只占 25%。等价于"以距顶边 25% 处为锚点缩放到 80%"。
             # （之前做成"顶边完全固定"是错的；做成"以弹窗中心缩放"则上下各半，也不对。）
-            H_START = 0.80
-            ANCHOR = 0.25
-            start_h = max(1, int(round(final.height() * H_START)))
-            start_y = final.y() + int(round((final.height() - start_h) * ANCHOR))
+            # 分风格决定展开方向：
+            #   Win11 —— 像系统那样"从控件方向往下展开"：顶边固定、高度从 8px 长到全高；
+            #   Win10 —— 以距顶边 25% 处为锚点、高度 80% -> 100%（下边占大部分）。
+            if theme.is_win10:
+                H_START = 0.80
+                ANCHOR = 0.25
+                start_h = max(1, int(round(final.height() * H_START)))
+                start_y = final.y() + int(round((final.height() - start_h) * ANCHOR))
+            else:
+                # Win11：从控件那一侧往下展开，顶边不动
+                start_h = max(8, int(round(final.height() * 0.06)))
+                start_y = final.y()
             start = QRect(final.x(), start_y, final.width(), start_h)
 
             scrollbars = None
@@ -2003,19 +2011,26 @@ class FluentComboBox(QComboBox):
             except Exception:
                 scrollbars = None
 
+            if theme.is_win10:
+                _dur = 360
+                _fade_from = 0.55
+            else:
+                # Win11：系统的展开更快、淡入更彻底
+                _dur = 190
+                _fade_from = 0.0
             container.setGeometry(start)
-            container.setWindowOpacity(0.55)
+            container.setWindowOpacity(_fade_from)
             group = QParallelAnimationGroup(container)
             fade = QPropertyAnimation(container, b"windowOpacity", group)
             # 时长按录屏实测：下边一直长到 t=933ms 才停（567ms 开始），约 370ms。
             # 之前按"帧间变化峰值"估的 100~135ms 是错的 —— 那个方法只看到第一波变化。
             # 关闭仍是瞬间完成（Qt 默认行为），不用动。
-            fade.setDuration(360)
-            fade.setStartValue(0.55)      # 录屏里中途亮度掉得比 0.92 更多，淡入要更明显
+            setDuration(_dur)
+            fade.setStartValue(_fade_from)      # 录屏里中途亮度掉得比 0.92 更多，淡入要更明显
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
             grow = QPropertyAnimation(container, b"geometry", group)
-            grow.setDuration(360)
+            setDuration(_dur)
             grow.setStartValue(start)
             grow.setEndValue(final)
             grow.setEasingCurve(anim.curve("decelerate"))
