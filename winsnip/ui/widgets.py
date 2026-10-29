@@ -1647,6 +1647,14 @@ class FluentComboBox(QComboBox):
                 # Show 发生在第一次绘制之前，在这里把几何改成居中的，屏幕上不会先闪一下
                 # "在下面"再跳上来（用户："打开就在中间"）。
                 try:
+                    # 用户："在 win10 风格下，菜单在弹出一瞬间没有高斯模糊" —— 模糊底要几十毫秒才
+                    # 生成好，而 Win10 是瞬间弹出，那一瞬间露出的就是没糊的画面。
+                    # 这里先把自己设为全透明，等模糊底生成完再显示，第一帧就是糊好的。
+                    if theme.is_win10:
+                        try:
+                            container0.setWindowOpacity(0.0)
+                        except Exception:
+                            pass
                     container0.setGeometry(self._centred_geometry(container0))
                     # 用户："不要有圆边" —— 我们自己画的 clip 已是直角，但 Windows 11 的 DWM
                     # 默认会给顶层窗口加圆角，这里显式要求不圆角。
@@ -1668,6 +1676,12 @@ class FluentComboBox(QComboBox):
                         self._refresh_popup_backdrop(container0)
                 except Exception:
                     pass
+                # 模糊底生成完之后再恢复不透明 —— 这样第一帧看到的就是糊好的画面。
+                if theme.is_win10:
+                    try:
+                        container0.setWindowOpacity(1.0)
+                    except Exception:
+                        pass
         try:
             view = self.view()
             if (self._keep_popup_open and view is not None
