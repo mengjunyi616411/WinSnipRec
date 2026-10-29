@@ -1881,7 +1881,7 @@ class FluentComboBox(QComboBox):
         return out.copy(pad, pad, w, h)
 
 
-    def _refresh_popup_backdrop(self, container) -> None:
+    def _refresh_popup_backdrop(self, container, rect=None) -> None:
         """抓弹窗背后那块屏幕 -> 高斯模糊 -> 保留颜色叠到浮出层底色上。
 
         性能：结果按"几何 + 主题"缓存。菜单每次都从同一位置弹出，所以第二次打开是
@@ -1894,7 +1894,7 @@ class FluentComboBox(QComboBox):
             handle = container.windowHandle()
             dpr = handle.devicePixelRatio() if handle else container.devicePixelRatioF()
             dpr = dpr or 1.0
-            g = container.geometry()
+            g = rect if rect is not None else container.geometry()
             key = (g.x(), g.y(), g.width(), g.height(), dpr,
                    theme.style, theme.mode, theme.palette.flyout_bg,
                    getattr(theme, 'uses_acrylic', False))
@@ -1986,6 +1986,17 @@ class FluentComboBox(QComboBox):
             self._screen_shot = _shot.toImage() if _shot is not None else None
         except Exception:
             self._screen_shot = None
+        # 用户："人眼还是能看出来了" —— 之前是在窗口出现**之后**才生成模糊底（约 23ms），
+        # 那一点点准备期肉眼可见。改成在窗口出现**之前**就把它算好，这样窗口一出来
+        # 就是最终画面，没有任何"准备中"的中间态。
+        if theme.is_win10:
+            try:
+                _cont = self.view().window() if self.view() is not None else None
+                if _cont is not None and _cont is not self:
+                    self._refresh_popup_backdrop(
+                        _cont, self._centred_geometry(_cont))
+            except Exception:
+                pass
         super().showPopup()
         self._animate_popup_open()
 
