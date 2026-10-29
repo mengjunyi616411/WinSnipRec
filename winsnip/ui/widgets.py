@@ -2017,7 +2017,7 @@ class FluentComboBox(QComboBox):
             else:
                 # Win11：系统的展开更快、淡入更彻底
                 _dur = 190
-                _fade_from = 0.0
+                _fade_from = 0.2
             container.setGeometry(start)
             container.setWindowOpacity(_fade_from)
             group = QParallelAnimationGroup(container)
@@ -2025,12 +2025,12 @@ class FluentComboBox(QComboBox):
             # 时长按录屏实测：下边一直长到 t=933ms 才停（567ms 开始），约 370ms。
             # 之前按"帧间变化峰值"估的 100~135ms 是错的 —— 那个方法只看到第一波变化。
             # 关闭仍是瞬间完成（Qt 默认行为），不用动。
-            setDuration(_dur)
+            fade.setDuration(_dur)
             fade.setStartValue(_fade_from)      # 录屏里中途亮度掉得比 0.92 更多，淡入要更明显
             fade.setEndValue(1.0)
             fade.setEasingCurve(anim.curve("out"))
             grow = QPropertyAnimation(container, b"geometry", group)
-            setDuration(_dur)
+            grow.setDuration(_dur)
             grow.setStartValue(start)
             grow.setEndValue(final)
             grow.setEasingCurve(anim.curve("decelerate"))
