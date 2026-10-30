@@ -74,6 +74,8 @@ class SettingsWindow(FluentWindow):
         except Exception:
             pass
         super().__init__(None, resizable=True)
+        # 必须在 super().__init__() 之后设 —— 父类构造里会把它初始化成 False。
+        self._real_screen_backdrop = True
         self.setWindowTitle(_t("设置"))
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(600, 640)

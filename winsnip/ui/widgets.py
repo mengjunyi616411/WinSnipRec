@@ -262,6 +262,8 @@ class FluentWindow(QWidget):
         self._open_animation_running = False
         self._suppress_open_animation = False
         self._backdrop: QPixmap | None = None
+        # 只有设置窗口用"真实屏幕内容"做底；主窗口/控制条仍走壁纸材质。
+        self._real_screen_backdrop = False
         self._shadow_pixmap: QPixmap | None = None
         self._resize_edges: Qt.Edge | None = None
         self._normal_geometry: QRect | None = None
@@ -328,7 +330,7 @@ class FluentWindow(QWidget):
         )
         try:
             shot = desktop_shot()
-            if theme.is_win10 and shot is not None:
+            if self._real_screen_backdrop and shot is not None:
                 # Win10：从"窗口出现前抓的整屏"里裁出窗口这块，再高斯模糊 ——
                 # 这样糊出来的是真实屏幕内容（桌面、其它窗口），而不是壁纸。
                 gtl = self.mapToGlobal(card.topLeft())
