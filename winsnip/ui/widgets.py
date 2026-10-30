@@ -383,9 +383,12 @@ class FluentWindow(QWidget):
                     _out = QImage(_src.size(), QImage.Format.Format_ARGB32_Premultiplied)
                     _out.fill(QColor(theme.palette.window_bg))
                     _pp = QPainter(_out)
-                    _pp.setOpacity(0.55)
-                    _pp.drawImage(0, 0, _src)
-                    _pp.end()
+                    try:
+                        _pp.setOpacity(max(0.0, min(1.0,
+                            float(getattr(settings, "backdrop_opacity", 45)) / 100.0)))
+                        _pp.drawImage(0, 0, _src)
+                    finally:
+                        _pp.end()
                     blurred = QPixmap.fromImage(_out)
                 except Exception:
                     pass

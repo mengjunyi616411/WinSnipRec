@@ -8,7 +8,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QApplication, QFileDialog, QHBoxLayout, QLabel, QScrollArea, QSlider,
+    QVBoxLayout, QWidget,
 )
 
 from .. import __version__, icons, startup
@@ -225,6 +226,19 @@ class SettingsWindow(FluentWindow):
         # 用户："在 win11 风格下隐藏光效强度" —— 这一项只有 Win10 风格才有效。
         self._reveal_row = self._rows[-1]
         self._reveal_row.setVisible(theme.is_win10)
+
+        # 用户："在 win10 风格下，再做一个可调节背景透明程度的调节按钮"。
+        self.opacity_slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.opacity_slider.setRange(0, 100)
+        self.opacity_slider.setValue(int(getattr(settings, "backdrop_opacity", 45)))
+        self.opacity_slider.setFixedWidth(150)
+        self.opacity_slider.sliderReleased.connect(self._on_backdrop_opacity_changed)
+        self._add_row(
+            _t("背景不透明度"),
+            _t("Windows 10 风格下窗口背景的实心程度：越小越透，越能看清桌面内容"),
+            self.opacity_slider)
+        self._opacity_row = self._rows[-1]
+        self._opacity_row.setVisible(theme.is_win10)
 
         self.tray_toggle = ToggleSwitch(settings.minimize_to_tray, self)
         self.tray_toggle.toggled.connect(lambda v: self._set("minimize_to_tray", v))
@@ -484,6 +498,25 @@ class SettingsWindow(FluentWindow):
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])
 
+    def _on_backdrop_opacity_changed(self) -> None:
+        """拖动完滑块后保存并让所有窗口重新生成背景。"""
+        value = int(self.opacity_slider.value())
+        self._set("backdrop_opacity", value)
+        for widget in QApplication.topLevelWidgets():
+            invalidate = getattr(widget, "invalidate_backdrop", None)
+            if callable(invalidate):
+                try:
+                    invalidate()
+                except Exception:
+                    pass
+            refresh = getattr(widget, "refresh_theme", None)
+            if callable(refresh):
+                try:
+                    refresh()
+                except Exception:
+                    pass
+            widget.update()
+
     def _set_row_visible_animated(self, row, visible: bool) -> None:
         """带展开/收起动画地显示或隐藏一行（光效强度用）。
 
@@ -552,6 +585,9 @@ class SettingsWindow(FluentWindow):
         row = getattr(self, "_reveal_row", None)
         if row is not None:
             self._set_row_visible_animated(row, theme.is_win10)
+            opacity_row = getattr(self, "_opacity_row", None)
+            if opacity_row is not None:
+                self._set_row_visible_animated(opacity_row, theme.is_win10)
         label = {"system": _t("跟随系统"), "win11": "Windows 11", "win10": "Windows 10"}[name]
         show_toast(_t("界面风格已切换"), _t("当前：{0}").format(label), "check",
                        duration=2600)
