@@ -194,6 +194,31 @@ class RevealOverlay(QWidget):
         painter.end()
 
 
+# 用户："在 win10 风格下，设置能不能也做成背景高斯模糊（真实屏幕内容）"。
+# 窗口本身是半透明的，直接抓屏会抓到自己；所以在窗口**出现之前**先抓一张整屏，
+# 之后 _ensure_backdrop 从这张图里裁出窗口那块做高斯。
+_DESKTOP_SHOT = None
+
+
+def capture_desktop_shot() -> None:
+    """在窗口出现前抓一张整屏快照（供 Win10 风格的窗口/弹窗做高斯底使用）。"""
+    global _DESKTOP_SHOT
+    try:
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            _DESKTOP_SHOT = None
+            return
+        pm = screen.grabWindow(0)
+        _DESKTOP_SHOT = pm.toImage() if pm is not None and not pm.isNull() else None
+    except Exception:
+        _DESKTOP_SHOT = None
+
+
+def desktop_shot():
+    return _DESKTOP_SHOT
+
+
+
 class FluentWindow(QWidget):
     """A frameless window painted with a Mica backdrop, rounded corners and a
     soft drop shadow. Works identically on Windows 10 and 11."""
@@ -287,6 +312,44 @@ class FluentWindow(QWidget):
             self.sync_reveal_overlay()
         self.update()
 
+    @staticmethod
+    def _gaussian_pixmap_static(pixmap, radius: float):
+        """降采样 + QGraphicsBlurEffect 的高斯（与弹窗同一套）。"""
+        from PySide6.QtWidgets import (QGraphicsBlurEffect, QGraphicsPixmapItem,
+                                       QGraphicsScene)
+
+        try:
+            w, h = pixmap.width(), pixmap.height()
+            pad = max(2, int(radius))
+            src = pixmap.toImage()
+            padded = QImage(w + pad * 2, h + pad * 2,
+                            QImage.Format.Format_ARGB32_Premultiplied)
+            padded.fill(src.pixelColor(0, 0))
+            pp = QPainter(padded)
+            pp.drawImage(pad, pad, src)
+            pp.end()
+            small = padded.scaled(max(1, padded.width() // 2),
+                                   max(1, padded.height() // 2),
+                                   Qt.AspectRatioMode.IgnoreAspectRatio,
+                                   Qt.TransformationMode.SmoothTransformation)
+            scene = QGraphicsScene()
+            item = QGraphicsPixmapItem(QPixmap.fromImage(small))
+            eff = QGraphicsBlurEffect()
+            eff.setBlurRadius(max(1.0, radius * 0.5))
+            eff.setBlurHints(QGraphicsBlurEffect.BlurHint.PerformanceHint)
+            item.setGraphicsEffect(eff)
+            scene.addItem(item)
+            out = QPixmap(small.size())
+            out.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(out)
+            scene.render(painter)
+            painter.end()
+            out = out.scaled(padded.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+            return out.copy(pad, pad, w, h)
+        except Exception:
+            return pixmap
+
     def _ensure_backdrop(self) -> None:
         if self._backdrop is not None or self._freeze_backdrop:
             return
@@ -298,8 +361,38 @@ class FluentWindow(QWidget):
             max(1, int(card.width() * dpr)), max(1, int(card.height() * dpr)),
         )
         try:
-            self._backdrop = mica.backdrop(physical, 0, dpr, self._tint_strength,
-                                           acrylic=theme.uses_acrylic)
+            shot = desktop_shot()
+            if theme.is_win10 and shot is not None:
+                # Win10：从"窗口出现前抓的整屏"里裁出窗口这块，再高斯模糊 ——
+                # 这样糊出来的是真实屏幕内容（桌面、其它窗口），而不是壁纸。
+                gtl = self.mapToGlobal(card.topLeft())
+                crop = shot.copy(int(gtl.x() * dpr), int(gtl.y() * dpr),
+                                  max(1, int(card.width() * dpr)),
+                                  max(1, int(card.height() * dpr)))
+                blurred = QPixmap.fromImage(crop)
+                if blurred.isNull():
+                    blurred = mica.backdrop(physical, 0, dpr, self._tint_strength,
+                                            acrylic=theme.uses_acrylic)
+                else:
+                    blurred = self._gaussian_pixmap_static(
+                        blurred, max(8.0, 14.0 * dpr))
+                # 压一层窗底色，避免背景太忙影响读字；仍能看出是真实内容的模糊。
+                try:
+                    _src = blurred.toImage().convertToFormat(
+                        QImage.Format.Format_ARGB32_Premultiplied)
+                    _out = QImage(_src.size(), QImage.Format.Format_ARGB32_Premultiplied)
+                    _out.fill(QColor(theme.palette.window_bg))
+                    _pp = QPainter(_out)
+                    _pp.setOpacity(0.55)
+                    _pp.drawImage(0, 0, _src)
+                    _pp.end()
+                    blurred = QPixmap.fromImage(_out)
+                except Exception:
+                    pass
+                self._backdrop = blurred
+            else:
+                self._backdrop = mica.backdrop(physical, 0, dpr, self._tint_strength,
+                                               acrylic=theme.uses_acrylic)
         except Exception:
             self._backdrop = None
 

@@ -65,6 +65,13 @@ class SettingsWindow(FluentWindow):
     closed = Signal()
 
     def __init__(self) -> None:
+        # Win10 风格的窗口背景要用"真实屏幕内容"做高斯，所以必须在窗口出现前先抓一张。
+        try:
+            from .widgets import capture_desktop_shot
+
+            capture_desktop_shot()
+        except Exception:
+            pass
         super().__init__(None, resizable=True)
         self.setWindowTitle(_t("设置"))
         self.setWindowIcon(icons.app_icon())
