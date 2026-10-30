@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import anim, icons, winapi
+from ..settings import settings
 from ..theme import (
     CAPTION_BUTTON_SIZE, WIN10_CLOSE_HOVER, WIN10_CLOSE_PRESSED, mica, render_shadow, rgba,
     theme, ui_font,
@@ -304,54 +305,19 @@ class FluentWindow(QWidget):
 
     # -- painting ---------------------------------------------------------- #
     def invalidate_backdrop(self) -> None:
-        self._backdrop = None
-        self._shadow_pixmap = None
-        self._static_card = None
-        self._static_key = None
-        if hasattr(self, "_reveal_overlay"):
-            self.sync_reveal_overlay()
-        self.update()
+        """标记背景需要重建。
 
-    @staticmethod
-    def _gaussian_pixmap_static(pixmap, radius: float):
-        """降采样 + QGraphicsBlurEffect 的高斯（与弹窗同一套）。"""
-        from PySide6.QtWidgets import (QGraphicsBlurEffect, QGraphicsPixmapItem,
-                                       QGraphicsScene)
-
-        try:
-            w, h = pixmap.width(), pixmap.height()
-            pad = max(2, int(radius))
-            src = pixmap.toImage()
-            padded = QImage(w + pad * 2, h + pad * 2,
-                            QImage.Format.Format_ARGB32_Premultiplied)
-            padded.fill(src.pixelColor(0, 0))
-            pp = QPainter(padded)
-            pp.drawImage(pad, pad, src)
-            pp.end()
-            small = padded.scaled(max(1, padded.width() // 2),
-                                   max(1, padded.height() // 2),
-                                   Qt.AspectRatioMode.IgnoreAspectRatio,
-                                   Qt.TransformationMode.SmoothTransformation)
-            scene = QGraphicsScene()
-            item = QGraphicsPixmapItem(QPixmap.fromImage(small))
-            eff = QGraphicsBlurEffect()
-            eff.setBlurRadius(max(1.0, radius * 0.5))
-            eff.setBlurHints(QGraphicsBlurEffect.BlurHint.PerformanceHint)
-            item.setGraphicsEffect(eff)
-            scene.addItem(item)
-            out = QPixmap(small.size())
-            out.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(out)
-            scene.render(painter)
-            painter.end()
-            out = out.scaled(padded.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
-                             Qt.TransformationMode.SmoothTransformation)
-            return out.copy(pad, pad, w, h)
-        except Exception:
-            return pixmap
+        注意：这里**不清空** self._backdrop —— 清了之后下一次绘制还没有新背景，
+        就会露出透明的中间态，看起来就是"闪烁"（用户反馈）。保留旧图，
+        等 _ensure_backdrop 生成好新图再替换。
+        """
+        self._backdrop_stale = True
 
     def _ensure_backdrop(self) -> None:
-        if self._backdrop is not None or self._freeze_backdrop:
+        if self._freeze_backdrop:
+            return
+        if self._backdrop is not None and not getattr(self, "_backdrop_stale", False):
+            return
             return
         card = self.card_rect()
         handle = self.windowHandle()
@@ -374,7 +340,7 @@ class FluentWindow(QWidget):
                     blurred = mica.backdrop(physical, 0, dpr, self._tint_strength,
                                             acrylic=theme.uses_acrylic)
                 else:
-                    blurred = self._gaussian_pixmap_static(
+                    blurred = FluentComboBox._gaussian_pixmap(
                         blurred, max(8.0, 14.0 * dpr))
                 # 压一层窗底色，避免背景太忙影响读字；仍能看出是真实内容的模糊。
                 try:
@@ -398,6 +364,12 @@ class FluentWindow(QWidget):
                                                acrylic=theme.uses_acrylic)
         except Exception:
             self._backdrop = None
+            self._backdrop_stale = False
+            import logging as _lg
+
+            _lg.getLogger(__name__).info(
+                "window backdrop rebuilt: opacity=%s",
+                getattr(settings, "backdrop_opacity", None))
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)

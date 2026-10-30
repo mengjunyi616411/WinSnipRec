@@ -232,6 +232,7 @@ class SettingsWindow(FluentWindow):
         self.opacity_slider.setRange(0, 100)
         self.opacity_slider.setValue(int(getattr(settings, "backdrop_opacity", 45)))
         self.opacity_slider.setFixedWidth(150)
+        self.opacity_slider.valueChanged.connect(self._on_opacity_slider_moved)
         self.opacity_slider.sliderReleased.connect(self._on_backdrop_opacity_changed)
         self._add_row(
             _t("背景不透明度"),
@@ -497,6 +498,16 @@ class SettingsWindow(FluentWindow):
 
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])
+
+    def _on_opacity_slider_moved(self, _value: int) -> None:
+        """拖动过程中防抖 180ms 再应用，避免每一步都重建背景导致卡顿/闪烁。"""
+        timer = getattr(self, "_opacity_debounce", None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._on_backdrop_opacity_changed)
+            self._opacity_debounce = timer
+        timer.start(180)
 
     def _on_backdrop_opacity_changed(self) -> None:
         """拖动完滑块后保存并让所有窗口重新生成背景。"""

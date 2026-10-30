@@ -67,7 +67,7 @@ class Settings:
     style: str = "win11"                  # interface style: win11 | win10 | system
     reveal_strength: str = "weak"
     # Win10 风格下窗口背景的不透明度（0 = 几乎全透、只看得到模糊；100 = 接近实心）。
-    backdrop_opacity: int = 45         # Win10 pointer light: weak | normal | strong
+    backdrop_opacity: int = 72         # Win10 pointer light: weak | normal | strong
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja
     onboarded: bool = False               # has the first-run guide been shown
     backdrop: str = "auto"                # real DWM blur: auto | native | classic
