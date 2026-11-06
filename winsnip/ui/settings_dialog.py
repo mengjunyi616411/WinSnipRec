@@ -88,6 +88,7 @@ class SettingsWindow(FluentWindow):
         self._row_separators: list[QWidget] = []
 
         root = QVBoxLayout(self)
+        self._root_layout = root
         # 标题栏铺满窗口（与主窗口一致）；body 自带 24px 内边距
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -465,23 +466,23 @@ class SettingsWindow(FluentWindow):
 
         holder = QWidget(self)
         layout = QHBoxLayout(holder)
-        layout.setContentsMargins(0, 0, 0, 6)
+        layout.setContentsMargins(24, 6, 24, 6)   # 现在在滚动区外，自己带边距
         layout.setSpacing(0)
         self.search_box = QLineEdit(holder)
         self.search_box.setPlaceholderText(_t("搜索设置"))
         self.search_box.setClearButtonEnabled(True)
         self.search_box.textChanged.connect(self._on_search)
         layout.addWidget(self.search_box)
-        self.body_layout.insertWidget(0, holder)
+        # 用户："下滑时搜索框黏在顶部不动（吸附）" —— 放进 root 布局（标题栏之后、滚动区之前），这样它不随内容滚动。
+        self._root_layout.insertWidget(1, holder)
         self._search_holder = holder
 
         # 用户："搜索框从第一张图移动到第二张时要有动画"。过滤到没有结果时，
         # 搜索框会被布局挤到中间 —— 这里用一个可动画高度的占位撑开它，
         # 让那次位移是平滑发生的，而不是跳过去。
+        # 搜索框已经移到滚动区外（吸附在顶部），不再需要可动画占位。
         self._top_spacer = QWidget(self)
-        self._top_spacer.setMinimumHeight(0)
-        self._top_spacer.setMaximumHeight(0)
-        self.body_layout.insertWidget(0, self._top_spacer)
+        self._top_spacer.setFixedHeight(0)
 
         # 用户："搜索框要有移动动画" —— 聚焦时框体长高、内容轻微下移，
         # 失焦时收回；用 maximumHeight 做动画，布局会跟着平滑重排。
