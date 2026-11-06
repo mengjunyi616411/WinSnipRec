@@ -75,7 +75,7 @@ class SettingsWindow(FluentWindow):
             pass
         super().__init__(None, resizable=True)
         # 必须在 super().__init__() 之后设 —— 父类构造里会把它初始化成 False。
-        self._real_screen_backdrop = True
+        self._real_screen_backdrop = False
         # 用户："win11风格背景不是透明的" —— Win11 走的是系统原生背景，而这台机器的
         # DwmSetWindowAttribute 不生效，回退后就变成了不透明纯色。这里直接关掉原生路径，
         # 设置窗口统一用"真实屏幕内容的高斯模糊"，两种风格都一样透。
@@ -245,7 +245,7 @@ class SettingsWindow(FluentWindow):
             _t("Windows 10 风格下窗口背景的实心程度：越小越透，越能看清桌面内容"),
             self.opacity_slider)
         self._opacity_row = self._rows[-1]
-        self._opacity_row.setVisible(theme.is_win10)
+        self._opacity_row.setVisible(False)
 
         self.tray_toggle = ToggleSwitch(settings.minimize_to_tray, self)
         self.tray_toggle.toggled.connect(lambda v: self._set("minimize_to_tray", v))
@@ -604,7 +604,7 @@ class SettingsWindow(FluentWindow):
             self._set_row_visible_animated(row, theme.is_win10)
             opacity_row = getattr(self, "_opacity_row", None)
             if opacity_row is not None:
-                self._set_row_visible_animated(opacity_row, theme.is_win10)
+                self._set_row_visible_animated(opacity_row, False)
         label = {"system": _t("跟随系统"), "win11": "Windows 11", "win10": "Windows 10"}[name]
         show_toast(_t("界面风格已切换"), _t("当前：{0}").format(label), "check",
                        duration=2600)
