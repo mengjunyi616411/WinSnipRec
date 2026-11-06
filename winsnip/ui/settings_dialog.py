@@ -366,6 +366,10 @@ class SettingsWindow(FluentWindow):
         self._add_row(_t("截图快捷键"), _t("若被系统占用，程序会自动回退到备用组合"), self.hotkey_snip_combo)
         self._add_row(_t("录屏快捷键"), _t("截图工具 (Windows 11) 会占用 Win+Shift+R"), self.hotkey_record_combo)
 
+        # 底部占位吸收多余空间：否则内容变少时 QVBoxLayout 会把多出来的高度分给各行，
+        # 布局重排会让搜索框"跳"一下（用户反馈的抖动）。
+        self.body_layout.addStretch(1)
+
         if getattr(settings, "dev_mode", False):
             self._build_dev_rows()
 
@@ -609,27 +613,84 @@ class SettingsWindow(FluentWindow):
             show_easter_egg(self)
 
     def _filter_rows(self, text: str) -> None:
-        """Hide rows whose title and subtitle do not contain the query."""
+        """Hide rows whose title and subtitle do not contain the query.
+
+        行的显示/隐藏走 maximumHeight 动画（用户选方案 A），这样布局是平滑重排的，
+        搜索框不会先跳一下再被占位推走。全部行动画结束后再驱动顶部占位。
+        """
         needle = (text or "").strip().lower()
         visible = 0
+        changes: list[tuple] = []
         for index, row in enumerate(self._rows):
             haystack = f"{row.title.text()} {row.subtitle.text()}".lower()
             match = not needle or needle in haystack
-            row.setVisible(match)
             separator = (self._row_separators[index]
                          if index < len(self._row_separators) else None)
-            if separator is not None:
-                separator.setVisible(match)
+            if row.isVisible() != match:
+                changes.append((row, separator, match))
             visible += int(match)
         for label in getattr(self, "_section_labels", []):
-            if needle:
-                label.setVisible(False)
-            else:
-                label.setVisible(True)
+            label.setVisible(not needle)
         if hasattr(self, "_empty_hint"):
             self._empty_hint.setVisible(bool(needle) and visible == 0)
-            # 有结果时占位收回（搜索框回到顶部），没结果时占位张开（搜索框缓缓下移）。
-            self._animate_top_spacer(bool(needle) and visible == 0)
+        empty = bool(needle) and visible == 0
+        self._animate_rows(changes, empty)
+
+    def _animate_rows(self, changes, empty: bool) -> None:
+        """把行/分隔线的显示隐藏做成高度动画；全部结束后再动顶部占位。"""
+        from PySide6.QtCore import QParallelAnimationGroup, QPropertyAnimation
+
+        if not changes:
+            self._animate_top_spacer(empty)
+            return
+        if not anim.animations_enabled():
+            for row, separator, show in changes:
+                row.setVisible(show)
+                if separator is not None:
+                    separator.setVisible(show)
+            self._animate_top_spacer(empty)
+            return
+        group = QParallelAnimationGroup(self)
+        pending: list[tuple] = []
+        for row, separator, show in changes:
+            for widget in (row, separator):
+                if widget is None:
+                    continue
+                if show:
+                    natural = getattr(widget, "_natural_h", None)
+                    if natural is None:
+                        natural = max(1, widget.sizeHint().height())
+                        widget._natural_h = natural
+                    widget.setVisible(True)
+                    start_h = 0
+                    end_h = natural
+                else:
+                    if getattr(widget, "_natural_h", None) is None:
+                        widget._natural_h = max(1, widget.height())
+                    start_h = widget.height()
+                    end_h = 0
+                widget.setMaximumHeight(start_h)
+                a = QPropertyAnimation(widget, b"maximumHeight", group)
+                a.setDuration(200)
+                a.setStartValue(start_h)
+                a.setEndValue(end_h)
+                a.setEasingCurve(anim.curve("inout"))
+                pending.append((widget, show))
+
+        def _finish() -> None:
+            for widget, show in pending:
+                try:
+                    if show:
+                        widget.setMaximumHeight(16777215)
+                    else:
+                        widget.setVisible(False)
+                        widget.setMaximumHeight(16777215)
+                except RuntimeError:
+                    pass
+            self._animate_top_spacer(empty)
+
+        group.finished.connect(_finish)
+        group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
 
     def _animate_top_spacer(self, expand: bool) -> None:
         """把搜索框上方的占位从 0 动画到目标高度（或反向），实现"移动"感。"""
