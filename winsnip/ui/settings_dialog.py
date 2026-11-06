@@ -471,6 +471,14 @@ class SettingsWindow(FluentWindow):
         self.body_layout.insertWidget(0, holder)
         self._search_holder = holder
 
+        # 用户："搜索框从第一张图移动到第二张时要有动画"。过滤到没有结果时，
+        # 搜索框会被布局挤到中间 —— 这里用一个可动画高度的占位撑开它，
+        # 让那次位移是平滑发生的，而不是跳过去。
+        self._top_spacer = QWidget(self)
+        self._top_spacer.setMinimumHeight(0)
+        self._top_spacer.setMaximumHeight(0)
+        self.body_layout.insertWidget(0, self._top_spacer)
+
         # 用户："搜索框要有移动动画" —— 聚焦时框体长高、内容轻微下移，
         # 失焦时收回；用 maximumHeight 做动画，布局会跟着平滑重排。
         self.search_box.setMinimumHeight(34)
@@ -620,6 +628,32 @@ class SettingsWindow(FluentWindow):
                 label.setVisible(True)
         if hasattr(self, "_empty_hint"):
             self._empty_hint.setVisible(bool(needle) and visible == 0)
+            # 有结果时占位收回（搜索框回到顶部），没结果时占位张开（搜索框缓缓下移）。
+            self._animate_top_spacer(bool(needle) and visible == 0)
+
+    def _animate_top_spacer(self, expand: bool) -> None:
+        """把搜索框上方的占位从 0 动画到目标高度（或反向），实现"移动"感。"""
+        from PySide6.QtCore import QParallelAnimationGroup, QPropertyAnimation
+
+        spacer = getattr(self, "_top_spacer", None)
+        if spacer is None:
+            return
+        target = 0
+        if expand:
+            # 用窗口高度的比例，而不是 body 高度 —— body 会随内容变高，算出来会撑过头。
+            target = max(0, int(self.height() * 0.22))
+        if not anim.animations_enabled():
+            spacer.setMinimumHeight(target)
+            spacer.setMaximumHeight(target)
+            return
+        group = QParallelAnimationGroup(spacer)
+        for prop in (b"minimumHeight", b"maximumHeight"):
+            a = QPropertyAnimation(spacer, prop, group)
+            a.setDuration(240)
+            a.setStartValue(spacer.height())
+            a.setEndValue(target)
+            a.setEasingCurve(anim.curve("inout"))
+        group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
 
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])
