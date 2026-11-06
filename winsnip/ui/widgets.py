@@ -505,12 +505,14 @@ class FluentWindow(QWidget):
         """
         if self.isMinimized():
             return
+        # 这一句必须在任何 log.xxx 之前 —— 之前插反了顺序，用户点最小化就会
+        # UnboundLocalError: cannot access local variable 'log'。
+        log = logging.getLogger("winsnip.ui")
         mode = str(getattr(settings, "minimize_animation", "auto") or "auto")
         if mode == "drawn":
             log.info("minimize: 自绘（用户设置为「自绘」）")
             anim.minimize_window_animated(self)
             return
-        log = logging.getLogger("winsnip.ui")
         native_ok = False
         try:
             native_ok = winapi.native_minimize_animation_enabled()
