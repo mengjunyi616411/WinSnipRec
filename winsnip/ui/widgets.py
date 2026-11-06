@@ -328,7 +328,8 @@ class FluentWindow(QWidget):
         # 用户："win11风格背景不是透明的" —— 窗口开启动画会 _freeze_backdrop=True，
         # 而 Win11 风格据此跳过整块背景生成，回退成不透明纯色。
         # 真实屏幕内容走的是"快照"，与窗口位置无关，不需要冻结，这里只对原生路径生效。
-        if self._freeze_backdrop and not self._real_screen_backdrop:
+        if (self._freeze_backdrop
+                and not (self._real_screen_backdrop and theme.is_win10)):
             return
         if self._backdrop is not None and not getattr(self, "_backdrop_stale", False):
             return
@@ -342,7 +343,8 @@ class FluentWindow(QWidget):
         )
         try:
             shot = desktop_shot()
-            if self._real_screen_backdrop and shot is not None:
+            if (self._real_screen_backdrop and theme.is_win10
+                    and shot is not None):
                 # Win10：从"窗口出现前抓的整屏"里裁出窗口这块，再高斯模糊 ——
                 # 这样糊出来的是真实屏幕内容（桌面、其它窗口），而不是壁纸。
                 gtl = self.mapToGlobal(card.topLeft())
