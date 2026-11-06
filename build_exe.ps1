@@ -131,19 +131,13 @@ if (-not $OneFile -and -not $NoTrim) {
             $item = Get-Item $target
             $mb = if ($item.PSIsContainer) {
                 [math]::Round((Get-ChildItem $target -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 1)
-            
-    # 两个不会被加载的大件：Qt 的软件 OpenGL 兜底 DLL（19.7MB）和 scipy 的
-    # openblas（19.6MB）。删掉能让安装包少压约 40MB，压缩时间也跟着降。
-    foreach ($dead in @('opengl32sw.dll')) {
-        $p = Join-Path $distDir $dead
-        if (Test-Path $p) { Remove-Item $p -Force }
-    }
-    Get-ChildItem $distDir -Filter 'libscipy_openblas*' -File -ErrorAction SilentlyContinue |
-        ForEach-Object { Remove-Item $_.FullName -Force }
-} else { [math]::Round($item.Length / 1MB, 1) }
+            } else { [math]::Round($item.Length / 1MB, 1) }
             Remove-Item $target -Recurse -Force
             Write-Host "  移除 $rel ($mb MB)"
         }
+    # scipy 的 openblas 不会被加载（19.6 MB），删掉能少压 20MB。
+    Get-ChildItem $exeDir -Recurse -File -Filter 'libscipy_openblas*' -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item $_.FullName -Force }
     }
     $langDir = Join-Path $internal 'PySide6\translations'
     if (Test-Path $langDir) {
