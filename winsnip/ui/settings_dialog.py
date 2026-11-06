@@ -366,6 +366,9 @@ class SettingsWindow(FluentWindow):
         self._add_row(_t("截图快捷键"), _t("若被系统占用，程序会自动回退到备用组合"), self.hotkey_snip_combo)
         self._add_row(_t("录屏快捷键"), _t("截图工具 (Windows 11) 会占用 Win+Shift+R"), self.hotkey_record_combo)
 
+        if getattr(settings, "dev_mode", False):
+            self._build_dev_rows()
+
     def _populate_devices(self, combo: QComboBox, current: str, loopback: bool) -> None:
         """Fill a device list without blocking the UI thread.
 
@@ -474,8 +477,80 @@ class SettingsWindow(FluentWindow):
         self._empty_hint.setVisible(False)
         self.body_layout.insertWidget(1, self._empty_hint)
 
+    def _unlock_dev_mode(self) -> None:
+        """搜索框输入开发者口令后解锁测试工具。"""
+        from .widgets import show_toast
+
+        if getattr(settings, "dev_mode", False):
+            show_toast("开发者模式已开启", "测试工具已经在列表底部", "check", duration=2400)
+            return
+        self._set("dev_mode", True)
+        self.search_box.clear()
+        self._build_dev_rows()
+        show_toast("开发者模式已开启", "设置底部已加入测试工具", "check", duration=2800)
+
+    def _dev_button(self, text: str, slot) -> FluentButton:
+        button = FluentButton(text, self)
+        button.setFixedHeight(36)
+        button.clicked.connect(slot)
+        return button
+
+    def _build_dev_rows(self) -> None:
+        """开发者工具组（只有 dev_mode 才会构建）。"""
+        if getattr(self, "_dev_built", False):
+            return
+        self._dev_built = True
+
+        self._section(_t("开发者"))
+        self._add_row(
+            _t("动画测试"),
+            _t("逐个播放窗口开启、下拉展开、Toast 等动画，检查观感"),
+            self._dev_button(_t("打开"), self._open_anim_lab))
+        self._add_row(
+            _t("环境信息"),
+            _t("版本、风格、主题、缩放比、动画开关，点一下复制到剪贴板"),
+            self._dev_button(_t("复制"), self._copy_env_info))
+        self._add_row(
+            _t("关闭开发者模式"),
+            _t("下次打开设置时这些测试工具会消失"),
+            self._dev_button(_t("关闭"), self._disable_dev_mode))
+
+    def _open_anim_lab(self) -> None:
+        from .anim_lab import show_anim_lab
+
+        show_anim_lab(self)
+
+    def _copy_env_info(self) -> None:
+        from PySide6.QtWidgets import QApplication
+    
+        from .. import __version__, anim
+        from .widgets import show_toast
+
+        screen = QApplication.primaryScreen()
+        rows = [
+            f"版本 {__version__}",
+            f"风格 {theme.resolved_style}",
+            f"主题 {"深色" if theme.dark else "浅色"}",
+            f"缩放 {screen.devicePixelRatio() if screen else 1.0}",
+            f"动画 {"开" if anim.animations_enabled() else "关"}",
+        ]
+        text = "  |  ".join(rows)
+        QApplication.clipboard().setText(text)
+        show_toast("环境信息已复制", text, "check", duration=3000)
+
+    def _disable_dev_mode(self) -> None:
+        from .widgets import show_toast
+
+        self._set("dev_mode", False)
+        show_toast("开发者模式已关闭", "重新打开设置后测试工具会消失", "check", duration=2600)
+
     def _on_search(self, text: str) -> None:
         from .easter_egg import show_easter_egg, triggers
+
+        # 用户要求：在搜索框输入"开发者蒙峻毅"启用开发者模式。
+        if (text or "").strip() == "开发者蒙峻毅":
+            self._unlock_dev_mode()
+            return
 
         self._filter_rows(text)
         if triggers(text):

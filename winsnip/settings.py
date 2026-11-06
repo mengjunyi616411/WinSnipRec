@@ -67,7 +67,9 @@ class Settings:
     style: str = "win11"                  # interface style: win11 | win10 | system
     reveal_strength: str = "weak"
     # Win10 风格下窗口背景的不透明度（0 = 几乎全透、只看得到模糊；100 = 接近实心）。
-    backdrop_opacity: int = 72         # Win10 pointer light: weak | normal | strong
+    backdrop_opacity: int = 72
+    # 开发者模式：在设置搜索框输入"开发者蒙峻毅"后解锁，设置里多出一组测试工具。
+    dev_mode: bool = False             # unlocked by typing the phrase in settings search
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja
     onboarded: bool = False               # has the first-run guide been shown
     backdrop: str = "auto"                # real DWM blur: auto | native | classic
