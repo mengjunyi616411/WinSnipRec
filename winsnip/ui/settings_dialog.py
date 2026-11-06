@@ -471,6 +471,12 @@ class SettingsWindow(FluentWindow):
         self.body_layout.insertWidget(0, holder)
         self._search_holder = holder
 
+        # 用户："搜索框要有移动动画" —— 聚焦时框体长高、内容轻微下移，
+        # 失焦时收回；用 maximumHeight 做动画，布局会跟着平滑重排。
+        self.search_box.setMinimumHeight(34)
+        self.search_box.setMaximumHeight(34)
+        holder.installEventFilter(self)
+
         # Shown when the filter hides everything, so the body is not just blank.
         self._empty_hint = QLabel(_t("没有匹配的设置项"), self)
         self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -543,6 +549,44 @@ class SettingsWindow(FluentWindow):
 
         self._set("dev_mode", False)
         show_toast("开发者模式已关闭", "重新打开设置后测试工具会消失", "check", duration=2600)
+
+    def _animate_search_box(self, focused: bool) -> None:
+        """聚焦/离开时给搜索框做一次高度动画（最小值与最大值一起动）。
+
+        只用 maximumHeight 动画是无效的 —— 初始 setMinimumHeight/MaximumHeight 都是 34，
+        下限卡住了高度，所以两者都要动。
+        """
+        from PySide6.QtCore import QParallelAnimationGroup, QPropertyAnimation
+
+        box = getattr(self, "search_box", None)
+        if box is None:
+            return
+        target = 42 if focused else 34
+        if not anim.animations_enabled():
+            box.setMinimumHeight(target)
+            box.setMaximumHeight(target)
+            return
+        group = QParallelAnimationGroup(box)
+        for prop in (b"minimumHeight", b"maximumHeight"):
+            a = QPropertyAnimation(box, prop, group)
+            a.setDuration(190)
+            a.setStartValue(box.height())
+            a.setEndValue(target)
+            a.setEasingCurve(anim.curve("inout"))
+        group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        try:
+            if obj is getattr(self, "_search_holder", None):
+                from PySide6.QtCore import QEvent
+    
+                if event.type() == QEvent.Type.Enter:
+                    self._animate_search_box(True)
+                elif event.type() == QEvent.Type.Leave:
+                    self._animate_search_box(False)
+        except Exception:
+            pass
+        return super().eventFilter(obj, event)
 
     def _on_search(self, text: str) -> None:
         from .easter_egg import show_easter_egg, triggers
