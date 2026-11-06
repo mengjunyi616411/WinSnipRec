@@ -2442,10 +2442,10 @@ class FluentMenu(FluentWindow):
             return None
 
     def __init__(self, parent: QWidget | None = None, *, min_width: int = 200) -> None:
-        # shadow=True：菜单是浮出层，有投影才有层次感。这里的 14px 边距正是留给阴影的
-        # （native_backdrop=False 才保得住这段边距；原生 DWM 背景会把它吃掉）。
-        super().__init__(None, tint_strength=0.93, margin=14, open_slide=8,
-                         native_backdrop=False, shadow=True)
+        # 用户："有透明的框" —— 原来用 14px 边距留给投影，但本机投影渲染不出来，
+        # 结果就是菜单外面套了一圈透明边。改成无边距、无投影，卡片直接铺满窗口。
+        super().__init__(None, tint_strength=0.93, margin=0, open_slide=8,
+                         native_backdrop=False, shadow=False)
         self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.NoDropShadowWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
