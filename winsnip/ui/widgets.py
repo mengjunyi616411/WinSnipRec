@@ -2722,13 +2722,15 @@ class Toast(FluentWindow):
 
     def __init__(self, title: str, message: str = "", icon_name: str = "check",
                  *, duration: int = 3200, on_click: Callable[[], None] | None = None) -> None:
-        super().__init__(None, tint_strength=0.90, margin=16, open_slide=22,
-                         native_backdrop=False)
+        # 用户："Toast通知周围会有发亮的透明边" —— 和菜单同一个问题：margin 是留给
+        # 投影的，本机投影画不出来，就只剩一圈透明边。改成无边距、无投影。
+        super().__init__(None, tint_strength=0.90, margin=0, open_slide=22,
+                         native_backdrop=False, shadow=False)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
                             Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self._on_click = on_click
-        self.setFixedSize(360 + 32, 76 + 32)
+        self.setFixedSize(360, 76)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(self._margin + 14, self._margin + 14,
