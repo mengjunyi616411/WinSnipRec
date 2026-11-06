@@ -693,28 +693,16 @@ class SettingsWindow(FluentWindow):
         group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
 
     def _animate_top_spacer(self, expand: bool) -> None:
-        """把搜索框上方的占位从 0 动画到目标高度（或反向），实现"移动"感。"""
-        from PySide6.QtCore import QParallelAnimationGroup, QPropertyAnimation
+        """搜索框始终固定在顶部（用户："搜索框始终在顶部显示"）。
 
+        之前用这个可动画占位把搜索框推到窗口中间；现在占位永远保持 0，
+        搜索框不再下移，行的过滤动画保留。
+        """
         spacer = getattr(self, "_top_spacer", None)
         if spacer is None:
             return
-        target = 0
-        if expand:
-            # 用窗口高度的比例，而不是 body 高度 —— body 会随内容变高，算出来会撑过头。
-            target = max(0, int(self.height() * 0.22))
-        if not anim.animations_enabled():
-            spacer.setMinimumHeight(target)
-            spacer.setMaximumHeight(target)
-            return
-        group = QParallelAnimationGroup(spacer)
-        for prop in (b"minimumHeight", b"maximumHeight"):
-            a = QPropertyAnimation(spacer, prop, group)
-            a.setDuration(240)
-            a.setStartValue(spacer.height())
-            a.setEndValue(target)
-            a.setEasingCurve(anim.curve("inout"))
-        group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+        spacer.setMinimumHeight(0)
+        spacer.setMaximumHeight(0)
 
     def _on_theme_changed(self, index: int) -> None:
         self._set("theme", ["system", "light", "dark"][index])
