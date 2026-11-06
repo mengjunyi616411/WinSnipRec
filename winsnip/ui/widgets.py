@@ -2011,7 +2011,12 @@ class FluentComboBox(QComboBox):
                                 QImage.Format.Format_ARGB32_Premultiplied)
                 tinted.fill(QColor(theme.palette.flyout_bg))
                 painter = QPainter(tinted)
-                painter.setOpacity(0.85)
+                # 用户截图：深色主题下拉还是浅色。真实屏幕的模糊底是亮的，压 0.85 顶不住，
+                # 深色模式压到 0.94，浅色保持 0.85。
+                # 用户截图：深色主题下下拉还是浅色。原因是混合比例反了 ——
+                # 这里是把"模糊底"叠到 flyout_bg 上，opacity 越高底色越被盖住。
+                # 正确做法是让底色主导，模糊只占少量：深色 0.12，浅色 0.28。
+                painter.setOpacity(0.12 if theme.dark else 0.28)
                 painter.drawImage(0, 0, source)
                 painter.end()
                 self._popup_backdrop = QPixmap.fromImage(tinted)
