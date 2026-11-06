@@ -488,6 +488,10 @@ class FluentWindow(QWidget):
         self._start_reveal_tracking()
         self.sync_reveal_overlay()
         self._apply_native_backdrop()
+        # 预热自绘最小化用的幽灵窗口：首次创建 + 半透明合成要上百毫秒，
+        # 不预热的话第一次最小化会明显抽搐。延迟一点，别拖慢窗口打开。
+        QTimer.singleShot(600, lambda: anim.prewarm_ghost(
+            (self.width(), self.height())))
         if self._native_backdrop:
             QTimer.singleShot(200, self._verify_native_backdrop)
 

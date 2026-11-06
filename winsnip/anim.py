@@ -282,6 +282,40 @@ def _acquire_ghost(snapshot: QPixmap, radius: float) -> _MinimizeGhost:
     return _ghost
 
 
+def prewarm_ghost(size: tuple[int, int] = (640, 360)) -> None:
+    """Create and composite the ghost off-screen ahead of time.
+
+    用户反馈「自绘最小化会抽搐」。实测第一次最小化时幽灵窗口是新建的，
+    创建 + 半透明合成要上百毫秒，动画在那之前就启动了，第一帧之后整块卡住。
+    预热必须用**真实尺寸**的画面 —— 2x2 的空白图只省掉控件创建，
+    省不掉分层窗口的首次合成。
+    """
+    global _ghost, _ghost_live
+    if _ghost is not None or _ghost_live:
+        return
+    try:
+        from PySide6.QtGui import QColor, QPixmap
+
+        w, h = max(64, int(size[0])), max(48, int(size[1]))
+        blank = QPixmap(w, h)
+        blank.fill(QColor(0, 0, 0, 8))
+        ghost = _acquire_ghost(blank, 14.0)
+        ghost.setGeometry(-20000, -20000, w, h)
+        ghost.show()
+        ghost.repaint()
+
+        def _hide() -> None:
+            try:
+                ghost.hide()
+            except RuntimeError:
+                pass
+            _release_ghost()
+
+        QTimer.singleShot(250, _hide)
+    except Exception:
+        pass
+
+
 def _release_ghost() -> None:
     """Keep the widget alive for the next minimize, just stop counting it."""
     global _ghost_live
@@ -320,6 +354,11 @@ class _MinimizeGhost(QWidget):
         self._snapshot = snapshot
         self._radius = radius
         self.painted_frames = 0
+        self._origin = QRect()
+        self._target = QRect()
+        self._union = QRect()
+        self._progress = 0.0
+        self._fade = 1.0
         #: Size of the first frame after a retarget. The animation must start at
         #: the window's full size; if it starts any later the ghost pops in
         #: already shrunk, which is exactly the judder this guards against.
@@ -337,6 +376,58 @@ class _MinimizeGhost(QWidget):
         self._radius = radius
         self.painted_frames = 0
         self.first_frame_size = None
+        self._progress = 0.0
+        self._fade = 1.0
+
+    def play(self, origin: QRect, target: QRect, duration: int,
+             on_finished=None) -> None:
+        """Start the shrink motion.
+
+        用户反馈「自绘最小化会抽搐」。原因是原来的做法每帧改窗口 geometry ——
+        半透明顶层窗口每帧都要重新合成，实测帧率极低（前 28ms 完全静止，之后
+        一帧跳 150px）。现在窗口几何只设一次（起点∪终点的并集），动画只推进
+        一个 0..1 的进度值，绘制时把快照按进度缩放并移动到对应位置，全程零重排。
+        """
+        from PySide6.QtCore import QVariantAnimation
+
+        self._origin = origin
+        self._target = target
+        self._progress = 0.0
+        self._fade = 1.0
+        union = origin.united(target)
+        self._union = union
+        self.setGeometry(union)
+        self.setWindowOpacity(1.0)
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(duration)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.setEasingCurve(curve("in_out"))
+        self._anim.valueChanged.connect(self._on_progress)
+        if on_finished is not None:
+            self._anim.finished.connect(on_finished)
+        self._anim.start(QVariantAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def _on_progress(self, value) -> None:
+        try:
+            self._progress = float(value)
+            # 只更新这一帧和上一帧覆盖的区域，避免整块重绘
+            self._fade = max(0.0, min(1.0, 1.0 - float(value) ** 1.6))
+            self.update(self.rect())
+        except RuntimeError:
+            pass
+
+    def current_rect(self) -> QRect:
+        """当前帧在屏幕坐标下的矩形（按进度在起止矩形之间插值）。"""
+        from PySide6.QtCore import QEasingCurve
+
+        t = curve("in_out").valueForProgress(max(0.0, min(1.0, self._progress)))
+        o, d = self._origin, self._target
+        x = int(o.x() + (d.x() - o.x()) * t)
+        y = int(o.y() + (d.y() - o.y()) * t)
+        w = int(o.width() + (d.width() - o.width()) * t)
+        h = int(o.height() + (d.height() - o.height()) * t)
+        return QRect(x, y, max(1, w), max(1, h))
 
     def paintEvent(self, event) -> None:  # noqa: N802
         from PySide6.QtGui import QPainter, QPainterPath
@@ -347,16 +438,24 @@ class _MinimizeGhost(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        # 按进度算出这一刻应该在屏幕上的位置，再换算成窗口内坐标
+        cur = self.current_rect() if hasattr(self, "_union") else self.geometry()
+        local = QRectF(cur.translated(-self.x(), -self.y()))
+        painter.setOpacity(min(1.0, max(0.0, getattr(self, "_fade", 1.0))))
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), self._radius, self._radius)
+        path.addRoundedRect(local, self._radius, self._radius)
         painter.setClipPath(path)
-        painter.drawPixmap(QRectF(self.rect()), self._snapshot,
-                           QRectF(self._snapshot.rect()))
+        painter.drawPixmap(local, self._snapshot, QRectF(self._snapshot.rect()))
         painter.end()
 
 
+# 自绘最小化的时长。这台机器（远程虚拟显示器）半透明窗口合成很慢，实测 240ms
+# 只有 7~10 帧；帧数上不去就只能把每帧位移降到最小，所以拉到 420ms。
+MINIMIZE_DURATION = 420
+
+
 def minimize_window_animated(window: QWidget, *, on_finished=None,
-                             duration: int = DURATION_NORMAL) -> None:
+                             duration: int = MINIMIZE_DURATION) -> None:
     """Play the Windows-style minimize, then actually minimize the window.
 
     The real window is minimized at once and a snapshot ghost provides the
@@ -383,13 +482,7 @@ def minimize_window_animated(window: QWidget, *, on_finished=None,
     target = minimize_target(window)
 
     ghost = _acquire_ghost(snapshot, 14.0)
-    ghost.setGeometry(origin)
-    ghost.setWindowOpacity(1.0)
     window.showMinimized()
-    ghost.show()
-    # Draw one frame synchronously: starting the timeline before the ghost has
-    # any content is what made it pop in already half-shrunk.
-    ghost.repaint()
 
     finished_flag = {"done": False}
 
@@ -402,31 +495,20 @@ def minimize_window_animated(window: QWidget, *, on_finished=None,
         if on_finished is not None:
             on_finished()
 
-    def begin() -> None:
-        if finished_flag["done"]:
-            return
-        group = QParallelAnimationGroup()
-        group.setParent(ghost)
-
-        move = QPropertyAnimation(ghost, b"geometry", group)
-        move.setDuration(duration)
-        move.setStartValue(origin)
-        move.setEndValue(target)
-        move.setEasingCurve(curve("in_out"))
-
-        fade = QPropertyAnimation(ghost, b"windowOpacity", group)
-        fade.setDuration(duration)
-        fade.setStartValue(1.0)
-        fade.setEndValue(0.0)
-        fade.setEasingCurve(curve("in"))
-
-        group.addAnimation(move)
-        group.addAnimation(fade)
-        group.finished.connect(cleanup)
-        group.start(QParallelAnimationGroup.DeletionPolicy.DeleteWhenStopped)
+    try:
+        # 用户："自绘最小化会抽搐"。旧做法每帧改窗口 geometry，半透明顶层窗口
+        # 每帧重新合成，实测前 28ms 完全静止、之后一帧跳 150px。
+        # 现在窗口几何只设一次（起点∪终点的并集），动画只推进 0..1 的进度，
+        # 绘制时把快照按进度缩放并移动，全程零重排。
+        # 必须先 show 再 play：play 里会 setGeometry 并立刻启动动画，
+        # 如果窗口还没显示，前几帧的 update() 会被吞掉（实测只剩 2 种矩形）。
+        ghost.show()
+        ghost.play(origin, target, duration, cleanup)
+        ghost.repaint()
+    except Exception:
+        fall_back()
 
     # One turn of the event loop: the ghost is on screen at full size by then.
-    QTimer.singleShot(0, begin)
 
 
 def fade_in(widget: QWidget, *, duration: int = DURATION_NORMAL, start: float = 0.0,
