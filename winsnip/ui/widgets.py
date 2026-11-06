@@ -247,7 +247,12 @@ class FluentWindow(QWidget):
         native_backdrop: bool | None = None,   # None = ask backdrop.wanted()
     ) -> None:
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+        # 用户："最小化动画能不能走系统原生动画"。实测发现无边框窗口没有 WS_MINIMIZEBOX，
+        # 系统因此认为它不可最小化，ShowWindow(SW_MINIMIZE) 会 17ms 一帧到位（零过渡帧，
+        # DWM 根本没播动画）。补上 Minimize/Maximize 按钮提示位，系统才会播原生最小化动画。
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint |
+                                Qt.WindowType.WindowMinimizeButtonHint |
+                                Qt.WindowType.WindowMaximizeButtonHint)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         # A real DWM backdrop cannot coexist with a layered window, and a layered
@@ -499,6 +504,11 @@ class FluentWindow(QWidget):
         answered from app.log instead of guessed at.
         """
         if self.isMinimized():
+            return
+        mode = str(getattr(settings, "minimize_animation", "auto") or "auto")
+        if mode == "drawn":
+            log.info("minimize: 自绘（用户设置为「自绘」）")
+            anim.minimize_window_animated(self)
             return
         log = logging.getLogger("winsnip.ui")
         native_ok = False

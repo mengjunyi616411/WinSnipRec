@@ -69,7 +69,11 @@ class Settings:
     # Win10 风格下窗口背景的不透明度（0 = 几乎全透、只看得到模糊；100 = 接近实心）。
     backdrop_opacity: int = 72
     # 开发者模式：在设置搜索框输入"开发者蒙峻毅"后解锁，设置里多出一组测试工具。
-    dev_mode: bool = False             # unlocked by typing the phrase in settings search
+    dev_mode: bool = False
+    # 最小化动画来源：auto = 系统允许就用原生（默认），native = 强制原生，
+    # drawn = 强制自绘。有些显示环境（远程会话 / 虚拟显示器）系统报告动画为开
+    # 但实际上不播，此时只有 drawn 能看见动画。
+    minimize_animation: str = "auto"             # unlocked by typing the phrase in settings search
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja
     onboarded: bool = False               # has the first-run guide been shown
     backdrop: str = "auto"                # real DWM blur: auto | native | classic

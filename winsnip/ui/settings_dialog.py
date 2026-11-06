@@ -266,6 +266,23 @@ class SettingsWindow(FluentWindow):
         self._add_row(_t("界面动画"), _t("启动动画、窗口淡入与滑动效果；Windows 关闭「显示动画」时自动跳过"),
                       self.animation_toggle)
 
+        # 用户："最小化动画能不能走系统原生动画"。
+        # 有些显示环境（远程会话 / 虚拟显示器）系统报告动画为开，但实际一帧都不播，
+        # 这时只有「自绘」能看见动画，所以给一个可选项。
+        self.minimize_anim_combo = FluentComboBox(self)
+        self.minimize_anim_combo.addItems(
+            [_t("跟随系统"), _t("强制原生"), _t("自绘（带动画）")])
+        self.minimize_anim_combo.setCurrentIndex(
+            {"auto": 0, "native": 1, "drawn": 2}.get(
+                getattr(settings, "minimize_animation", "auto"), 0))
+        self.minimize_anim_combo.currentIndexChanged.connect(
+            lambda index: self._set(
+                "minimize_animation", ["auto", "native", "drawn"][index]))
+        self._add_row(
+            _t("最小化动画"),
+            _t("跟随系统：系统报告可播就用原生；原生播不出来时改选「自绘（带动画）」"),
+            self.minimize_anim_combo)
+
         self._section(_t("录制"))
         self.fps_combo = FluentComboBox(self)
         for value in FPS_PRESETS:
