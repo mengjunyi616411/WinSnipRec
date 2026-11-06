@@ -589,6 +589,15 @@ class SettingsWindow(FluentWindow):
     def _on_style_changed(self, index: int) -> None:
         name = ["system", "win11", "win10"][index]
         self._set("style", name)
+        # 用户："选择win10风格后，默认使用深色模式"
+        # 用户："选择win10风格后，默认使用深色模式"
+        if name == "win10":
+            self.theme_combo.blockSignals(True)
+            self.theme_combo.setCurrentIndex(2)   # 2 = 深色
+            self.theme_combo.blockSignals(False)
+            self._set("theme", "dark")
+            theme.mode = "dark"
+            settings.theme = "dark"
         theme.style = name
         theme.refresh()
         apply_app_theme(QApplication.instance())
