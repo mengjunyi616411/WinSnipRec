@@ -2136,8 +2136,12 @@ class FluentComboBox(QComboBox):
                 # Win11：从控件那一侧往下展开，顶边不动
                 # Win11：**不改变高度**（改成从 9px 长到全高看起来像"板子往下滑"，不是系统那种展开），
                 # 整块一开始就是全尺寸，配合淡入 + 4px 的极轻微位移进来。
+                # 用户："菜单动画不流畅 / 有抽搐"。根因是**窗口几何动画**：半透明顶层窗口
+                # 每帧改尺寸/位置，DWM 都要重新合成，60fps 下必然掉帧。
+                # Win11 系统浮出菜单本质是"整块淡入"，几何是固定的 —— 这里改成纯淡入，
+                # 一帧都不用重排，动画必定连续。
                 start_h = final.height()
-                start_y = final.y() - 4
+                start_y = final.y()
             start = QRect(final.x(), start_y, final.width(), start_h)
 
             scrollbars = None
