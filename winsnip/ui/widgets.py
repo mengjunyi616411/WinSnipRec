@@ -2082,6 +2082,9 @@ class FluentComboBox(QComboBox):
             except Exception:
                 pass
         super().showPopup()
+        # 用户："菜单弹出时候有抽搐"。实测动画中途卡了约 165ms（弹窗第一次布局/绘制
+        # 阻塞了事件循环），然后透明度一下从 0.16 跳到 0.91。
+        # 改成等第一帧画完再启动动画，卡顿就发生在动画开始之前，看不出来。
         self._animate_popup_open()
 
     def _animate_popup_open(self) -> None:
