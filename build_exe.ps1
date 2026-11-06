@@ -12,14 +12,23 @@
 param(
     [switch]$OneFile,
     [switch]$SkipSmokeTest,
-    [switch]$NoTrim          # 保留 Qt 里用不到的文件（默认会裁掉，安装包小约 9 MB）
+    [switch]$NoTrim,         # 保留 Qt 里用不到的文件（默认会裁掉，安装包小约 9 MB）
+    [switch]$Fast            # 快速模式：不 --clean（复用 PyInstaller 分析缓存）、不裁剪 Qt
 )
 
+$script:phaseStart = $null
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 Set-Location $root
 
-function Step($text) { Write-Host "`n==> $text" -ForegroundColor Cyan }
+function Step($text) {
+    if ($script:phaseStart) {
+        $el = [math]::Round(((Get-Date) - $script:phaseStart).TotalSeconds, 1)
+        Write-Host "    (上一阶段 $el 秒)" -ForegroundColor DarkGray
+    }
+    $script:phaseStart = Get-Date
+    Write-Host "`n==> $text" -ForegroundColor Cyan
+}
 
 # ---- 1. 解释器 -------------------------------------------------------------
 $venvPython = Join-Path $root '.venv\Scripts\python.exe'
@@ -72,8 +81,13 @@ if (-not $SkipSmokeTest) {
 Step 'PyInstaller 打包'
 $mode = if ($OneFile) { '--onefile' } else { '--onedir' }
 
-$args = @(
-    '--noconfirm', '--clean',
+if ($Fast -and -not $NoTrim) { $NoTrim = $true }
+
+# 用户问过打包能不能更快：--clean 会丢掉 PyInstaller 的分析缓存，每次都全量重建。
+# -Fast 时不带 --clean，并且跳过 Qt 裁剪，通常能省掉一半以上时间。
+$cleanArgs = if ($Fast) { @() } else { @('--clean') }
+
+$args = @('--noconfirm') + $cleanArgs + @(
     '--name', '截图工具',
     '--icon', 'assets\app.ico',
     '--noconsole',
@@ -117,7 +131,16 @@ if (-not $OneFile -and -not $NoTrim) {
             $item = Get-Item $target
             $mb = if ($item.PSIsContainer) {
                 [math]::Round((Get-ChildItem $target -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 1)
-            } else { [math]::Round($item.Length / 1MB, 1) }
+            
+    # 两个不会被加载的大件：Qt 的软件 OpenGL 兜底 DLL（19.7MB）和 scipy 的
+    # openblas（19.6MB）。删掉能让安装包少压约 40MB，压缩时间也跟着降。
+    foreach ($dead in @('opengl32sw.dll')) {
+        $p = Join-Path $distDir $dead
+        if (Test-Path $p) { Remove-Item $p -Force }
+    }
+    Get-ChildItem $distDir -Filter 'libscipy_openblas*' -File -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item $_.FullName -Force }
+} else { [math]::Round($item.Length / 1MB, 1) }
             Remove-Item $target -Recurse -Force
             Write-Host "  移除 $rel ($mb MB)"
         }

@@ -44,8 +44,11 @@ SetupIconFile=..\assets\app.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
 
-Compression=lzma2/max
-SolidCompression=yes
+; 用户问过打包能不能更快。lzma2/max 在 205MB 的 dist 上要压 4 分钟，
+; lzma2/normal 快得多，安装包只大几 MB。
+Compression=lzma2/fast
+; 用户问过打包能不能更快：solid 会把所有文件压成一个流，速度最慢。
+SolidCompression=no
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

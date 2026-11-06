@@ -18,6 +18,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipAppBuild,
+    [switch]$Fast,
     [string]$Version
 )
 
@@ -45,7 +46,9 @@ if ($SkipAppBuild) {
     Write-Host "跳过主程序打包，复用现有 dist"
 } else {
     Step '打包主程序'
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $root 'build_exe.ps1') -SkipSmokeTest
+    $exeArgs = @('-SkipSmokeTest')
+        if ($Fast) { $exeArgs += '-Fast' }
+        & powershell -ExecutionPolicy Bypass -File (Join-Path $root 'build_exe.ps1') @exeArgs
     if ($LASTEXITCODE -ne 0) { throw "build_exe.ps1 失败（退出码 $LASTEXITCODE）" }
 }
 
