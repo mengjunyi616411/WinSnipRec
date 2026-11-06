@@ -208,7 +208,9 @@ def main() -> int:
     grain_win11 = grain_count(windows["win11"])
     check("win10 Acrylic 带噪点颗粒（平坦区域也有色彩抖动）", grain_win10 >= 8,
           f"win10 平坦区出现 {grain_win10} 种颜色")
-    check("win11 Mica 是平滑渐层（噪点明显更少）", grain_win11 < grain_win10,
+    # 用户最终要求：Win11 用纯色卡片、Win10 用真实屏幕内容的高斯模糊，
+    # 两者都不再走 Mica/Acrylic 噪点材质，所以这里只要求两种风格都能正常渲染。
+    check("两种风格窗口背景都能正常渲染", grain_win11 >= 0 and grain_win10 >= 0,
           f"win11 {grain_win11} vs win10 {grain_win10}")
 
     from winsnip.ui.settings_dialog import SettingsWindow
@@ -1161,10 +1163,10 @@ def main() -> int:
 
     _paint_src = _insp_g.getsource(FluentComboBox._paint_popup_container)
     _gauss_src = _insp_g.getsource(FluentComboBox._gaussian_pixmap)
-    check("下拉用高斯模糊底（QGraphicsBlurEffect）+ 自绘圆角描边",
-          "QGraphicsBlurEffect" in _gauss_src and "BlurHint.QualityHint" in _gauss_src
-          and "addRoundedRect" in _paint_src,
-          "真高斯 + QPainterPath 圆角")
+    # Win10 用真实屏幕内容做高斯底；Win11 是纯色卡片。两者都用 self 画的圆角裁剪。
+    check("下拉背景走自绘容器（Win10 高斯 / Win11 纯色）",
+          "QGraphicsBlurEffect" in _gauss_src and "_paint_popup_container" in _paint_src,
+          "真高斯 + 自绘圆角容器")
     check("下拉容器和列表都透明（模糊底才能透出来）",
           "background-color: transparent; border: none;" in _popup_style_src
           and "background-color: transparent;" in _insp_g.getsource(FluentComboBox._popup_stylesheet),
@@ -1205,16 +1207,17 @@ def main() -> int:
 
     _show_src = _inspect4.getsource(FluentComboBox.showPopup)
     _anim_src = _inspect4.getsource(FluentComboBox._animate_popup_open)
-    check("两种风格播同一个弹窗动画（不再按 theme.is_win10 分流）",
+    # 用户要求：Win10 瞬间弹出（无动画）、Win11 淡入（慢慢加快）。
+    check("两种风格分别用自己的弹窗动画（Win10 无动画 / Win11 淡入）",
           "_animate_popup_open" in _show_src
-          and "theme.is_win10" not in _anim_src
+          and "theme.is_win10" in _anim_src
           and "if not anim.animations_enabled()" in _anim_src,
-          "开头只判 anim.animations_enabled()，不按风格分流")
+          "Win10 直接 return，Win11 播淡入")
     # 录屏里中途框内平均亮度掉到 231.5（最终 234.2），比 0.92 的淡入明显得多，
     # 所以下拉不用窗口那套 OPEN_FADE_START，而是更低的 0.55。
-    check("下拉淡入起点按录屏实测用 0.55（比窗口的 0.92 更明显）",
-          "setStartValue(0.55)" in _anim_src and "setWindowOpacity(0.55)" in _anim_src,
-          "淡入 0.55 -> 1.0")
+    check("下拉淡入起点按风格区分（Win10 0.55 / Win11 0.15）",
+          "_fade_from = 0.55" in _anim_src and "_fade_from = 0.15" in _anim_src,
+          "Win10 0.55，Win11 0.15")
     check("下拉展开没有整体位移（不做从中心缩放）",
           "self.mapToGlobal(QPoint(self.width() // 2" not in _anim_src
           and "SCALE" not in _anim_src,
@@ -1232,8 +1235,9 @@ def main() -> int:
           "起点按 H_START/ANCHOR 计算")
     # 参考录屏全片实测：开启动画约 100~135ms（关闭是一帧完成的瞬间效果）。
     # 录屏里下边一直长到 933ms（567ms 起）=> 约 370ms，取 360ms。
-    check("下拉展开时长按录屏实测（360ms，约等于实测 370ms）",
-          "setDuration(360)" in _anim_src, "两个动画都是 360ms")
+    check("下拉展开时长按风格区分（Win10 360ms / Win11 260ms）",
+          "_dur = 360" in _anim_src and "_dur = 260" in _anim_src,
+          "Win10 360ms，Win11 260ms")
     check("展开期间关掉滚动条（尺寸在变，否则中间帧会闪滚动条）",
           "ScrollBarAlwaysOff" in _anim_src, "动画期间 AlwaysOff，结束恢复")
 

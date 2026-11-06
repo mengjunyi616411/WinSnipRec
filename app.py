@@ -169,7 +169,8 @@ def _show_first_run_guide() -> None:
 
         show_onboarding()
     except Exception:
-        log.exception("failed to show the first-run guide")
+        logging.getLogger("winsnip").exception(
+            "failed to show the first-run guide")
 
 
 def main() -> int:

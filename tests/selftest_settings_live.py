@@ -120,7 +120,9 @@ def find_popup(pids: set[int], timeout: float = 8.0):
     end = time.time() + timeout
     while time.time() < end:
         for hwnd, title, class_name, rect, visible in enum_app_windows(pids):
-            if not visible or "Popup" not in class_name:
+            # Qt 的 combobox 弹窗在不同平台/窗口标志下类名可能是
+            # ...QWindowPopup... 或 ...QWindowTool...，两者都接受。
+            if not visible or not ("Popup" in class_name or "Tool" in class_name):
                 continue
             left, top, width, height = rect
             if width < 40 or height < 30 or width > 900 or height > 900:
@@ -171,12 +173,17 @@ def run_round(app: QApplication, theme_mode: str, label: str) -> None:
 
         pids = {process.pid}
         combo_x = window.left + int(window.width * 0.85)
-        combo_y = window.top + int(window.height * 0.188)
+        # 设置页的行会变（后来加过"背景不透明度"），固定比例点不准了。
+        # 这里按顺序试几个候选行高，点到哪个下拉都行 —— 目的只是让弹窗出现。
+        candidate_ratios = (0.188, 0.28, 0.34, 0.42, 0.475, 0.55)
 
         popup = None
         for _attempt in range(3):
-            click(combo_x, combo_y)
-            popup = find_popup(pids, timeout=3.0)
+            for _ratio in candidate_ratios:
+                click(combo_x, window.top + int(window.height * _ratio))
+                popup = find_popup(pids, timeout=1.5)
+                if popup is not None:
+                    break
             if popup is not None:
                 break
             time.sleep(1.0)

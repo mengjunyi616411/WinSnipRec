@@ -2584,9 +2584,6 @@ class FluentMenu(FluentWindow):
         self.popup(global_pos)
         loop.exec()
 
-    def closeEvent(self, event) -> None:  # noqa: N802
-        FluentMenu._open.discard(self)
-        super().closeEvent(event)
 
 
 # --------------------------------------------------------------------------- #
