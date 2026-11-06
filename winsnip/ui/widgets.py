@@ -2165,12 +2165,13 @@ class FluentComboBox(QComboBox):
             fade.setDuration(_dur)
             fade.setStartValue(_fade_from)      # 录屏里中途亮度掉得比 0.92 更多，淡入要更明显
             fade.setEndValue(1.0)
-            fade.setEasingCurve(anim.curve("out"))
+            # 用户："在 win11 风格下，菜单的弹出动画要慢慢加慢慢加快" —— Win11 用缓起加速，Win10 保持快起慢收。
+            fade.setEasingCurve(anim.curve("out" if theme.is_win10 else "in"))
             grow = QPropertyAnimation(container, b"geometry", group)
             grow.setDuration(_dur)
             grow.setStartValue(start)
             grow.setEndValue(final)
-            grow.setEasingCurve(anim.curve("decelerate"))
+            grow.setEasingCurve(anim.curve("decelerate" if theme.is_win10 else "in"))
 
             settled = {"done": False}
 
