@@ -76,6 +76,10 @@ class SettingsWindow(FluentWindow):
         super().__init__(None, resizable=True)
         # 必须在 super().__init__() 之后设 —— 父类构造里会把它初始化成 False。
         self._real_screen_backdrop = True
+        # 用户："win11风格背景不是透明的" —— Win11 走的是系统原生背景，而这台机器的
+        # DwmSetWindowAttribute 不生效，回退后就变成了不透明纯色。这里直接关掉原生路径，
+        # 设置窗口统一用"真实屏幕内容的高斯模糊"，两种风格都一样透。
+        self._native_backdrop = False
         self.setWindowTitle(_t("设置"))
         self.setWindowIcon(icons.app_icon())
         self.set_card_size(600, 640)

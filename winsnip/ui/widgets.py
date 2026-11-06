@@ -202,17 +202,26 @@ _DESKTOP_SHOT = None
 
 
 def capture_desktop_shot() -> None:
-    """在窗口出现前抓一张整屏快照（供 Win10 风格的窗口/弹窗做高斯底使用）。"""
+    """在窗口出现前抓一张整屏快照（供设置窗口做高斯底使用）。
+
+    抓屏偶尔会失败（返回空），失败时**保留上一张成功的**，并重试几次 ——
+    否则背景会退回壁纸材质，而在不支持的机器上那就是"不透明纯色"，
+    看起来就是用户说的"背景不是透明的"（Win11 风格）。
+    """
     global _DESKTOP_SHOT
-    try:
-        screen = QGuiApplication.primaryScreen()
-        if screen is None:
-            _DESKTOP_SHOT = None
-            return
-        pm = screen.grabWindow(0)
-        _DESKTOP_SHOT = pm.toImage() if pm is not None and not pm.isNull() else None
-    except Exception:
-        _DESKTOP_SHOT = None
+    for _ in range(3):
+        try:
+            screen = QGuiApplication.primaryScreen()
+            if screen is None:
+                continue
+            pm = screen.grabWindow(0)
+            if pm is not None and not pm.isNull():
+                img = pm.toImage()
+                if not img.isNull():
+                    _DESKTOP_SHOT = img
+                    return
+        except Exception:
+            continue
 
 
 def desktop_shot():
@@ -316,7 +325,10 @@ class FluentWindow(QWidget):
         self._backdrop_stale = True
 
     def _ensure_backdrop(self) -> None:
-        if self._freeze_backdrop:
+        # 用户："win11风格背景不是透明的" —— 窗口开启动画会 _freeze_backdrop=True，
+        # 而 Win11 风格据此跳过整块背景生成，回退成不透明纯色。
+        # 真实屏幕内容走的是"快照"，与窗口位置无关，不需要冻结，这里只对原生路径生效。
+        if self._freeze_backdrop and not self._real_screen_backdrop:
             return
         if self._backdrop is not None and not getattr(self, "_backdrop_stale", False):
             return
@@ -365,13 +377,13 @@ class FluentWindow(QWidget):
                 self._backdrop = mica.backdrop(physical, 0, dpr, self._tint_strength,
                                                acrylic=theme.uses_acrylic)
         except Exception:
-            self._backdrop = None
-            self._backdrop_stale = False
             import logging as _lg
 
-            _lg.getLogger(__name__).info(
-                "window backdrop rebuilt: opacity=%s",
-                getattr(settings, "backdrop_opacity", None))
+            _lg.getLogger(__name__).exception(
+                "backdrop 生成失败（style=%s, real_screen=%s）",
+                theme.resolved_style, getattr(self, "_real_screen_backdrop", None))
+            self._backdrop = None
+            self._backdrop_stale = False
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
