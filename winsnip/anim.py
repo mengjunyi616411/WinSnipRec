@@ -481,8 +481,10 @@ def minimize_window_animated(window: QWidget, *, on_finished=None,
     origin = window.geometry()
     target = minimize_target(window)
 
-    ghost = _acquire_ghost(snapshot, 14.0)
-    window.showMinimized()
+    # 圆角必须和真窗口一致：之前写死 14，而主窗口 Win11 是 8、Win10 是 0，
+    # radius 是 property（不是方法）；Win11 是 8、Win10 是 0。
+    ghost_radius = float(getattr(window, "radius", 8))
+    ghost = _acquire_ghost(snapshot, ghost_radius)
 
     finished_flag = {"done": False}
 
@@ -505,11 +507,11 @@ def minimize_window_animated(window: QWidget, *, on_finished=None,
         ghost.show()
         ghost.play(origin, target, duration, cleanup)
         ghost.repaint()
+        # 幽灵先出现在屏幕上，再让真窗口最小化 —— 反过来的话中间会有一帧
+        # 两边都不存在的空档，观感就是闪一下（用户说的"抽搐"）。
+        window.showMinimized()
     except Exception:
         fall_back()
-
-    # One turn of the event loop: the ghost is on screen at full size by then.
-
 
 def fade_in(widget: QWidget, *, duration: int = DURATION_NORMAL, start: float = 0.0,
             effect_owner: QWidget | None = None) -> QGraphicsOpacityEffect | None:
