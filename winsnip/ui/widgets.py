@@ -1901,6 +1901,26 @@ class FluentComboBox(QComboBox):
             container.setContentsMargins(0, 0, 0, 0)
 
     # ------------------------------------------------------------------ #
+    def _content_width(self) -> int:
+        """列表里最长一项需要的宽度（含左侧蓝条和左右内边距）。
+
+        用户："字要显示完全"。之前把弹窗宽度写死成"和控件一样宽"，
+        「自绘（带动画）」「经典（壁纸）」这类长文案就被省略号截断了。
+        """
+        view = self.view()
+        if view is None:
+            return 0
+        try:
+            hint = int(view.sizeHintForColumn(0))
+        except Exception:
+            hint = 0
+        if hint <= 0:
+            fm = self.fontMetrics()
+            for index in range(self.count()):
+                hint = max(hint, fm.horizontalAdvance(self.itemText(index)))
+        # 蓝条 4px + 间距 + 左右 padding（Win11 是 3px 8px 3px 18px）
+        return hint + 32
+
     def _centred_geometry(self, container) -> QRect:
         """The popup geometry with its vertical centre on the combo's centre.
 
@@ -1917,7 +1937,8 @@ class FluentComboBox(QComboBox):
             # 多出来的高度在列表下面留白，换来的是真正的正方形卡片。
             # 用户："菜单要和控件一样宽度" —— 不再把宽度拉成正方形，直接用容器原始宽度
             # （Qt 给的弹窗宽度就等于控件宽度）；高度保持列表内容需要的高度。
-            wanted_w = final.width()
+            # 用户："字要显示完全" —— 至少和控件一样宽，内容更长时按内容撑开。
+            wanted_w = max(final.width(), self._content_width())
             wanted_h = final.height()
             wanted_x = final.x()
             wanted_y = final.y()
