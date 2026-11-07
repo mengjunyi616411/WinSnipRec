@@ -63,6 +63,9 @@ class _Row(QWidget):
 class SettingsWindow(FluentWindow):
     applied = Signal()
     devices_ready = Signal(object)   # 后台扫描完成后回主线程
+    # 后台线程查完更新后用这个信号回主线程（QTimer.singleShot 在无事件循环的
+    # 线程里不会触发，之前就是这么一直卡在"检查中…"）。
+    update_ready = Signal(object, str)
     closed = Signal()
 
     def __init__(self) -> None:
@@ -116,6 +119,7 @@ class SettingsWindow(FluentWindow):
         # 设备下拉的状态与后台扫描回调连接，必须早于 _build_rows()
         self._device_rows: list[tuple[QComboBox, str, bool]] = []
         self.devices_ready.connect(self._on_devices_ready)
+        self.update_ready.connect(self._on_update_ready)
 
         self._build_rows()
         self._add_search_box()
@@ -282,6 +286,32 @@ class SettingsWindow(FluentWindow):
             _t("最小化动画"),
             _t("跟随系统：系统报告可播就用原生；原生播不出来时改选「自绘（带动画）」"),
             self.minimize_anim_combo)
+
+        self._section(_t("更新"))
+        from PySide6.QtWidgets import QLineEdit
+
+        self.update_target_edit = QLineEdit(self)
+        self.update_target_edit.setText(
+            str(getattr(settings, "update_target", "") or ""))
+        self.update_target_edit.setPlaceholderText("owner/repo 或 JSON 地址")
+        self.update_target_edit.setMinimumWidth(220)
+        self.update_target_edit.editingFinished.connect(
+            lambda: self._set("update_target",
+                              self.update_target_edit.text().strip()))
+        self._add_row(
+            _t("更新源"),
+            _t("GitHub 填 owner/repo（如 yourname/WinSnipRec）；也可以填一个 version JSON 的完整 URL"),
+            self.update_target_edit)
+
+        self.update_status = QLabel(_t("尚未检查"), self)
+        self.update_status.setFont(ui_font(12))
+        self.update_button = FluentButton(_t("检查"), self)
+        self.update_button.setFixedHeight(36)
+        self.update_button.clicked.connect(self._check_update)
+        self._add_row(
+            _t("检查更新"),
+            _t("从 GitHub Releases 查询是否有新版本（不会自动下载安装）"),
+            self.update_button)
 
         self._section(_t("录制"))
         self.fps_combo = FluentComboBox(self)
@@ -512,6 +542,50 @@ class SettingsWindow(FluentWindow):
         self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_hint.setVisible(False)
         self.body_layout.insertWidget(1, self._empty_hint)
+
+    def _check_update(self) -> None:
+        """后台线程查一次更新，结果用信号回主线程弹 Toast。"""
+        import threading
+    
+        from .. import update as update_mod
+    
+        source = str(getattr(settings, "update_source", "github") or "github")
+        target = str(getattr(settings, "update_target", "") or "")
+        try:
+            self.update_button.setEnabled(False)
+            self.update_status.setText(_t("检查中…"))
+        except Exception:
+            pass
+    
+        def work() -> None:
+            try:
+                info, message = update_mod.check(source, target)
+            except Exception as exc:
+                info, message = None, f"检查失败：{exc}"
+            try:
+                self.update_ready.emit(info, message)
+            except RuntimeError:
+                pass
+    
+        threading.Thread(target=work, daemon=True).start()
+    
+    def _on_update_ready(self, info, message: str) -> None:
+        """主线程：恢复按钮、写状态、必要时弹 Toast。"""
+        from .widgets import show_toast
+    
+        try:
+            self.update_button.setEnabled(True)
+            self.update_status.setText(message)
+        except Exception:
+            pass
+        if info is None:
+            show_toast(_t("检查更新"), message, "info", duration=3600)
+            return
+        show_toast(
+            f"发现新版本 {info.version}",
+            message + ("    点击打开下载页" if info.url else ""),
+            "arrow-down", duration=6000,
+            on_click=(lambda u=info.url: _open_url(u)) if info.url else None)
 
     def _unlock_dev_mode(self) -> None:
         """搜索框输入开发者口令后解锁测试工具。"""
@@ -946,6 +1020,17 @@ class SettingsWindow(FluentWindow):
         settings.save()
         super().closeEvent(event)
         self.closed.emit()
+
+
+def _open_url(url: str) -> None:
+    """用系统默认浏览器打开链接（打不开时什么也不做，别让它抛）。"""
+    try:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        QDesktopServices.openUrl(QUrl(url))
+    except Exception:
+        pass
 
 
 def producer_name() -> str:

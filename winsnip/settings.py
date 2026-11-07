@@ -73,7 +73,13 @@ class Settings:
     # 最小化动画来源：auto = 系统允许就用原生（默认），native = 强制原生，
     # drawn = 强制自绘。有些显示环境（远程会话 / 虚拟显示器）系统报告动画为开
     # 但实际上不播，此时只有 drawn 能看见动画。
-    minimize_animation: str = "auto"             # unlocked by typing the phrase in settings search
+    minimize_animation: str = "auto"
+    # 检查更新：source = github（查 Releases API）| manifest（你自己的 JSON）
+    update_source: str = "github"
+    # github 时填 "owner/repo"；manifest 时填 JSON 的完整 URL
+    update_target: str = ""
+    # 启动后是否静默检查一次（没配置 update_target 时不会联网）
+    update_check_on_start: bool = False             # unlocked by typing the phrase in settings search
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja
     onboarded: bool = False               # has the first-run guide been shown
     backdrop: str = "auto"                # real DWM blur: auto | native | classic
