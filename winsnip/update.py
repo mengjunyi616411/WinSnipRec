@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -88,10 +89,80 @@ def is_newer(candidate: str, current: str | None = None) -> bool:
     return new > old
 
 
+def system_proxy() -> str:
+    """读 Windows「Internet 选项」里配置的代理（Clash/v2ray 的"系统代理"就写这里）。
+
+    urllib 自己只认环境变量和 macOS/Linux 的设置，不读 Windows 这个键，
+    所以用户开了系统代理程序仍然直连 —— 这里补上。
+    """
+    if sys.platform != "win32":
+        return ""
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
+        try:
+            enabled, _ = winreg.QueryValueEx(key, "ProxyEnable")
+            if not enabled:
+                return ""
+            server, _ = winreg.QueryValueEx(key, "ProxyServer")
+        finally:
+            key.Close()
+    except Exception:
+        return ""
+    server = str(server or "").strip()
+    if not server:
+        return ""
+    # "http=127.0.0.1:7890;https=127.0.0.1:7890" 或 "127.0.0.1:7890"
+    for part in server.split(";"):
+        if "=" in part:
+            name, _, value = part.partition("=")
+            if name.strip().lower() in ("http", "https"):
+                server = value.strip()
+                break
+    if "://" not in server:
+        server = "http://" + server
+    return server
+
+
+def proxy_url() -> str:
+    """当前生效的代理地址。空字符串表示直连。
+
+    配置（设置里的「网络代理」）：
+      留空 / system  -> 跟随 Windows 系统代理
+      direct         -> 强制直连
+      http://...     -> 手动指定
+    """
+    try:
+        from .settings import settings as _settings
+
+        mode = str(getattr(_settings, "update_proxy", "") or "").strip()
+    except Exception:
+        mode = ""
+    if mode.lower() == "direct":
+        return ""
+    if mode and mode.lower() != "system":
+        return mode if "://" in mode else "http://" + mode
+    return system_proxy()
+
+
+def _build_opener():
+    """按当前代理配置建 opener。空配置也用 ProxyHandler({}) 显式关掉环境变量代理。"""
+    address = proxy_url()
+    if address:
+        handler = urllib.request.ProxyHandler({"http": address, "https": address})
+    else:
+        handler = urllib.request.ProxyHandler({})
+    return urllib.request.build_opener(handler)
+
+
 def _fetch_json(url: str, timeout: float = TIMEOUT) -> object:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT,
                                                    "Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    opener = _build_opener()
+    with opener.open(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8", "replace"))
 
 

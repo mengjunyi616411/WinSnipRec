@@ -82,7 +82,10 @@ class Settings:
     update_check_on_start: bool = False
     # 下载加速前缀（裸网直连 github.com 慢）。实测 ghfast.top 快 2.5 倍；
     # 失效时清空这里就会退回直连。
-    update_mirror: str = "https://ghfast.top/"             # unlocked by typing the phrase in settings search
+    update_mirror: str = "https://ghfast.top/"
+    # 网络代理：留空或 system = 跟随 Windows 系统代理；direct = 强制直连；
+    # 也可以直接填 http://127.0.0.1:7890（Clash 之类）。
+    update_proxy: str = ""             # unlocked by typing the phrase in settings search
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja
     onboarded: bool = False               # has the first-run guide been shown
     backdrop: str = "auto"                # real DWM blur: auto | native | classic

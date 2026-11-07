@@ -316,6 +316,19 @@ class SettingsWindow(FluentWindow):
             _t("GitHub 下载加速前缀，留空则直连。实测 ghfast.top 比直连快约 2.5 倍"),
             self.update_mirror_edit)
 
+        self.update_proxy_edit = QLineEdit(self)
+        self.update_proxy_edit.setText(
+            str(getattr(settings, "update_proxy", "") or ""))
+        self.update_proxy_edit.setPlaceholderText("留空=跟随系统，direct=直连，或 http://127.0.0.1:7890")
+        self.update_proxy_edit.setMinimumWidth(260)
+        self.update_proxy_edit.editingFinished.connect(
+            lambda: self._set("update_proxy",
+                              self.update_proxy_edit.text().strip()))
+        self._add_row(
+            _t("网络代理"),
+            _t("留空跟随 Windows 系统代理（Clash/v2ray 的系统代理模式会自动生效）；direct 强制直连；也可填 http://127.0.0.1:7890"),
+            self.update_proxy_edit)
+
         self.update_status = QLabel(_t("尚未检查"), self)
         self.update_status.setFont(ui_font(12))
         self.update_button = FluentButton(_t("检查"), self)
