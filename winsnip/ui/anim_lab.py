@@ -8,7 +8,7 @@ place in the UI that triggers it.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout)
 
 from .. import __version__, anim, winapi
 from ..settings import settings
@@ -55,7 +55,8 @@ class AnimLabWindow(FluentWindow):
     def __init__(self, parent=None) -> None:
         super().__init__(parent, resizable=False)
         self.setWindowTitle("动画测试")
-        self.set_card_size(560, 480)
+        self.set_card_size(560, 660)
+        # 用户截图：右侧漏出一块壁纸 —— 内容把窗口撑宽了，卡片却只画 560。
 
         margin = self._margin + 20
         layout = QVBoxLayout(self)
@@ -75,6 +76,9 @@ class AnimLabWindow(FluentWindow):
             b = FluentButton(text, self)
             b.setFixedHeight(38)
             b.clicked.connect(slot)
+            # 不加 Expanding 的话按钮按 sizeHint 居中，长短不一（用户截图里很明显）。
+            b.setSizePolicy(QSizePolicy.Policy.Expanding,
+                            QSizePolicy.Policy.Fixed)
             layout.addWidget(b)
             return b
 
@@ -108,6 +112,10 @@ class AnimLabWindow(FluentWindow):
         self.report.setReadOnly(True)
         self.report.setFont(ui_font(12))
         self.report.setFixedHeight(150)
+        # QTextEdit 的 sizeHint 很宽，不压住会把整个窗口撑大。
+        self.report.setMinimumWidth(0)
+        self.report.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                     QSizePolicy.Policy.Fixed)
         self.report.setPlaceholderText("点上面的「运行动画自检」")
         layout.addWidget(self.report)
         layout.addStretch(1)
@@ -116,6 +124,11 @@ class AnimLabWindow(FluentWindow):
         close.setFixedHeight(38)
         close.clicked.connect(self.close)
         layout.addWidget(close)
+
+        # 布局建完后按卡片尺寸锁死窗口：只要有一个子控件 sizeHint 偏大，
+        # 窗口就会被撑开，而卡片是按 set_card_size 画的，右边就会漏出背景。
+        self.resize(self.card_size())
+        self.setFixedSize(self.card_size())
 
         self._sync_info()
 
