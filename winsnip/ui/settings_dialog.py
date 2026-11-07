@@ -329,15 +329,17 @@ class SettingsWindow(FluentWindow):
             _t("留空跟随 Windows 系统代理（Clash/v2ray 的系统代理模式会自动生效）；direct 强制直连；也可填 http://127.0.0.1:7890"),
             self.update_proxy_edit)
 
-        self.update_status = QLabel(_t("尚未检查"), self)
-        self.update_status.setFont(ui_font(12))
         self.update_button = FluentButton(_t("检查"), self)
         self.update_button.setFixedHeight(36)
         self.update_button.clicked.connect(self._check_update)
         self._add_row(
             _t("检查更新"),
-            _t("从 GitHub Releases 查询是否有新版本（不会自动下载安装）"),
+            _t("尚未检查"),
             self.update_button)
+        # 状态文字就用这一行的副标题：以前那个 QLabel 从来没加进布局，
+        # 所以界面上永远是空的（用户反馈"还没检查"看不到）。
+        self._update_row = self._rows[-1]
+        self.update_status = self._update_row.subtitle
 
         self._section(_t("录制"))
         self.fps_combo = FluentComboBox(self)
