@@ -77,7 +77,7 @@ class Settings:
     # 检查更新：source = github（查 Releases API）| manifest（你自己的 JSON）
     update_source: str = "github"
     # github 时填 "owner/repo"；manifest 时填 JSON 的完整 URL
-    update_target: str = ""
+    update_target: str = "mengjunyi616411/WinSnipRec"
     # 启动后是否静默检查一次（没配置 update_target 时不会联网）
     update_check_on_start: bool = False             # unlocked by typing the phrase in settings search
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja

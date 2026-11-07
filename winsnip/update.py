@@ -26,6 +26,9 @@ from . import __version__
 USER_AGENT = f"WinSnipRec/{__version__} (+https://github.com)"
 TIMEOUT = 8.0
 
+#: 官方仓库；用户没配置「更新源」时查这里。
+DEFAULT_REPO = "mengjunyi616411/WinSnipRec"
+
 
 @dataclass(frozen=True)
 class UpdateInfo:
@@ -118,7 +121,7 @@ def check(source: str = "github", target: str = "", *,
         except Exception as exc:
             return None, f"检查失败：{type(exc).__name__}: {exc}"
     else:
-        repo = target or "OWNER/REPO"
+        repo = target or DEFAULT_REPO
         if "/" not in repo or "OWNER" in repo:
             return None, "还没配置仓库地址（设置里的「更新源」）"
         try:

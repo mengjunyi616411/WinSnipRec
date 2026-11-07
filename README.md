@@ -4,7 +4,7 @@
 
 [English](README.en.md) · [中文](README.md) · [更新日志](CHANGELOG.md)
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/mengjunyi616411/WinSnipRec/actions/workflows/ci.yml/badge.svg)](https://github.com/mengjunyi616411/WinSnipRec/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-lightgrey)](#)

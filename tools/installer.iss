@@ -13,7 +13,7 @@
 #define AppShortName   "截图工具"
 #define AppExeName     "截图工具.exe"
 #define AppPublisher   "WinSnipRec contributors"
-#define AppUrl         "https://github.com/OWNER/REPO"
+#define AppUrl         "https://github.com/mengjunyi616411/WinSnipRec"
 #ifndef AppVersion
   #define AppVersion "1.4.0"
 #endif
