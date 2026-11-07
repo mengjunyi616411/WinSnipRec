@@ -948,6 +948,14 @@ class SettingsWindow(FluentWindow):
         self.closed.emit()
 
 
+def producer_name() -> str:
+    """制作人署名。
+
+    用户要求：进入开发者模式时显示「蒙峻毅」，关闭时显示「天童 アリス」。
+    """
+    return "蒙峻毅" if getattr(settings, "dev_mode", False) else "天童 アリス"
+
+
 class AboutWindow(FluentWindow):
     def __init__(self) -> None:
         super().__init__(None)
@@ -993,7 +1001,9 @@ class AboutWindow(FluentWindow):
         layout.addWidget(description)
 
         layout.addSpacing(2)
-        self.producer = QLabel(_t("制作人：天童 アリス"), body)
+        # 用户要求：开发者模式下制作人显示"蒙峻毅"，普通模式显示"天童 アリス"。
+        who = producer_name()
+        self.producer = QLabel(_t("制作人：") + who, body)
         self.producer.setObjectName("aboutProducer")
         self.producer.setFont(ui_font(12, 600))
         self.producer.setAlignment(Qt.AlignmentFlag.AlignCenter)
