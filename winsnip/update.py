@@ -50,6 +50,34 @@ def _version_tuple(text: str) -> tuple[int, ...]:
     return tuple(int(p) for p in parts) if parts else (0,)
 
 
+def normalize_target(text: str) -> str:
+    """把用户填的东西整理成 owner/repo。
+
+    用户很自然地会把整个网址贴进来（实测就有人填
+    https://github.com/owner/repo），而 API 只认 owner/repo —— 之前直接拼进
+    URL 就会拼出 /repos/https://github.com/... 然后 404。这里统一收口：
+      https://github.com/owner/repo(.git)  -> owner/repo
+      git@github.com:owner/repo.git        -> owner/repo
+      owner/repo                           -> owner/repo
+    """
+    value = (text or "").strip()
+    if not value:
+        return ""
+    match = re.search(r"github\.com[/:]+([^/\s]+)/([^/\s#?]+)", value)
+    if match:
+        owner, repo = match.group(1), match.group(2)
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+        return f"{owner}/{repo}"
+    # 已经是 owner/repo 形态就直接用（顺手去掉 .git）
+    if "/" in value and "://" not in value and "@" not in value:
+        parts = [p for p in value.split("/") if p]
+        if len(parts) >= 2:
+            repo = parts[1][:-4] if parts[1].endswith(".git") else parts[1]
+            return f"{parts[0]}/{repo}"
+    return value
+
+
 def is_newer(candidate: str, current: str | None = None) -> bool:
     """Whether ``candidate`` is a strictly newer version than ``current``."""
     new = _version_tuple(candidate)
@@ -121,7 +149,7 @@ def check(source: str = "github", target: str = "", *,
         except Exception as exc:
             return None, f"检查失败：{type(exc).__name__}: {exc}"
     else:
-        repo = target or DEFAULT_REPO
+        repo = normalize_target(target) or DEFAULT_REPO
         if "/" not in repo or "OWNER" in repo:
             return None, "还没配置仓库地址（设置里的「更新源」）"
         try:
