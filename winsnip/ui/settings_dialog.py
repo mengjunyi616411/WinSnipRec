@@ -303,6 +303,19 @@ class SettingsWindow(FluentWindow):
             _t("GitHub 填 owner/repo（如 yourname/WinSnipRec）；也可以填一个 version JSON 的完整 URL"),
             self.update_target_edit)
 
+        self.update_mirror_edit = QLineEdit(self)
+        self.update_mirror_edit.setText(
+            str(getattr(settings, "update_mirror", "https://ghfast.top/") or ""))
+        self.update_mirror_edit.setPlaceholderText("https://ghfast.top/")
+        self.update_mirror_edit.setMinimumWidth(220)
+        self.update_mirror_edit.editingFinished.connect(
+            lambda: self._set("update_mirror",
+                              self.update_mirror_edit.text().strip()))
+        self._add_row(
+            _t("下载镜像"),
+            _t("GitHub 下载加速前缀，留空则直连。实测 ghfast.top 比直连快约 2.5 倍"),
+            self.update_mirror_edit)
+
         self.update_status = QLabel(_t("尚未检查"), self)
         self.update_status.setFont(ui_font(12))
         self.update_button = FluentButton(_t("检查"), self)
@@ -583,9 +596,9 @@ class SettingsWindow(FluentWindow):
             return
         show_toast(
             f"发现新版本 {info.version}",
-            message + ("    点击打开下载页" if info.url else ""),
+            message + ("    点击用镜像下载" if _mirror_prefix() else "    点击打开下载页") if info.url else "",
             "arrow-down", duration=6000,
-            on_click=(lambda u=info.url: _open_url(u)) if info.url else None)
+            on_click=(lambda u=info.url: _open_url(update_mirror_url(u))) if info.url else None)
 
     def _unlock_dev_mode(self) -> None:
         """搜索框输入开发者口令后解锁测试工具。"""
@@ -1020,6 +1033,18 @@ class SettingsWindow(FluentWindow):
         settings.save()
         super().closeEvent(event)
         self.closed.emit()
+
+
+def _mirror_prefix() -> str:
+    """当前下载加速前缀（空表示直连）。"""
+    return str(getattr(settings, "update_mirror", "") or "").strip()
+
+
+def update_mirror_url(url: str) -> str:
+    """给下载链接套上加速前缀。"""
+    from ..update import mirror_url
+
+    return mirror_url(url, _mirror_prefix())
 
 
 def _open_url(url: str) -> None:

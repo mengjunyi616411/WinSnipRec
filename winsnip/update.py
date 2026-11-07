@@ -128,6 +128,24 @@ def _from_manifest(url: str, timeout: float) -> UpdateInfo | None:
                       url=str(data.get("url") or "").strip())
 
 
+def mirror_url(url: str, prefix: str) -> str:
+    """给 GitHub 下载链接套一个加速前缀。
+
+    用户反馈裸网访问 github.com 不稳定。实测：直连能下但慢（2552ms），
+    ghfast.top 前缀 1026ms（快 2.5 倍），gh-proxy.com 1771ms；
+    gh.llkk.cc / hub.gitmirror.com / ghp.ci / moeyy.xyz 已经死掉。
+    所以前缀做成可配置，默认给 ghfast.top，失效时清空即可回到直连。
+    """
+    prefix = (prefix or "").strip()
+    if not prefix or not url:
+        return url
+    if not prefix.endswith("/"):
+        prefix += "/"
+    if url.startswith(prefix):
+        return url
+    return prefix + url
+
+
 def check(source: str = "github", target: str = "", *,
           timeout: float = TIMEOUT) -> tuple[UpdateInfo | None, str]:
     """Look for a newer release.

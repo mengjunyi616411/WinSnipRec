@@ -79,7 +79,10 @@ class Settings:
     # github 时填 "owner/repo"；manifest 时填 JSON 的完整 URL
     update_target: str = "mengjunyi616411/WinSnipRec"
     # 启动后是否静默检查一次（没配置 update_target 时不会联网）
-    update_check_on_start: bool = False             # unlocked by typing the phrase in settings search
+    update_check_on_start: bool = False
+    # 下载加速前缀（裸网直连 github.com 慢）。实测 ghfast.top 快 2.5 倍；
+    # 失效时清空这里就会退回直连。
+    update_mirror: str = "https://ghfast.top/"             # unlocked by typing the phrase in settings search
     language: str = "system"              # system | zh-Hans | zh-Hant | en | ja
     onboarded: bool = False               # has the first-run guide been shown
     backdrop: str = "auto"                # real DWM blur: auto | native | classic
