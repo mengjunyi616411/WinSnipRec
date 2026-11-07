@@ -16,6 +16,39 @@ from ..theme import theme, ui_font
 from .widgets import FluentButton, FluentComboBox, FluentWindow, ToggleSwitch, show_toast
 
 
+def _sound_path():
+    """assets/sounds/test_tone.wav 的位置（打包后 / 源码 / exe 旁边都试）。"""
+    import sys
+    from pathlib import Path
+
+    candidates: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(Path(meipass))
+    candidates.append(Path(__file__).resolve().parents[2])
+    candidates.append(Path(sys.executable).resolve().parent)
+    for root in candidates:
+        p = root / "assets" / "sounds" / "test_tone.wav"
+        if p.is_file():
+            return str(p)
+    return None
+
+
+def play_test_sound() -> bool:
+    """异步播放测试音频。返回是否成功开始播放。"""
+    path = _sound_path()
+    if path is None:
+        return False
+    try:
+        import winsound
+
+        winsound.PlaySound(path,
+                           winsound.SND_FILENAME | winsound.SND_ASYNC)
+        return True
+    except Exception:
+        return False
+
+
 class AnimLabWindow(FluentWindow):
     """Preview each animation with the current style/theme."""
 
@@ -48,6 +81,7 @@ class AnimLabWindow(FluentWindow):
         button("播放窗口开启动画", self._play_window)
         button("播放下拉展开动画", self._play_popup)
         button("播放 Toast", self._play_toast)
+        button("播放测试音", self._play_sound)
         button("运行动画自检", self._run_selfcheck)
 
         row = QHBoxLayout()
@@ -106,6 +140,13 @@ class AnimLabWindow(FluentWindow):
 
     def _play_popup(self) -> None:
         self.combo.showPopup()
+
+    def _play_sound(self) -> None:
+        """按钮：播放 assets/sounds/test_tone.wav。"""
+        if play_test_sound():
+            show_toast("正在播放测试音", "assets/sounds/test_tone.wav", "check", duration=1800)
+        else:
+            show_toast("播放失败", "找不到音频文件或不支持该格式", "info", duration=2600)
 
     def _run_selfcheck(self) -> None:
         """实测几项动画指标，把结论写进下面的文本框。
