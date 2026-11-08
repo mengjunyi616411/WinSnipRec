@@ -2,6 +2,45 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.1] - 2026-11-08
+
+### 新增
+
+- **检查更新改成 Alert 弹窗**：点「检查」弹出独立窗口，依次显示
+  「尚未检查」→「检查中…」→ 结果；设置页那一行的副标题同时保留并同步更新，
+  关掉弹窗也能看到上次结果。查到新版本时弹窗里出现「打开下载页」。
+- **下载镜像**（设置 → 更新）：默认 `https://ghfast.top/`，给 Release 下载链接套加速前缀，
+  Toast 和弹窗里的下载按钮都走镜像；留空即直连。
+- **网络代理**（设置 → 更新）：留空或 `system` 跟随 Windows 系统代理，`direct` 强制直连，
+  也可直接填 `http://127.0.0.1:7890`。
+- 「更新源」「下载镜像」默认值已填好（仓库完整网址 + ghfast.top），开箱即用。
+- 开发者模式新增**声音播放测试**（`assets/sounds/test_tone.wav`，由 ffmpeg 从 mp3 转出）
+  和**动画自检**（实测 DWM 合成、幽灵窗口合成耗时、下拉几何是否恒定等）。
+
+### 修复
+
+- **「检查更新」的状态文字一直不可见**：`update_status` 创建后从没加进布局，
+  界面上永远空白。改成复用「检查更新」那一行的副标题。
+- **填完整 GitHub 网址会报「找不到该仓库的 Release」**：GitHub API 只认 `owner/repo`，
+  网址被直接拼进请求路径就是 404。新增 `normalize_target()` 统一各种写法
+  （完整网址 / 带 .git / ssh 形式 / owner/repo）。
+- **Alert 的「立即检查」按钮一按就恢复**：`_trigger` 先禁用按钮，紧接着调用的
+  `set_status()` 结尾又把它启用。改成先设状态再禁用。
+- **下拉菜单圆角写死 14** 导致幽灵窗口比真窗口圆：改成读窗口自己的 `radius`。
+- **自绘最小化抽搐**：窗口几何改为固定（起点∪终点并集）+ 内部按进度绘制，
+  幽灵窗口预热，圆角与真窗口一致，`showMinimized()` 挪到 `show()` 之后，
+  时长 240 → 420ms。
+- **Win11 风格背景不透明**：原生 DWM 背景不生效时会回退成纯色，
+  且窗口开启动画会把 `_freeze_backdrop` 置真后跳过整块背景生成。
+- **`UnboundLocalError: cannot access local variable 'log'`**：给「自绘」分支加日志时
+  把 `log.xxx` 写在了 `log = logging.getLogger(...)` 之前。
+
+### 变更
+
+- 打包：`build_exe.ps1 -Fast`（不 `--clean`、跳过裁剪）、`installer.iss` 压缩
+  `lzma2/max`+solid → `lzma2/fast`+非 solid（255 → 124 秒）、裁剪补 `libscipy_openblas*`。
+- 新增 `tools/upload_release.py`：建 Release 并上传安装包，正文自动取 CHANGELOG 对应版本段。
+
 ## [1.4.0] - 2026-11-07
 
 ### 新增
