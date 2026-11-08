@@ -23,6 +23,7 @@ import urllib.request
 from dataclasses import dataclass
 
 from . import __version__
+from .i18n import t as _t
 
 USER_AGENT = f"WinSnipRec/{__version__} (+https://github.com)"
 TIMEOUT = 8.0
@@ -49,6 +50,17 @@ def _version_tuple(text: str) -> tuple[int, ...]:
     cleaned = (text or "").strip().lstrip("vV")
     parts = re.findall(r"\d+", cleaned.split("-")[0].split("+")[0])
     return tuple(int(p) for p in parts) if parts else (0,)
+
+
+def _paren(text: str) -> str:
+    """用当前语言的括号包起来。中文/日文用全角，其它用半角。"""
+    try:
+        from .i18n import language as _language
+
+        wide = _language() in ("zh-Hans", "zh-Hant", "ja")
+    except Exception:
+        wide = True
+    return f"（{text}）" if wide else f"({text})"
 
 
 def normalize_target(text: str) -> str:
@@ -228,30 +240,30 @@ def check(source: str = "github", target: str = "", *,
     target = (target or "").strip()
     if source == "manifest":
         if not target:
-            return None, "没有配置更新地址"
+            return None, _t("没有配置更新地址")
         try:
             info = _from_manifest(target, timeout)
         except urllib.error.HTTPError as exc:
-            return None, f"更新地址返回 HTTP {exc.code}"
+            return None, f"{_t('更新地址返回 HTTP')} {exc.code}"
         except urllib.error.URLError as exc:
-            return None, f"连不上更新地址：{exc.reason}"
+            return None, f"{_t('连不上更新地址')}：{exc.reason}"
         except Exception as exc:
-            return None, f"检查失败：{type(exc).__name__}: {exc}"
+            return None, f"{_t('检查失败')}：{type(exc).__name__}: {exc}"
     else:
         repo = normalize_target(target) or DEFAULT_REPO
         if "/" not in repo or "OWNER" in repo:
-            return None, "还没配置仓库地址（设置里的「更新源」）"
+            return None, _t("还没配置仓库地址") + _paren(_t("更新源"))
         try:
             info = _from_github(repo, timeout)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
-                return None, "找不到该仓库的 Release（可能还没发布）"
-            return None, f"GitHub API 返回 HTTP {exc.code}"
+                return None, _t("找不到该仓库的 Release") + _paren(_t("可能还没发布"))
+            return None, f"GitHub API HTTP {exc.code}"
         except urllib.error.URLError as exc:
-            return None, f"连不上 GitHub：{exc.reason}"
+            return None, f"{_t('连不上 GitHub')}：{exc.reason}"
         except Exception as exc:
-            return None, f"检查失败：{type(exc).__name__}: {exc}"
+            return None, f"{_t('检查失败')}：{type(exc).__name__}: {exc}"
 
     if info is None:
-        return None, f"已是最新版（{__version__}）"
-    return info, f"发现新版本 {info.version}（当前 {__version__}）"
+        return None, f"{_t('已是最新版')}{_paren(__version__)}"
+    return info, f"{_t('发现新版本')} {info.version} {_paren(_t('当前版本') + ' ' + __version__)}"

@@ -439,6 +439,51 @@ TABLE: dict[str, tuple[str, str, str]] = {
          "Windows 11 の切り取りツールの録画体験を Windows 10 で再現します。\n"
          "範囲 / ウィンドウ / 全画面 · 一時停止と再開 · マイクとシステム音声 · H.264 MP4。\n"
          "UI、アイコン、配色は Windows 11 Fluent に準拠しています。"),
+
+    # ---- 检查更新 ----
+    "更新": ("更新", "Updates", "アップデート"),
+    "检查更新": ("檢查更新", "Check for updates", "アップデートを確認"),
+    "尚未检查": ("尚未檢查", "Not checked yet", "未確認"),
+    "立即检查": ("立即檢查", "Check now", "今すぐ確認"),
+    "打开下载页": ("開啟下載頁", "Open download page", "ダウンロードページを開く"),
+    "检查中…": ("檢查中…", "Checking…", "確認中…"),
+    "检查失败": ("檢查失敗", "Check failed", "確認に失敗しました"),
+    "当前版本": ("目前版本", "Current version", "現在のバージョン"),
+    "发现新版本": ("發現新版本", "New version available", "新しいバージョンがあります"),
+    "点击打开下载页": ("點擊開啟下載頁", "Click to open the download page", "クリックでダウンロードページを開く"),
+    "点击用镜像下载": ("點擊用鏡像下載", "Click to download via mirror", "クリックでミラーからダウンロード"),
+    "更新源": ("更新來源", "Update source", "更新元"),
+    "下载镜像": ("下載鏡像", "Download mirror", "ダウンロードミラー"),
+    "网络代理": ("網路代理", "Network proxy", "ネットワークプロキシ"),
+    "从 GitHub Releases 查询是否有新版本（不会自动下载安装）":
+        ("從 GitHub Releases 查詢是否有新版本（不會自動下載安裝）",
+         "Query GitHub Releases for a newer version (never downloads or installs)",
+         "GitHub Releases に新しいバージョンがあるか確認します（自動ダウンロードはしません）"),
+    "GitHub 下载加速前缀，留空则直连。实测 ghfast.top 比直连快约 2.5 倍":
+        ("GitHub 下載加速前綴，留空則直連。實測 ghfast.top 比直連快約 2.5 倍",
+         "GitHub download accelerator prefix; leave empty for direct. ghfast.top measured ~2.5x faster",
+         "GitHub ダウンロード高速化プレフィックス。空欄なら直接接続。ghfast.top は約 2.5 倍高速"),
+    "留空跟随 Windows 系统代理（Clash/v2ray 的系统代理模式会自动生效）；direct 强制直连；也可填 http://127.0.0.1:7890":
+        ("留空跟隨 Windows 系統代理（Clash/v2ray 的系統代理模式會自動生效）；direct 強制直連；也可填 http://127.0.0.1:7890",
+         "Empty follows the Windows system proxy (Clash/v2ray system proxy works automatically); direct forces direct; or enter http://127.0.0.1:7890",
+         "空欄なら Windows のシステムプロキシに従う（Clash/v2ray のシステムプロキシが有効）；direct で直接接続；http://127.0.0.1:7890 も可"),
+    "owner/repo 或 JSON 地址": ("owner/repo 或 JSON 位址", "owner/repo or a JSON URL", "owner/repo または JSON URL"),
+    "没有配置更新地址": ("沒有設定更新位址", "No update URL configured", "更新 URL が設定されていません"),
+    "还没配置仓库地址": ("還沒設定儲存庫位址", "Repository not configured", "リポジトリが設定されていません"),
+    "找不到该仓库的 Release": ("找不到該儲存庫的 Release", "No release found for that repository", "そのリポジトリの Release が見つかりません"),
+    "连不上更新地址": ("連不上更新位址", "Cannot reach the update URL", "更新 URL に接続できません"),
+    "连不上 GitHub": ("連不上 GitHub", "Cannot reach GitHub", "GitHub に接続できません"),
+    "已是最新版": ("已是最新版", "You are on the latest version", "最新バージョンです"),
+    "开发者模式已开启": ("開發者模式已開啟", "Developer mode enabled", "開発者モードを有効にしました"),
+    "开发者模式已关闭": ("開發者模式已關閉", "Developer mode disabled", "開発者モードを無効にしました"),
+    "测试工具已经在列表底部": ("測試工具已經在列表底部", "Test tools are at the bottom of the list", "テストツールはリストの最下部にあります"),
+    "设置底部已加入测试工具": ("設定底部已加入測試工具", "Test tools were added at the bottom of Settings", "設定の最下部にテストツールを追加しました"),
+    "重新打开设置后测试工具会消失": ("重新開啟設定後測試工具會消失", "Test tools disappear after reopening Settings", "設定を開き直すとテストツールは消えます"),
+    "环境信息已复制": ("環境資訊已複製", "Environment info copied", "環境情報をコピーしました"),
+    "已复制到剪贴板": ("已複製到剪貼簿", "Copied to clipboard", "クリップボードにコピーしました"),
+
+    "可能还没发布": ("可能還沒發布", "it may not be published yet", "まだ公開されていない可能性があります"),
+    "更新地址返回 HTTP": ("更新位址回應 HTTP", "The update URL returned HTTP", "更新 URL が返した HTTP"),
 }
 
 

@@ -15,7 +15,7 @@
 #define AppPublisher   "WinSnipRec contributors"
 #define AppUrl         "https://github.com/mengjunyi616411/WinSnipRec"
 #ifndef AppVersion
-  #define AppVersion "1.4.10"
+  #define AppVersion "1.4.11"
 #endif
 #define SourceDir      "..\dist\截图工具"
 

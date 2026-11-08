@@ -293,7 +293,7 @@ class SettingsWindow(FluentWindow):
         self.update_target_edit = QLineEdit(self)
         self.update_target_edit.setText(
             str(getattr(settings, "update_target", "") or ""))
-        self.update_target_edit.setPlaceholderText("owner/repo 或 JSON 地址")
+        self.update_target_edit.setPlaceholderText(_t("owner/repo 或 JSON 地址"))
         self.update_target_edit.setMinimumWidth(220)
         self.update_target_edit.editingFinished.connect(
             lambda: self._set("update_target",
@@ -319,7 +319,8 @@ class SettingsWindow(FluentWindow):
         self.update_proxy_edit = QLineEdit(self)
         self.update_proxy_edit.setText(
             str(getattr(settings, "update_proxy", "") or ""))
-        self.update_proxy_edit.setPlaceholderText("留空=跟随系统，direct=直连，或 http://127.0.0.1:7890")
+        self.update_proxy_edit.setPlaceholderText(
+            _t("留空跟随 Windows 系统代理（Clash/v2ray 的系统代理模式会自动生效）；direct 强制直连；也可填 http://127.0.0.1:7890"))
         self.update_proxy_edit.setMinimumWidth(260)
         self.update_proxy_edit.editingFinished.connect(
             lambda: self._set("update_proxy",
@@ -617,7 +618,7 @@ class SettingsWindow(FluentWindow):
             try:
                 info, message = update_mod.check(source, target)
             except Exception as exc:
-                info, message = None, f"检查失败：{exc}"
+                info, message = None, f"{_t('检查失败')}：{exc}"
             try:
                 self.update_ready.emit(info, message)
             except RuntimeError:
@@ -637,29 +638,30 @@ class SettingsWindow(FluentWindow):
         if info is None:
             _alert = getattr(self, "_update_alert", None)
             if _alert is not None:
-                _alert.set_status(message, f"当前版本 {__version__}")
+                _alert.set_status(message, f"{_t('当前版本')} {__version__}")
             show_toast(_t("检查更新"), message, "info", duration=3600)
             return
         show_toast(
-            f"发现新版本 {info.version}",
-            message + ("    点击用镜像下载" if _mirror_prefix() else "    点击打开下载页") if info.url else "",
+            f"{_t('发现新版本')} {info.version}",
+            message + ("    " + _t("点击用镜像下载") if _mirror_prefix()
+                       else "    " + _t("点击打开下载页")) if info.url else "",
             "arrow-down", duration=6000,
             on_click=(lambda u=info.url: _open_url(update_mirror_url(u))) if info.url else None)
         _alert2 = getattr(self, "_update_alert", None)
         if _alert2 is not None:
-            _alert2.set_status(f"发现新版本 {info.version}", message, info)
+            _alert2.set_status(f"{_t('发现新版本')} {info.version}", message, info)
 
     def _unlock_dev_mode(self) -> None:
         """搜索框输入开发者口令后解锁测试工具。"""
         from .widgets import show_toast
 
         if getattr(settings, "dev_mode", False):
-            show_toast("开发者模式已开启", "测试工具已经在列表底部", "check", duration=2400)
+            show_toast(_t("开发者模式已开启"), _t("测试工具已经在列表底部"), "check", duration=2400)
             return
         self._set("dev_mode", True)
         self.search_box.clear()
         self._build_dev_rows()
-        show_toast("开发者模式已开启", "设置底部已加入测试工具", "check", duration=2800)
+        show_toast(_t("开发者模式已开启"), _t("设置底部已加入测试工具"), "check", duration=2800)
 
     def _dev_button(self, text: str, slot) -> FluentButton:
         button = FluentButton(text, self)
@@ -708,13 +710,13 @@ class SettingsWindow(FluentWindow):
         ]
         text = "  |  ".join(rows)
         QApplication.clipboard().setText(text)
-        show_toast("环境信息已复制", text, "check", duration=3000)
+        show_toast(_t("环境信息已复制"), text, "check", duration=3000)
 
     def _disable_dev_mode(self) -> None:
         from .widgets import show_toast
 
         self._set("dev_mode", False)
-        show_toast("开发者模式已关闭", "重新打开设置后测试工具会消失", "check", duration=2600)
+        show_toast(_t("开发者模式已关闭"), _t("重新打开设置后测试工具会消失"), "check", duration=2600)
 
     def _animate_search_box(self, focused: bool) -> None:
         """聚焦/离开时给搜索框做一次高度动画（最小值与最大值一起动）。
