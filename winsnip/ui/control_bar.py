@@ -94,18 +94,23 @@ class _StopButton(QPushButton):
 class RecordControlBar(FluentWindow):
     """Always-on-top recording controls."""
 
+    #: 预备模式（框选完还没开录）下按主按钮时发这个；录制中则发 stopRequested。
+    startRequested = Signal()
     stopRequested = Signal()
     pauseRequested = Signal(bool)      # True -> pause, False -> resume
     discardRequested = Signal()
     micToggled = Signal(bool)
 
-    def __init__(self, *, mic_available: bool = True, mic_enabled: bool = False) -> None:
+    def __init__(self, *, mic_available: bool = True, mic_enabled: bool = False,
+                 preview: bool = False) -> None:
         super().__init__(None, tint_strength=0.88, open_slide=10, margin=BAR_MARGIN)
         self.setWindowFlags(
             Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        # 预备模式：主按钮显示「开始」，点了才真正开录（对应 Win11 截图工具框选后的条）
+        self._preview = preview
         self._paused = False
         self._elapsed = 0.0
         self._drag_origin: QPoint | None = None
@@ -157,7 +162,9 @@ class RecordControlBar(FluentWindow):
         layout.addWidget(self.discard_button)
 
         self.stop_button = _StopButton(self)
-        self.stop_button.clicked.connect(self.stopRequested.emit)
+        if preview:
+            self.stop_button.set_label(_t("开始"))
+        self.stop_button.clicked.connect(self._on_main_clicked)
         layout.addWidget(self.stop_button)
 
         self.setFixedSize(layout.sizeHint().width() + 4, BAR_HEIGHT + 2 * BAR_MARGIN)
@@ -176,6 +183,15 @@ class RecordControlBar(FluentWindow):
         )
         self.mic_button.set_icon_name("mic" if self.mic_button.isChecked() else "mic_off")
         self.update()
+
+    def _on_main_clicked(self) -> None:
+        """主按钮：预备模式发 startRequested 并切到录制态，录制中发 stopRequested。"""
+        if self._preview:
+            self._preview = False
+            self.stop_button.set_label(_t("停止"))
+            self.startRequested.emit()
+        else:
+            self.stopRequested.emit()
 
     def _on_pulse(self) -> None:
         self._pulse_on = not self._pulse_on

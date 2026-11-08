@@ -2,6 +2,25 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.4] - 2026-11-08
+
+### 新增
+
+- **框选完区域后先出「开始」准备条，点开始才真正录制**（用户指明参考图是
+  「框选录屏区域时出现的」，不是录制中的控制条）：
+  - `RecordControlBar` 新增 `preview` 模式：主按钮显示「开始」，
+    点击后自动切成「停止」并发 `startRequested`；
+  - `MainWindow._begin_recording()` 拆成三段：`_begin_recording()`（只建准备条）、
+    `_cancel_pending_recording()`（按 ✕ 取消，什么都不录）、
+    `_start_recording_now()`（真正构造 Recorder 并开录）；
+  - `Recorder` 推迟到点「开始」时才构造，所以准备条里切麦克风/系统声音能生效；
+    准备阶段的麦克风开关直接写 `settings.mic_enabled`。
+
+### 说明
+
+准备条和录制条都用 `exclude_from_capture()` 排除在录制之外，
+所以截图工具/mss 抓不到它（这是预期行为，不是渲染失败）。
+
 ## [1.4.3] - 2026-11-08
 
 ### 变更

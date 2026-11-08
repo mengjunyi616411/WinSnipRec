@@ -722,9 +722,43 @@ class MainWindow(FluentWindow):
         return []
 
     def _begin_recording(self, physical: QRect) -> None:
-        from ..core.recorder import Recorder
-
+        """框选完成：先弹预备条（主按钮「开始」），等用户确认再真的开录。
+    
+        用户要求按 Win11 截图工具的样子：框完区域不是立刻录，而是出现一条
+        「● 开始  00:00:00  麦克风  扬声器   ✕」，点「开始」才开始。
+        Recorder 也推迟到那时才构造，这样预备条里切麦克风/系统声音才能生效。
+        """
         self._countdown = None
+        bar = RecordControlBar(
+            mic_available=self._mic_available(),
+            mic_enabled=bool(getattr(settings, "mic_enabled", False)),
+            preview=True,
+        )
+        self._control_bar = bar
+        bar.startRequested.connect(lambda: self._start_recording_now(physical))
+        bar.discardRequested.connect(self._cancel_pending_recording)
+        bar.micToggled.connect(self._on_bar_mic_toggled)
+        bar.show()
+        screen = QGuiApplication.primaryScreen()
+        dpr = screen.devicePixelRatio() if screen else 1.0
+        logical = QRect(int(physical.x() / dpr), int(physical.y() / dpr),
+                        int(physical.width() / dpr), int(physical.height() / dpr))
+        bar.place_outside(physical, logical)
+        bar.exclude_from_capture()
+    
+    def _cancel_pending_recording(self) -> None:
+        """预备条上按 ✕：什么都不录，直接收起。"""
+        from .widgets import show_toast
+    
+        if self._control_bar is not None:
+            self._control_bar.close()
+            self._control_bar = None
+        show_toast(_t("已取消录制"), "", "info", duration=1600)
+    
+    def _start_recording_now(self, physical: QRect) -> None:
+        """预备条上按「开始」：构造 Recorder 并真正开录。"""
+        from ..core.recorder import Recorder
+    
         stamp = _dt.datetime.now().strftime("%Y-%m-%d %H%M%S")
         out_path = str(Path(settings.video_dir) / f"屏幕录制 {stamp}.mp4")
         devices = self._resolve_audio_devices()
@@ -740,21 +774,14 @@ class MainWindow(FluentWindow):
         recorder.elapsed_changed.connect(self._on_recorder_elapsed)
         recorder.error.connect(self._on_recorder_error)
         recorder.finished.connect(self._on_recorder_finished)
-
-        bar = RecordControlBar(mic_available=self._mic_available(), mic_enabled=bool(devices))
-        self._control_bar = bar
-        bar.stopRequested.connect(self.stop_recording)
-        bar.pauseRequested.connect(self._on_pause_requested)
-        bar.discardRequested.connect(self.discard_recording)
-        bar.micToggled.connect(self._on_bar_mic_toggled)
-        bar.show()
-        screen = QGuiApplication.primaryScreen()
-        dpr = screen.devicePixelRatio() if screen else 1.0
-        logical = QRect(int(physical.x() / dpr), int(physical.y() / dpr),
-                        int(physical.width() / dpr), int(physical.height() / dpr))
-        bar.place_outside(physical, logical)
-        bar.exclude_from_capture()
-
+    
+        bar = self._control_bar
+        if bar is not None:
+            bar.stopRequested.connect(self.stop_recording)
+            bar.pauseRequested.connect(self._on_pause_requested)
+            if devices:
+                bar.set_mic_enabled(True, available=True)
+    
         self._register_recording_hotkeys()
         recorder.start()
         logging.getLogger("winsnip.ui").info(
@@ -776,6 +803,13 @@ class MainWindow(FluentWindow):
             return False
 
     def _on_bar_mic_toggled(self, enabled: bool) -> None:
+        # 预备阶段还没有 recorder：只记到设置里，开录时 _resolve_audio_devices 会读它。
+        if self._recorder is None:
+            try:
+                settings.mic_enabled = bool(enabled)
+            except Exception:
+                pass
+            return
         recorder = self._recorder
         if recorder is None:
             return
