@@ -72,7 +72,8 @@ class _StopButton(QPushButton):
             color = color.lighter(108)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
-        radius = rect.height() / 2      # 胶囊形，和参考图一致
+        # 胶囊形：半径 = 高度一半（同时不超过宽度一半，防止画成方的）
+        radius = min(rect.height(), rect.width()) / 2
         painter.drawRoundedRect(rect, radius, radius)
 
         # 白色圆环（录制指示）
@@ -103,7 +104,10 @@ class RecordControlBar(FluentWindow):
 
     def __init__(self, *, mic_available: bool = True, mic_enabled: bool = False,
                  preview: bool = False) -> None:
-        super().__init__(None, tint_strength=0.88, open_slide=10, margin=BAR_MARGIN)
+        # margin=0：原来留给投影的 14px 边距在这台机器上渲染不出投影，
+        # 只剩一圈透明白边（菜单和 Toast 之前也是这个毛病）。
+        super().__init__(None, tint_strength=0.88, open_slide=10, margin=0,
+                         native_backdrop=False, shadow=False)
         self.setWindowFlags(
             Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.WindowDoesNotAcceptFocus
@@ -116,7 +120,7 @@ class RecordControlBar(FluentWindow):
         self._drag_origin: QPoint | None = None
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(BAR_MARGIN + 8, BAR_MARGIN + 6, BAR_MARGIN + 6, BAR_MARGIN + 6)
+        layout.setContentsMargins(10, 10, 12, 10)
         layout.setSpacing(2)
 
         # ---- 控件全部先建好，顺序按模式决定 ----
@@ -162,6 +166,10 @@ class RecordControlBar(FluentWindow):
         if preview:
             # 用户参考图： [● 开始] 00:00:00  🎤  🔊  |  ✕
             # 准备阶段没有红点和暂停（还没开始录，暂停没有意义）
+            # 这两个控件也创建了，但不进布局时必须隐藏，
+            # 否则作为子控件会浮在窗口左上角（实测出现红点和暂停贴在按钮上）。
+            self.dot.hide()
+            self.pause_button.hide()
             layout.addWidget(self.stop_button)
             layout.addWidget(self.timer_label)
             layout.addWidget(self.mic_button)
@@ -179,7 +187,8 @@ class RecordControlBar(FluentWindow):
             layout.addWidget(self.discard_button)
             layout.addWidget(self.stop_button)
 
-        self.setFixedSize(layout.sizeHint().width() + 4, BAR_HEIGHT + 2 * BAR_MARGIN)
+        hint = layout.sizeHint()
+        self.setFixedSize(hint.width() + 4, hint.height())
         self.refresh()
         self._pulse = QTimer(self)
         self._pulse.setInterval(700)
@@ -258,14 +267,17 @@ class RecordControlBar(FluentWindow):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         palette = theme.palette
-        dot_geo = self.dot.geometry()
-        if self._paused:
-            dot_color = QColor(palette.text_secondary)
-        else:
-            dot_color = QColor("#E81123") if self._pulse_on else rgba("#E81123", 0.35)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(dot_color)
-        painter.drawEllipse(QRectF(dot_geo.x() + 3.5, dot_geo.y() + 13.5, 9, 9))
+        # 准备条里 dot 是隐藏的（没进布局），这里必须跳过，
+        # 否则红点会被画在窗口左上角（实测就是这个问题）。
+        if self.dot.isVisible():
+            dot_geo = self.dot.geometry()
+            if self._paused:
+                dot_color = QColor(palette.text_secondary)
+            else:
+                dot_color = QColor("#E81123") if self._pulse_on else rgba("#E81123", 0.35)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(dot_color)
+            painter.drawEllipse(QRectF(dot_geo.x() + 3.5, dot_geo.y() + 13.5, 9, 9))
         painter.end()
 
     # ------------------------------------------------------------------ #
@@ -288,7 +300,7 @@ class RecordControlBar(FluentWindow):
         if region is None:
             x = available.left() + (available.width() - width) // 2
             y = available.top() + margin
-            self.move(x - BAR_MARGIN, y - BAR_MARGIN)
+            self.move(x, y)
             return
 
         candidates = [
@@ -310,7 +322,7 @@ class RecordControlBar(FluentWindow):
             break
         if chosen is None:
             chosen = candidates[4]
-        self.move(chosen.x() - BAR_MARGIN, chosen.y() - BAR_MARGIN)
+        self.move(chosen.x(), chosen.y())
 
     def exclude_from_capture(self) -> None:
         """Best effort: keep the bar out of the recording on Windows 10 2004+."""
