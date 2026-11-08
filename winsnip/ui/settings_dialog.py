@@ -331,7 +331,7 @@ class SettingsWindow(FluentWindow):
 
         self.update_button = FluentButton(_t("检查"), self)
         self.update_button.setFixedHeight(36)
-        self.update_button.clicked.connect(self._check_update)
+        self.update_button.clicked.connect(self._open_update_alert)
         self._add_row(
             _t("检查更新"),
             _t("尚未检查"),
@@ -571,6 +571,34 @@ class SettingsWindow(FluentWindow):
         self._empty_hint.setVisible(False)
         self.body_layout.insertWidget(1, self._empty_hint)
 
+    def _open_update_alert(self) -> None:
+        """弹出检查更新的 Alert。副标题状态仍然保留（用户要求"原来不删"）。"""
+        from .update_dialog import UpdateAlert
+    
+        alert = getattr(self, "_update_alert", None)
+        try:
+            if alert is not None and alert.isVisible():
+                alert.raise_()
+                alert.activateWindow()
+                alert._trigger()
+                return
+        except RuntimeError:
+            alert = None
+        alert = UpdateAlert(self._check_update, self._open_update_url, self)
+        self._update_alert = alert
+        alert.show()
+        alert.raise_()
+        try:
+            centre = self.frameGeometry().center()
+            alert.move(centre.x() - alert.width() // 2,
+                       max(0, centre.y() - alert.height() // 2))
+        except Exception:
+            pass
+    
+    def _open_update_url(self, url: str) -> None:
+        """Alert 里的「打开下载页」：走镜像前缀。"""
+        _open_url(update_mirror_url(url))
+    
     def _check_update(self) -> None:
         """后台线程查一次更新，结果用信号回主线程弹 Toast。"""
         import threading
@@ -607,6 +635,9 @@ class SettingsWindow(FluentWindow):
         except Exception:
             pass
         if info is None:
+            _alert = getattr(self, "_update_alert", None)
+            if _alert is not None:
+                _alert.set_status(message, f"当前版本 {__version__}")
             show_toast(_t("检查更新"), message, "info", duration=3600)
             return
         show_toast(
@@ -614,6 +645,9 @@ class SettingsWindow(FluentWindow):
             message + ("    点击用镜像下载" if _mirror_prefix() else "    点击打开下载页") if info.url else "",
             "arrow-down", duration=6000,
             on_click=(lambda u=info.url: _open_url(update_mirror_url(u))) if info.url else None)
+        _alert2 = getattr(self, "_update_alert", None)
+        if _alert2 is not None:
+            _alert2.set_status(f"发现新版本 {info.version}", message, info)
 
     def _unlock_dev_mode(self) -> None:
         """搜索框输入开发者口令后解锁测试工具。"""
