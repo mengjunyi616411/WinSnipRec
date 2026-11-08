@@ -77,7 +77,9 @@ class Settings:
     # 检查更新：source = github（查 Releases API）| manifest（你自己的 JSON）
     update_source: str = "github"
     # github 时填 "owner/repo"；manifest 时填 JSON 的完整 URL
-    update_target: str = "mengjunyi616411/WinSnipRec"
+    # 用户要求默认就填好，省得自己输。check() 里的 normalize_target 会把
+    # 完整网址转成 owner/repo，所以填 URL 也能用。
+    update_target: str = "https://github.com/mengjunyi616411/WinSnipRec"
     # 启动后是否静默检查一次（没配置 update_target 时不会联网）
     update_check_on_start: bool = False
     # 下载加速前缀（裸网直连 github.com 慢）。实测 ghfast.top 快 2.5 倍；
