@@ -119,11 +119,11 @@ class RecordControlBar(FluentWindow):
         layout.setContentsMargins(BAR_MARGIN + 8, BAR_MARGIN + 6, BAR_MARGIN + 6, BAR_MARGIN + 6)
         layout.setSpacing(2)
 
-
-        self.dot = QWidget(self)
-        self.dot.setFixedSize(16, 36)
-        self.dot.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        layout.addWidget(self.dot)
+        # ---- 控件全部先建好，顺序按模式决定 ----
+        self.stop_button = _StopButton(self)
+        if preview:
+            self.stop_button.set_label(_t("开始"))
+        self.stop_button.clicked.connect(self._on_main_clicked)
 
         self.timer_label = QLabel("00:00:00", self)
         self.timer_label.setFont(ui_font(14, 600))
@@ -131,11 +131,6 @@ class RecordControlBar(FluentWindow):
         self.timer_label.setMinimumWidth(74)
         self.timer_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.timer_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        layout.addWidget(self.timer_label)
-
-        self.pause_button = IconButton("pause", self, width=40, height=36, tooltip=_t("暂停 (Ctrl+Alt+P)"))
-        self.pause_button.clicked.connect(self._toggle_pause)
-        layout.addWidget(self.pause_button)
 
         self.mic_button = IconButton(
             "mic" if mic_enabled else "mic_off", self, width=40, height=36,
@@ -144,28 +139,45 @@ class RecordControlBar(FluentWindow):
         self.mic_button.setEnabled(mic_available)
         self.mic_button.setChecked(mic_enabled)
         self.mic_button.clicked.connect(self._on_mic_clicked)
-        layout.addWidget(self.mic_button)
 
-
-        # 用户参考图里麦克风右边还有一个扬声器开关（系统声音）
         self.sound_button = IconButton(
             "sound" if getattr(settings, "system_audio", False) else "sound_off",
             self, width=40, height=36, tooltip=_t("录制系统声音"), checkable=True)
         self.sound_button.setChecked(bool(getattr(settings, "system_audio", False)))
         self.sound_button.clicked.connect(self._on_sound_clicked)
-        layout.addWidget(self.sound_button)
-        layout.addWidget(Separator(self, height=22))
 
         self.discard_button = IconButton("close", self, width=40, height=36,
                                          tooltip=_t("取消并删除这段录制"))
         self.discard_button.clicked.connect(self.discardRequested.emit)
-        layout.addWidget(self.discard_button)
 
-        self.stop_button = _StopButton(self)
+        self.dot = QWidget(self)
+        self.dot.setFixedSize(16, 36)
+        self.dot.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+        self.pause_button = IconButton("pause", self, width=40, height=36,
+                                       tooltip=_t("暂停 (Ctrl+Alt+P)"))
+        self.pause_button.clicked.connect(self._toggle_pause)
+
+        # ---- 布局顺序 ----
         if preview:
-            self.stop_button.set_label(_t("开始"))
-        self.stop_button.clicked.connect(self._on_main_clicked)
-        layout.addWidget(self.stop_button)
+            # 用户参考图： [● 开始] 00:00:00  🎤  🔊  |  ✕
+            # 准备阶段没有红点和暂停（还没开始录，暂停没有意义）
+            layout.addWidget(self.stop_button)
+            layout.addWidget(self.timer_label)
+            layout.addWidget(self.mic_button)
+            layout.addWidget(self.sound_button)
+            layout.addWidget(Separator(self, height=22))
+            layout.addWidget(self.discard_button)
+        else:
+            # 录制中： [●] 00:00:00  ‖  🎤  🔊  |  ✕  [■ 停止]
+            layout.addWidget(self.dot)
+            layout.addWidget(self.timer_label)
+            layout.addWidget(self.pause_button)
+            layout.addWidget(self.mic_button)
+            layout.addWidget(self.sound_button)
+            layout.addWidget(Separator(self, height=22))
+            layout.addWidget(self.discard_button)
+            layout.addWidget(self.stop_button)
 
         self.setFixedSize(layout.sizeHint().width() + 4, BAR_HEIGHT + 2 * BAR_MARGIN)
         self.refresh()
