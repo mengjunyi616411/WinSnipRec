@@ -2,6 +2,15 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.2] - 2026-11-08
+
+### 修复
+
+- **录制完成后弹「TypeError: 'float' object is not callable」**：`MainWindow` 里打开
+  录制结果的 `_reveal(path)` 与 `FluentWindow` 的光效进度属性 `self._reveal`（float）
+  重名，实例属性把类方法覆盖掉了，所以每录完一段就抛异常，"完成后打开文件夹"
+  也一起失效。把方法改名为 `_reveal_file()`，光效那套保持不变。
+
 ## [1.4.1] - 2026-11-08
 
 ### 新增

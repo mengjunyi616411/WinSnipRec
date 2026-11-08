@@ -838,9 +838,9 @@ class MainWindow(FluentWindow):
         except Exception:
             pass
         show_toast(_t("录制已保存"), f"{Path(path).name} · {_human_size(size)}", "check",
-                   duration=5200, on_click=lambda: self._reveal(path))
+                   duration=5200, on_click=lambda: self._reveal_file(path))
         if settings.open_folder_when_done:
-            self._reveal(path)
+            self._reveal_file(path)
         self._restore_main()
 
     def stop_recording(self) -> None:
@@ -995,7 +995,7 @@ class MainWindow(FluentWindow):
         except Exception as exc:
             show_toast(_t("无法打开文件夹"), str(exc), "info")
 
-    def _reveal(self, path: str) -> None:
+    def _reveal_file(self, path: str) -> None:
         try:
             subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
         except Exception:
