@@ -35,8 +35,8 @@ class _StopButton(QPushButton):
 
     def _fit(self) -> None:
         metrics = self.fontMetrics()
-        width = 16 + 16 + 6 + metrics.horizontalAdvance(self._label) + 16
-        self.setFixedSize(max(88, width), 36)
+        width = 12 + 14 + 6 + metrics.horizontalAdvance(self._label) + 12
+        self.setFixedSize(max(76, width), 36)
 
     def set_label(self, text: str) -> None:
         self._label = text
@@ -73,11 +73,11 @@ class _StopButton(QPushButton):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
         # 胶囊形：半径 = 高度一半（同时不超过宽度一半，防止画成方的）
-        radius = min(rect.height(), rect.width()) / 2
+        radius = 10.0      # 参考图是圆角矩形，不是胶囊
         painter.drawRoundedRect(rect, radius, radius)
 
         # 白色圆环（录制指示）
-        ring = QRectF(12, (self.height() - 14) / 2, 16, 14)
+        ring = QRectF(11, (self.height() - 14) / 2, 16, 14)
         pen = QPen(QColor("#FFFFFF"), 2.0)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(pen)
@@ -85,7 +85,7 @@ class _StopButton(QPushButton):
 
         # 文字
         painter.setPen(QColor("#FFFFFF"))
-        text_rect = QRectF(34, 0, self.width() - 34 - 12, self.height())
+        text_rect = QRectF(31, 0, self.width() - 31 - 10, self.height())
         painter.drawText(text_rect,
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          self._label)
