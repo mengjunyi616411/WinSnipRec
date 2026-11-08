@@ -207,11 +207,56 @@ class RecordControlBar(FluentWindow):
         self.mic_button.set_icon_name("mic" if self.mic_button.isChecked() else "mic_off")
         self.update()
 
+    def set_recording(self) -> None:
+        """从预备条切到录制态：按钮变「停止」，红点和暂停回到布局里。
+    
+        两套布局的控件顺序不同，所以直接清空布局重建。
+        """
+        if not self._preview:
+            return
+        self._preview = False
+        self.stop_button.set_label(_t("停止"))
+        self._rebuild_layout(recording=True)
+    
+    def _rebuild_layout(self, *, recording: bool) -> None:
+        """按模式重排控件。takeAt 只把控件移出布局，不销毁。"""
+        layout = self.layout()
+        if layout is None:
+            return
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.hide()
+        if recording:
+            self.dot.show()
+            self.pause_button.show()
+            layout.addWidget(self.dot)
+            layout.addWidget(self.timer_label)
+            layout.addWidget(self.pause_button)
+            layout.addWidget(self.mic_button)
+            layout.addWidget(self.sound_button)
+            layout.addWidget(Separator(self, height=22))
+            layout.addWidget(self.discard_button)
+            layout.addWidget(self.stop_button)
+        else:
+            layout.addWidget(self.stop_button)
+            layout.addWidget(self.timer_label)
+            layout.addWidget(self.mic_button)
+            layout.addWidget(self.sound_button)
+            layout.addWidget(Separator(self, height=22))
+            layout.addWidget(self.discard_button)
+        for widget in (self.stop_button, self.timer_label, self.mic_button,
+                       self.sound_button, self.discard_button):
+            widget.show()
+        hint = layout.sizeHint()
+        self.setFixedSize(hint.width() + 4, hint.height())
+        self.update()
+    
     def _on_main_clicked(self) -> None:
         """主按钮：预备模式发 startRequested 并切到录制态，录制中发 stopRequested。"""
         if self._preview:
-            self._preview = False
-            self.stop_button.set_label(_t("停止"))
+            self.set_recording()
             self.startRequested.emit()
         else:
             self.stopRequested.emit()

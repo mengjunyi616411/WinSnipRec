@@ -2,6 +2,26 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.9] - 2026-11-08
+
+### 修复
+
+- **倒计时结束后没有自动开录，还要手点「开始」**（用户反馈）：
+  1.4.4 把 `_begin_recording` 拆开时，`CountdownOverlay.finished` 仍然只连到它，
+  而它现在只弹准备条，于是读秒完就停在那里。
+  改成 `_begin_recording(physical, autostart=True)`：
+  - 倒计时结束 -> 直接调 `_start_recording_now()`，不用再点；
+  - `countdown = 0` -> 仍然出准备条等用户点「开始」（参考图的行为）。
+- **切到录制态时红点和暂停不出现**：`preview` 模式下它们被 `hide()` 了，
+  切录制时没有恢复，而且两套布局的控件顺序不同。
+  新增 `RecordControlBar.set_recording()` + `_rebuild_layout()`：
+  清空布局后按录制态重新 addWidget 并 show()，尺寸重新按 sizeHint 算。
+  `_on_main_clicked` 和 `MainWindow._start_recording_now` 都改调 `set_recording()`。
+
+实测：
+  autostart=False -> 按钮「开始」 recorder=False dot/pause 隐藏 315×56
+  autostart=True  -> 按钮「停止」 recorder=True  dot/pause 显示 372×56
+
 ## [1.4.8] - 2026-11-08
 
 ### 修复

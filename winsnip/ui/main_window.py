@@ -663,7 +663,8 @@ class MainWindow(FluentWindow):
             int(physical.width() / dpr), int(physical.height() / dpr),
         )
         self._countdown = CountdownOverlay(logical, settings.countdown)
-        self._countdown.finished.connect(lambda: self._begin_recording(physical))
+        self._countdown.finished.connect(
+            lambda: self._begin_recording(physical, autostart=True))
         self._countdown.show()
 
     def _capture_screenshot(self, physical: QRect, frozen: QImage | None = None) -> None:
@@ -721,12 +722,12 @@ class MainWindow(FluentWindow):
                 return [device]
         return []
 
-    def _begin_recording(self, physical: QRect) -> None:
+    def _begin_recording(self, physical: QRect, autostart: bool = False) -> None:
         """框选完成：先弹预备条（主按钮「开始」），等用户确认再真的开录。
     
-        用户要求按 Win11 截图工具的样子：框完区域不是立刻录，而是出现一条
-        「● 开始  00:00:00  麦克风  扬声器   ✕」，点「开始」才开始。
-        Recorder 也推迟到那时才构造，这样预备条里切麦克风/系统声音才能生效。
+    两种入口：
+      · 倒计时结束后进入 -> autostart=True，准备条直接切成「停止」并开录；
+      · 没设倒计时（countdown=0）-> autostart=False，等用户点「开始」。
         """
         self._countdown = None
         bar = RecordControlBar(
@@ -745,7 +746,11 @@ class MainWindow(FluentWindow):
                         int(physical.width() / dpr), int(physical.height() / dpr))
         bar.place_outside(physical, logical)
         bar.exclude_from_capture()
-    
+
+        if autostart:
+            # 倒计时结束：不用再点「开始」，直接开录（按钮会切成「停止」）。
+            self._start_recording_now(physical)
+
     def _cancel_pending_recording(self) -> None:
         """预备条上按 ✕：什么都不录，直接收起。"""
         from .widgets import show_toast
@@ -757,6 +762,10 @@ class MainWindow(FluentWindow):
     
     def _start_recording_now(self, physical: QRect) -> None:
         """预备条上按「开始」：构造 Recorder 并真正开录。"""
+        # 不管从「开始」按钮还是倒计时自动进入，按钮都要切成「停止」。
+        _bar0 = self._control_bar
+        if _bar0 is not None:
+            _bar0.set_recording()
         from ..core.recorder import Recorder
     
         stamp = _dt.datetime.now().strftime("%Y-%m-%d %H%M%S")
