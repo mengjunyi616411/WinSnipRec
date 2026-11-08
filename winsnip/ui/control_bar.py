@@ -3,29 +3,45 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QRegion
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPen, QRegion
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from .. import icons, winapi
+from ..settings import settings
 from ..theme import rgba, theme, ui_font
 from .widgets import FluentWindow, IconButton, Separator
 from ..i18n import t as _t
 
-BAR_HEIGHT = 48
+BAR_HEIGHT = 36
 BAR_MARGIN = 14
 
 
 class _StopButton(QPushButton):
-    """Red stop button, matching the Windows 11 recording bar."""
+    """蓝色主按钮：圆环 + 文字，对应 Windows 11 录制栏那个「开始/停止」。
+
+    用户要求按参考图改：原来是一个红色方块图标，现在是蓝色圆角按钮、
+    左边白色圆环、右边文字（录制中显示「停止」）。
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedSize(40, 36)
+        self._label = _t("停止")
         self.setToolTip(_t("停止录制 (Ctrl+Alt+Q)"))
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self._hover = False
         self._pressed = False
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self._fit()
+
+    def _fit(self) -> None:
+        metrics = self.fontMetrics()
+        width = 16 + 16 + 6 + metrics.horizontalAdvance(self._label) + 16
+        self.setFixedSize(max(88, width), 36)
+
+    def set_label(self, text: str) -> None:
+        self._label = text
+        self._fit()
+        self.update()
 
     def enterEvent(self, event) -> None:  # noqa: N802
         self._hover = True
@@ -48,19 +64,30 @@ class _StopButton(QPushButton):
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        rect = QRectF(self.rect()).adjusted(2, 2, -2, -2)
-        color = QColor("#C42B1C")
+        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+        color = QColor(theme.palette.accent)
         if self._pressed:
-            color = color.darker(115)
+            color = color.darker(112)
         elif self._hover:
-            color = color.lighter(115)
+            color = color.lighter(108)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
-        painter.drawRoundedRect(rect, theme.radius_control, theme.radius_control)
-        size = 14
-        icons.paint_icon(painter, "stop",
-                         QRectF((self.width() - size) / 2, (self.height() - size) / 2, size, size),
-                         QColor("#FFFFFF"))
+        radius = rect.height() / 2      # 胶囊形，和参考图一致
+        painter.drawRoundedRect(rect, radius, radius)
+
+        # 白色圆环（录制指示）
+        ring = QRectF(12, (self.height() - 14) / 2, 16, 14)
+        pen = QPen(QColor("#FFFFFF"), 2.0)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(pen)
+        painter.drawEllipse(ring.adjusted(1, 1, -1, -1))
+
+        # 文字
+        painter.setPen(QColor("#FFFFFF"))
+        text_rect = QRectF(34, 0, self.width() - 34 - 12, self.height())
+        painter.drawText(text_rect,
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         self._label)
         painter.end()
 
 
@@ -87,10 +114,6 @@ class RecordControlBar(FluentWindow):
         layout.setContentsMargins(BAR_MARGIN + 8, BAR_MARGIN + 6, BAR_MARGIN + 6, BAR_MARGIN + 6)
         layout.setSpacing(2)
 
-        self.grip = QWidget(self)
-        self.grip.setFixedSize(18, 36)
-        self.grip.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        layout.addWidget(self.grip)
 
         self.dot = QWidget(self)
         self.dot.setFixedSize(16, 36)
@@ -118,9 +141,17 @@ class RecordControlBar(FluentWindow):
         self.mic_button.clicked.connect(self._on_mic_clicked)
         layout.addWidget(self.mic_button)
 
+
+        # 用户参考图里麦克风右边还有一个扬声器开关（系统声音）
+        self.sound_button = IconButton(
+            "sound" if getattr(settings, "system_audio", False) else "sound_off",
+            self, width=40, height=36, tooltip=_t("录制系统声音"), checkable=True)
+        self.sound_button.setChecked(bool(getattr(settings, "system_audio", False)))
+        self.sound_button.clicked.connect(self._on_sound_clicked)
+        layout.addWidget(self.sound_button)
         layout.addWidget(Separator(self, height=22))
 
-        self.discard_button = IconButton("trash", self, width=40, height=36,
+        self.discard_button = IconButton("close", self, width=40, height=36,
                                          tooltip=_t("取消并删除这段录制"))
         self.discard_button.clicked.connect(self.discardRequested.emit)
         layout.addWidget(self.discard_button)
@@ -154,6 +185,19 @@ class RecordControlBar(FluentWindow):
         self.mic_button.set_icon_name("mic" if self.mic_button.isChecked() else "mic_off")
         self.micToggled.emit(self.mic_button.isChecked())
 
+    def _on_sound_clicked(self) -> None:
+        """系统声音开关。录制中切换要 recorder 支持，这里先同步 UI 与设置。"""
+        from .widgets import show_toast
+    
+        on = self.sound_button.isChecked()
+        self.sound_button.set_icon_name("sound" if on else "sound_off")
+        try:
+            settings.system_audio = on
+        except Exception:
+            pass
+        show_toast(_t("系统声音"), _t("已开启") if on else _t("已关闭"),
+                   "sound" if on else "sound_off", duration=1600)
+
     def _toggle_pause(self) -> None:
         self.set_paused(not self._paused)
         self.pauseRequested.emit(self._paused)
@@ -186,10 +230,6 @@ class RecordControlBar(FluentWindow):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         palette = theme.palette
-        grip_color = rgba(palette.text_secondary, 0.55)
-        grip_geo = self.grip.geometry()
-        icons.paint_icon(painter, "grip",
-                         QRectF(grip_geo.x(), grip_geo.y() + 6, grip_geo.width(), 24), grip_color)
         dot_geo = self.dot.geometry()
         if self._paused:
             dot_color = QColor(palette.text_secondary)
