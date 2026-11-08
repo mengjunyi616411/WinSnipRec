@@ -2,6 +2,24 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.10] - 2026-11-08
+
+### 修复
+
+- **主按钮文字发虚**（用户反馈「停止按钮上字体不清晰」）。三个原因叠在一起：
+  1. `ui_font()` 的首选族是 `Segoe UI Variable Text`，**不含汉字**，
+     「停止/开始」走 font fallback，125% DPI 下明显发糊；
+  2. 文字是 `painter.drawText` 自绘的，而且画圆环用的 `QPen(..., 3.2)`
+     **没有重置笔宽**就去 `drawText`，等于用 3.2px 的笔描字形；
+  3. 量宽度用按钮默认字体（9pt），绘制用 15px，两边不一致，文字区域被裁。
+
+  改法：
+  - 新增 `_button_font()`：显式 `setFamilies(["Microsoft YaHei UI", "Microsoft YaHei", "SimHei"])`
+    + `setPixelSize(15)` + `DemiBold` + `PreferAntialias`；
+  - 文字改由 **QLabel 子控件**显示（走 Qt 原生文字渲染），
+    `paintEvent` 只画圆角矩形和圆环，不再自绘文字；
+  - 宽度用同一个字体量。
+
 ## [1.4.9] - 2026-11-08
 
 ### 修复

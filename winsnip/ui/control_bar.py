@@ -16,30 +16,53 @@ BAR_HEIGHT = 36
 BAR_MARGIN = 14
 
 
-class _StopButton(QPushButton):
-    """蓝色主按钮：圆环 + 文字，对应 Windows 11 录制栏那个「开始/停止」。
+def _button_font(size: int = 15) -> QFont:
+    """按钮文字字体：显式用中文字体族。
 
-    用户要求按参考图改：原来是一个红色方块图标，现在是蓝色圆角按钮、
-    左边白色圆环、右边文字（录制中显示「停止」）。
+    ui_font() 的首选族是 Segoe UI Variable Text，不含汉字，"停止/开始" 会走
+    font fallback，在 125% DPI 下明显发虚。这里把中文字体放在最前面。
+    """
+    font = QFont()
+    font.setFamilies(["Microsoft YaHei UI", "Microsoft YaHei", "SimHei"])
+    font.setPixelSize(size)
+    font.setWeight(QFont.Weight.DemiBold)
+    font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+    return font
+
+
+class _StopButton(QPushButton):
+    """蓝色主按钮：白圆环 + 文字（开始 / 停止）。
+
+    文字用 QLabel 子控件而不是自绘：之前 drawText 在 125% DPI 下明显发虚，
+    换成 QLabel 走 Qt 原生的文字渲染 + 抗锯齿，和系统其它文字一样清晰。
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._label = _t("停止")
+        self.setText("")        # 文字由 QLabel 显示，QPushButton 的 text 留空
         self.setToolTip(_t("停止录制 (Ctrl+Alt+Q)"))
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self._hover = False
         self._pressed = False
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+
+        self._text = QLabel(self._label, self)
+        self._text.setFont(_button_font(15))
+        self._text.setStyleSheet("color: #FFFFFF; background: transparent;")
+        self._text.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._text.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._fit()
 
     def _fit(self) -> None:
-        metrics = self.fontMetrics()
-        width = 11 + 20 + 9 + metrics.horizontalAdvance(self._label) + 14
+        metrics = QFontMetrics(_button_font(15))
+        width = 11 + 21 + 9 + metrics.horizontalAdvance(self._label) + 14
         self.setFixedSize(max(84, width), 36)
+        self._text.setGeometry(39, 0, self.width() - 39 - 8, self.height())
 
     def set_label(self, text: str) -> None:
         self._label = text
+        self._text.setText(text)
         self._fit()
         self.update()
 
@@ -72,25 +95,14 @@ class _StopButton(QPushButton):
             color = color.lighter(108)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
-        # 胶囊形：半径 = 高度一半（同时不超过宽度一半，防止画成方的）
-        radius = 10.0      # 参考图是圆角矩形，不是胶囊
-        painter.drawRoundedRect(rect, radius, radius)
+        painter.drawRoundedRect(rect, 10.0, 10.0)
 
         # 白色圆环（录制指示）
         ring_size = 21.0
         ring = QRectF(11.0, (self.height() - ring_size) / 2, ring_size, ring_size)
-        pen = QPen(QColor("#FFFFFF"), 3.2)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(pen)
+        painter.setPen(QPen(QColor("#FFFFFF"), 3.2))
         painter.drawEllipse(ring.adjusted(2, 2, -2, -2))
-
-        # 文字
-        painter.setPen(QColor("#FFFFFF"))
-        painter.setFont(ui_font(15, 600))
-        text_rect = QRectF(40, 0, self.width() - 40 - 12, self.height())
-        painter.drawText(text_rect,
-                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                         self._label)
         painter.end()
 
 
