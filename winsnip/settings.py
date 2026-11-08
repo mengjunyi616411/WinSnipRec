@@ -82,6 +82,8 @@ class Settings:
     update_target: str = "https://github.com/mengjunyi616411/WinSnipRec"
     # 启动后是否静默检查一次（没配置 update_target 时不会联网）
     update_check_on_start: bool = False
+    # 更新通道：stable 只查正式版，preview 查最新的 prerelease
+    update_channel: str = "stable"
     # 下载加速前缀（裸网直连 github.com 慢）。实测 ghfast.top 快 2.5 倍；
     # 失效时清空这里就会退回直连。
     update_mirror: str = "https://ghfast.top/"

@@ -66,13 +66,14 @@ def find_release(repo: str, tag: str, token: str):
         raise
 
 
-def create_release(repo: str, tag: str, title: str, body: str, token: str):
+def create_release(repo: str, tag: str, title: str, body: str, token: str,
+                   prerelease: bool = False):
     payload = json.dumps({
         "tag_name": tag,
         "name": title,
         "body": body,
         "draft": False,
-        "prerelease": False,
+        "prerelease": bool(prerelease),
     }).encode("utf-8")
     return _request(f"{API}/repos/{repo}/releases", token, method="POST", data=payload)
 
@@ -104,6 +105,8 @@ def main() -> int:
     parser.add_argument("--notes", default="", help="release body; defaults to CHANGELOG section")
     parser.add_argument("--asset", action="append", default=[], help="file to upload (repeatable)")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--prerelease", action="store_true",
+                        help="标记为预览版（程序里选预览通道的用户能收到）")
     args = parser.parse_args()
 
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
@@ -124,6 +127,7 @@ def main() -> int:
     print(f"仓库  : {repo}")
     print(f"标签  : {tag}")
     print(f"标题  : {title}")
+    print(f"通道  : {"预览版" if args.prerelease else "稳定版"}")
     print(f"正文  : {len(body)} 字符" + ("（取自 CHANGELOG）" if not args.notes.strip() else ""))
     for asset in assets:
         print(f"附件  : {asset.name}  {asset.stat().st_size / 1024 / 1024:.1f} MB")
@@ -134,7 +138,7 @@ def main() -> int:
     release = find_release(repo, tag, token)
     if release is None:
         print("→ 创建 Release …")
-        release = create_release(repo, tag, title, body, token)
+        release = create_release(repo, tag, title, body, token, args.prerelease)
         print(f"  已创建 id={release['id']}  {release['html_url']}")
     else:
         print(f"→ Release 已存在 id={release['id']}  {release['html_url']}")

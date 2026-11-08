@@ -37,6 +37,11 @@ if (-not $Version) {
 }
 Write-Host "版本: $Version"
 
+# Inno Setup 的 VersionInfoVersion 只接受数字和点，带后缀（1.5.0-beta.1）会编译失败。
+# 给 ISCC 传纯数字版本，文件名和安装包显示名保留完整版本号。
+$VersionNumeric = ($Version -split '-')[0]
+Write-Host "  Inno 版本: $VersionNumeric   文件名: $Version"
+
 # ---------------------------------------------------------------- 主程序
 $appDir = Join-Path $root 'dist\截图工具'
 if ($SkipAppBuild) {
@@ -97,7 +102,7 @@ if (-not $hasChinese) {
 # ---------------------------------------------------------------- 编译
 Step '编译安装包'
 $iss = Join-Path $root 'tools\installer.iss'
-$args = @($iss, "/DAppVersion=$Version")
+$args = @($iss, "/DAppVersion=$VersionNumeric", "/DOutputBase=WinSnipRec-Setup-$Version")
 if (-not $hasChinese) { $args += '/DNoChinese=1' }
 & $iscc @args
 if ($LASTEXITCODE -ne 0) { throw "ISCC 编译失败（退出码 $LASTEXITCODE）" }

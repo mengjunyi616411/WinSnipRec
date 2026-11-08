@@ -298,6 +298,20 @@ class SettingsWindow(FluentWindow):
         self.update_target_edit.editingFinished.connect(
             lambda: self._set("update_target",
                               self.update_target_edit.text().strip()))
+        self.update_channel_combo = FluentComboBox(self)
+        for value, label in (("stable", _t("稳定版")), ("preview", _t("预览版"))):
+            self.update_channel_combo.addItem(label, value)
+        _channel = str(getattr(settings, "update_channel", "stable") or "stable")
+        _ci = self.update_channel_combo.findData(_channel)
+        self.update_channel_combo.setCurrentIndex(_ci if _ci >= 0 else 0)
+        self.update_channel_combo.currentIndexChanged.connect(
+            lambda: self._set("update_channel",
+                              self.update_channel_combo.currentData()))
+        self._add_row(
+            _t("更新通道"),
+            _t("稳定版只收正式发布；预览版会提前收到测试版本"),
+            self.update_channel_combo)
+
         self._add_row(
             _t("更新源"),
             _t("GitHub 填 owner/repo（如 yourname/WinSnipRec）；也可以填一个 version JSON 的完整 URL"),
@@ -616,7 +630,8 @@ class SettingsWindow(FluentWindow):
     
         def work() -> None:
             try:
-                info, message = update_mod.check(source, target)
+                channel = str(getattr(settings, "update_channel", "stable") or "stable")
+                info, message = update_mod.check(source, target, channel=channel)
             except Exception as exc:
                 info, message = None, f"{_t('检查失败')}：{exc}"
             try:

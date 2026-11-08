@@ -15,7 +15,7 @@
 #define AppPublisher   "WinSnipRec contributors"
 #define AppUrl         "https://github.com/mengjunyi616411/WinSnipRec"
 #ifndef AppVersion
-  #define AppVersion "1.4.11"
+  #define AppVersion "1.5.0"
 #endif
 #define SourceDir      "..\dist\截图工具"
 
@@ -39,7 +39,12 @@ DisableDirPage=auto
 PrivilegesRequired=lowest
 
 OutputDir=..\dist\installer
-OutputBaseFilename=WinSnipRec-Setup-{#AppVersion}
+; 预览版要保留 -beta.N 后缀，而 VersionInfoVersion 必须纯数字，
+; 所以输出文件名做成可被命令行覆盖。
+#ifndef OutputBase
+#define OutputBase "WinSnipRec-Setup-" + AppVersion
+#endif
+OutputBaseFilename={#OutputBase}
 SetupIconFile=..\assets\app.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}

@@ -484,6 +484,17 @@ TABLE: dict[str, tuple[str, str, str]] = {
 
     "可能还没发布": ("可能還沒發布", "it may not be published yet", "まだ公開されていない可能性があります"),
     "更新地址返回 HTTP": ("更新位址回應 HTTP", "The update URL returned HTTP", "更新 URL が返した HTTP"),
+
+    # ---- 预览通道 ----
+    "更新通道": ("更新通道", "Update channel", "アップデートチャンネル"),
+    "稳定版": ("穩定版", "Stable", "安定版"),
+    "预览版": ("預覽版", "Preview", "プレビュー版"),
+    "稳定版只收正式发布；预览版会提前收到测试版本":
+        ("穩定版只收正式發布；預覽版會提前收到測試版本",
+         "Stable only receives official releases; Preview gets test builds earlier",
+         "安定版は正式リリースのみ。プレビュー版はテスト版をいち早く受け取ります"),
+    "发现预览版": ("發現預覽版", "Preview build available", "プレビュー版があります"),
+    "没有预览版": ("沒有預覽版", "No preview build", "プレビュー版はありません"),
 }
 
 

@@ -178,10 +178,8 @@ def _fetch_json(url: str, timeout: float = TIMEOUT) -> object:
         return json.loads(response.read().decode("utf-8", "replace"))
 
 
-def _from_github(repo: str, timeout: float) -> UpdateInfo | None:
-    data = _fetch_json(f"https://api.github.com/repos/{repo}/releases/latest", timeout)
-    if not isinstance(data, dict):
-        return None
+def _release_to_info(data: dict) -> UpdateInfo | None:
+    """把一个 GitHub release 对象转成 UpdateInfo（版本不比当前新就返回 None）。"""
     tag = str(data.get("tag_name") or "").strip()
     if not tag or not is_newer(tag):
         return None
@@ -197,6 +195,32 @@ def _from_github(repo: str, timeout: float) -> UpdateInfo | None:
                 url = str(asset.get("browser_download_url") or url)
                 break
     return UpdateInfo(version=tag.lstrip("vV"), notes=notes, url=url)
+
+
+def _from_github_preview(repo: str, timeout: float) -> UpdateInfo | None:
+    """预览通道：在 /releases 里找最新的那个 prerelease。
+
+    GitHub 的 /releases/latest 只会返回正式版，预览版必须自己筛：
+    按 created_at 倒序取第一个 prerelease=True 且不是 draft 的。
+    """
+    data = _fetch_json(f"https://api.github.com/repos/{repo}/releases?per_page=30", timeout)
+    if not isinstance(data, list):
+        return None
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        if item.get("draft") or not item.get("prerelease"):
+            continue
+        info = _release_to_info(item)
+        if info is not None:
+            return info
+    return None
+
+
+def _from_github(repo: str, timeout: float) -> UpdateInfo | None:
+    """稳定通道：/releases/latest 只返回正式版。"""
+    data = _fetch_json(f"https://api.github.com/repos/{repo}/releases/latest", timeout)
+    return _release_to_info(data) if isinstance(data, dict) else None
 
 
 def _from_manifest(url: str, timeout: float) -> UpdateInfo | None:
@@ -229,13 +253,18 @@ def mirror_url(url: str, prefix: str) -> str:
     return prefix + url
 
 
-def check(source: str = "github", target: str = "", *,
+def check(source: str = "github", target: str = "", *, channel: str = "stable",
           timeout: float = TIMEOUT) -> tuple[UpdateInfo | None, str]:
     """Look for a newer release.
+
+    ``channel`` 决定查哪个通道：
+      · ``stable``  —— /releases/latest，只返回正式版；
+      · ``preview`` —— /releases 里最新的 prerelease（预览版）。
 
     Returns ``(info, message)``. ``info`` is None when already up to date *or*
     when the check failed; ``message`` always explains which of the two.
     """
+    channel = (channel or "stable").strip().lower()
     source = (source or "github").strip().lower()
     target = (target or "").strip()
     if source == "manifest":
@@ -254,7 +283,10 @@ def check(source: str = "github", target: str = "", *,
         if "/" not in repo or "OWNER" in repo:
             return None, _t("还没配置仓库地址") + _paren(_t("更新源"))
         try:
-            info = _from_github(repo, timeout)
+            if channel == "preview":
+                info = _from_github_preview(repo, timeout)
+            else:
+                info = _from_github(repo, timeout)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 return None, _t("找不到该仓库的 Release") + _paren(_t("可能还没发布"))
@@ -265,5 +297,10 @@ def check(source: str = "github", target: str = "", *,
             return None, f"{_t('检查失败')}：{type(exc).__name__}: {exc}"
 
     if info is None:
-        return None, f"{_t('已是最新版')}{_paren(__version__)}"
-    return info, f"{_t('发现新版本')} {info.version} {_paren(_t('当前版本') + ' ' + __version__)}"
+        message = f"{_t('已是最新版')}{_paren(__version__)}"
+        if channel == "preview":
+            message = f"{_t('没有预览版')}{_paren(_t('当前版本') + ' ' + __version__)}"
+        return None, message
+    label = _t("发现预览版") if channel == "preview" else _t("发现新版本")
+    return info, f"{label} {info.version} {_paren(_t('当前版本') + ' ' + __version__)}"
+
